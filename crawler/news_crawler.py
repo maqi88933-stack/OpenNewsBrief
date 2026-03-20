@@ -28,10 +28,17 @@ MAX_HOURS = 12
 
 def fetch_rss_xml(keyword):
     """
-    爬取核心逻辑：从Bing新闻或Google新闻提取数据。
-    使用 Playwright 模拟浏览器，解决 urllib 的 SSL 握手失败及 Bing 风控问题。
+    爬取核心逻辑：从百度新闻（默认）或 Bing 新闻（备选）提取数据。
+    使用 Playwright 模拟浏览器。
     """
     encoded_kw = urllib.parse.quote(keyword)
+    
+    # 百度新闻搜索 URL
+    baidu_url = (
+        "https://www.baidu.com/s"
+        f"?tn=news&word={encoded_kw}"
+    )
+    # Bing 新闻 RSS URL (备选)
     bing_url = (
         "https://www.bing.com/news/search"
         f"?q={encoded_kw}"
@@ -63,31 +70,109 @@ def fetch_rss_xml(keyword):
                     if not response:
                         return None
                     
-                    # 使用 response.body() 获取原始 XML，避免 page.content() 返回 Chrome 渲染后的 HTML
                     body = response.body()
-                    
-                    # 判定内容类型
-                    head = body[:500].lower()
-                    looks_like_xml = b"<?xml" in head or b"<rss" in head or b"<feed" in head
-                    
-                    if not looks_like_xml:
-                        # 如果包含新闻特征链接，则认为是有效的 HTML 结果页
-                        if b"/news/apiclick" in body:
-                            return body
-                        return None
-                    
                     return body
         except Exception as e:
-            print(f"    [!] 网络请求失败 [{keyword}]: {str(e).splitlines()[0][:60]}...")
+            print(f"    [!] 网络请求失败 [{url[:30]}...]: {str(e).splitlines()[0][:60]}...")
             return None
 
-    # 优先尝试 Bing
+    # 1. 优先尝试 百度
+    print(f"    [i] 尝试从 百度新闻 获取: {keyword}")
+    body = _fetch_with_playwright(baidu_url)
+    if body and (b"baidu.com" in body or b"result-op news" in body):
+        return body
+        
+    # 2. 备选尝试 Bing
+    print(f"    [i] 百度 结果不可用，尝试 Bing 新闻 RSS: {keyword}")
     body = _fetch_with_playwright(bing_url)
     if body:
         return body
-        
+    
+    # 3. 最后的兜底 Google News
     print(f"    [i] Bing 结果不可用，尝试 Google News RSS: {keyword}")
     return _fetch_with_playwright(google_url)
+
+class _BaiduNewsHTMLParser(HTMLParser):
+    """
+    解析百度新闻搜索结果页面。
+    """
+    def __init__(self):
+        super().__init__()
+        self._in_h3 = False
+        self._in_a = False
+        self._a_href: Optional[str] = None
+        self._a_text_parts: List[str] = []
+        self.items: List[Tuple[str, str]] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "h3":
+            # 百度新闻标题通常在 h3.news-title_xxx 或类似结构中
+            self._in_h3 = True
+        elif tag == "a" and self._in_h3:
+            self._in_a = True
+            for k, v in attrs:
+                if k.lower() == "href":
+                    self._a_href = v
+                    break
+
+    def handle_data(self, data):
+        if self._in_a:
+            self._a_text_parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "h3":
+            self._in_h3 = False
+        elif tag == "a" and self._in_a:
+            self._in_a = False
+            title = "".join(self._a_text_parts).strip()
+            href = (self._a_href or "").strip()
+            if len(title) > 5 and href.startswith("http"):
+                self.items.append((title, href))
+            self._a_text_parts = []
+            self._a_href = None
+
+def _parse_baidu_html_results(html_bytes: bytes, keyword: str) -> List[Dict]:
+    """
+    将百度返回的 HTML 解析成统一的 news_list 结构。
+    """
+    try:
+        html_text = html_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        html_text = str(html_bytes[:2000])
+
+    parser = _BaiduNewsHTMLParser()
+    try:
+        parser.feed(html_text)
+    except Exception as e:
+        print(f"百度HTML解析失败 [{keyword}]: {e}")
+        return []
+
+    seen = set()
+    results: List[Dict] = []
+    today_date = datetime.datetime.now().astimezone().date()
+    for title, link in parser.items:
+        # 关键词过滤
+        if keyword:
+            if any("\u4e00" <= ch <= "\u9fff" for ch in keyword):
+                if keyword not in title:
+                    continue
+            else:
+                if keyword.lower() not in title.lower():
+                    continue
+        
+        key = (title, link)
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append({
+            "title": title,
+            "link": link,
+            "content": "",
+            "date": today_date.strftime("%Y-%m-%d")
+        })
+        if len(results) >= 10:
+            break
+    return results
 
 class _BingNewsHTMLParser(HTMLParser):
     """
@@ -248,10 +333,23 @@ def parse_and_deduplicate(xml_data, keyword):
     if not xml_data:
         return [], 0
 
-    head = xml_data[:500].lower()
+    # 统一转换为 bytes 处理
+    if isinstance(xml_data, str):
+        xml_data_bytes = xml_data.encode("utf-8")
+    else:
+        xml_data_bytes = xml_data
+
+    head = xml_data_bytes[:1000].lower()
     looks_like_html = b"<!doctype html" in head or b"<html" in head
     if looks_like_html:
-        items = _parse_bing_html_results(xml_data, keyword)
+        # 判定来源：百度通常包含 baidu.com 或特定样式类
+        if b"baidu.com" in head or b"result-op news" in head or b"baidu" in head:
+            print(f"    [d] 检测到百度 HTML 格式")
+            items = _parse_baidu_html_results(xml_data_bytes, keyword)
+        else:
+            print(f"    [d] 检测到必应 HTML 格式")
+            items = _parse_bing_html_results(xml_data_bytes, keyword)
+            
         news_list = []
         expired_count = 0
         seen_links = set()
@@ -268,7 +366,7 @@ def parse_and_deduplicate(xml_data, keyword):
             print(f"    - 正在抓取正文(HTML模式): {title[:20]}...")
             import random
             import time
-            time.sleep(random.uniform(1.2, 2.5))
+            time.sleep(random.uniform(0.5, 1.2))
             article_content = fetch_article_content(link, "")
             news_list.append({
                 "title": title,
@@ -281,7 +379,8 @@ def parse_and_deduplicate(xml_data, keyword):
         return news_list, expired_count
         
     try:
-        root = ET.fromstring(xml_data)
+        # 对于 XML，ET 可以接受 bytes 或 string
+        root = ET.fromstring(xml_data_bytes)
     except Exception as e:
         print(f"XML解析失败 [{keyword}]: {e}")
         return [], 0
