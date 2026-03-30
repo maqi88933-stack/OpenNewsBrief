@@ -445,7 +445,7 @@ def parse_and_deduplicate(xml_data, keyword):
                     
     return news_list, expired_count
 
-def save_to_markdown_file(keyword, news_list, expired_count):
+def save_to_markdown_file(keyword, news_list, expired_count, title_dir=None):
     if not news_list and expired_count == 0:
         print(f"关键词 '{keyword}' 未获取到任何相关动态")
         return
@@ -455,11 +455,15 @@ def save_to_markdown_file(keyword, news_list, expired_count):
     filename = f"{safe_keyword}.md"
     
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    date_dir = os.path.join(script_dir, today_str)
-    if not os.path.exists(date_dir):
-        os.makedirs(date_dir)
+    # 按 日期/title_dir/ 子目录存放
+    if title_dir:
+        output_dir = os.path.join(script_dir, today_str, title_dir)
+    else:
+        output_dir = os.path.join(script_dir, today_str)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
         
-    filepath = os.path.join(date_dir, filename)
+    filepath = os.path.join(output_dir, filename)
     
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(f"# 【{keyword}】 每日新闻追踪\n\n")
@@ -478,18 +482,20 @@ def save_to_markdown_file(keyword, news_list, expired_count):
             f.write(f"**新闻正文**:\n\n{news['content']}\n\n")
             f.write("---\n\n")
             
-    print(f"[*] 成功保存 {len(news_list)} 条关于 '{keyword}' 的新闻至：{os.path.join(today_str, filename)}")
+    print(f"[*] 成功保存 {len(news_list)} 条关于 '{keyword}' 的新闻至：{filepath}")
 
-def run_crawler():
+def run_crawler(keywords=None, title_dir=None):
+    """运行爬虫，支持外部传入关键词列表和主题子目录名"""
+    kw_list = keywords if keywords is not None else KEYWORDS
     print("="*40)
     print("      今日新闻聚合程序启动 (Playwright版)")
     print("="*40)
-    for kw in KEYWORDS:
+    for kw in kw_list:
         print(f"\n>>>> 正在检索关键词：{kw}")
         try:
             xml_data = fetch_rss_xml(kw)
             news_items, expired_count = parse_and_deduplicate(xml_data, kw)
-            save_to_markdown_file(kw, news_items, expired_count)
+            save_to_markdown_file(kw, news_items, expired_count, title_dir=title_dir)
         except KeyboardInterrupt:
             raise
         except Exception as e:

@@ -41,15 +41,17 @@ def call_llm(prompt, text=""):
         print(f"调用大模型失败: {e}")
         return ""
 
-def is_theme_matched(content):
+def is_theme_matched(content, theme=None):
     """
     判断内容是否符合主题，并且是近期（24小时内）发生的新闻
+    :param theme: 主题描述，默认使用 THEME_CONFIG
     """
+    theme_text = theme if theme else THEME_CONFIG
     today_str = datetime.date.today().strftime('%Y-%m-%d')
     prompt = (
         f"当前日期是 {today_str}。请判断以下新闻内容是否满足两个条件：\n"
         f"1. 属于近24小时内发生的新事件（如果是几天前或更早的旧闻请直接判断为否）。\n"
-        f"2. 与主题“{THEME_CONFIG}”紧密相关。\n\n"
+        f"2. 与主题“{theme_text}”紧密相关。\n\n"
         "如果同时满足上述两个条件，请仅回复“是”；否则请仅回复“否”。不要输出其他任何字符。"
     )
     result = call_llm(prompt, content)
@@ -127,11 +129,12 @@ def is_duplicate(news, previous_content):
     result = call_llm(prompt)
     return "是" in result
 
-def summarize_news(item):
+def summarize_news(item, language="zh-CN"):
     """
     对单条新闻调用大模型生成简讯摘要（100字以内）
+    :param language: 目标语言
     """
-    prompt = f"请将以下新闻内容压缩为一条简讯，字数严格控制在100字以内，语言简练，直击要点。\n\n标题：{item['title']}\n\n内容：{item['content'][:1000]}"
+    prompt = f"请将以下新闻内容压缩为一条简讯，字数严格控制在100字以内，语言简练，直击要点。\n必须使用 {language} 输出结果。\n\n标题：{item['title']}\n\n内容：{item['content'][:1000]}"
     return call_llm(prompt)
 
 def write_to_md(news_item, output_file, index, file_lock):
@@ -148,9 +151,10 @@ def write_to_md(news_item, output_file, index, file_lock):
             f.write(f"**新闻正文**:\n\n{news_item['content']}\n\n")
             f.write("---\n\n")
 
-def generate_briefs(output_file, brief_file):
+def generate_briefs(output_file, brief_file, language="zh-CN"):
     """
     读取写入的 MD 文件，用大模型判断获取其中15条重要的新闻并做成简讯（每条100字以内），写入简讯文件
+    :param language: 目标语言
     """
     if not os.path.exists(output_file):
         print("没有可供总结的新闻文件。")
@@ -168,6 +172,7 @@ def generate_briefs(output_file, brief_file):
     today_str = datetime.date.today().strftime('%Y-%m-%d')
     prompt = f"""当前日期是 {today_str}。请从以下新闻合集中，挑选出最重要、最有价值的 15 条近期（24小时内）发生的新闻（如果不足15条则全部挑选）。请务必剔除那些明显是好几天前的旧闻。
 然后将这些挑选出的新闻转化为简讯。
+必须使用 {language} 输出结果。
 要求：
 1. 每条简讯字数严格控制在 100 字以内。
 2. 语言简练，直击要点，剥离冗余信息。
@@ -182,12 +187,18 @@ def generate_briefs(output_file, brief_file):
         
     print(f"简讯生成完毕，已保存至: {brief_file}")
 
-def process_news(target_dir=None):
+def process_news(target_dir=None, theme=None, title_dir=None, language="zh-CN"):
+    """:param theme: 主题描述，传递给 is_theme_matched
+    :param title_dir: 主题安全目录名，用于区分不同主题的输出
+    :param language: 目标语言"""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     today_str = datetime.date.today().strftime('%Y-%m-%d')
     
-    # 采用以日期为文件夹的形式建立目录
-    today_dir = os.path.join(script_dir, today_str)
+    # 按 日期/title_dir/ 子目录存放
+    if title_dir:
+        today_dir = os.path.join(script_dir, today_str, title_dir)
+    else:
+        today_dir = os.path.join(script_dir, today_str)
     if not os.path.exists(today_dir):
         os.makedirs(today_dir)
         
@@ -219,7 +230,7 @@ def process_news(target_dir=None):
     matched_lock = threading.Lock()
     
     def check_theme(item):
-        if is_theme_matched(item['content']):
+        if is_theme_matched(item['content'], theme=theme):
             with matched_lock:
                 matched_news.append(item)
             print(f"[+] 符合主题: {item['title'][:15]}...")
@@ -251,7 +262,7 @@ def process_news(target_dir=None):
     
     def process_brief_and_write(item):
         print(f"[~] 生成简讯摘要: {item['title'][:15]}...")
-        item['summary'] = summarize_news(item)
+        item['summary'] = summarize_news(item, language=language)
         print(f"[+] 写入文件: {item['title'][:15]}...")
         write_to_md(item, output_md_file, item['idx'], file_lock)
 
@@ -262,7 +273,7 @@ def process_news(target_dir=None):
                 print(f"[!] 简讯生成或写入异常: {future.exception()}")
         
     # 6. 生成简讯
-    generate_briefs(output_md_file, output_brief_md_file)
+    generate_briefs(output_md_file, output_brief_md_file, language=language)
     print("\n==== 所有处理任务已完成！ ====")
 
 if __name__ == "__main__":

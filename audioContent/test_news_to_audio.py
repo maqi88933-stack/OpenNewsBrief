@@ -61,6 +61,11 @@ class TestExtractDateStr(unittest.TestCase):
         result = news_to_audio.extract_date_str("/textContent/2026-03-18/news.md")
         self.assertEqual(result, "2026年03月18日")
 
+    def test_english_language(self):
+        """测试英文语言标识下的日期提取格式"""
+        result = news_to_audio.extract_date_str("/textContent/2026-03-18/news.md", language="English")
+        self.assertEqual(result, "March 18, 2026")
+
 
 class TestGetOutputPath(unittest.TestCase):
     """测试输出路径生成"""
@@ -101,8 +106,9 @@ class TestBuildTtsText(unittest.TestCase):
     """测试 TTS 文本构建"""
 
     def test_contains_intro_and_outro(self):
-        result = news_to_audio.build_tts_text("1. 一条新闻内容", "2026年03月18日")
+        result = news_to_audio.build_tts_text("1. 一条新闻内容", "2026年03月18日", title="AI 每日简报")
         self.assertIn("欢迎收听", result)
+        self.assertIn("AI 每日简报", result)
         self.assertIn("2026年03月18日", result)
         self.assertIn("感谢收听", result)
 
@@ -110,6 +116,11 @@ class TestBuildTtsText(unittest.TestCase):
         result = news_to_audio.build_tts_text("**重要新闻**内容", "2026年03月18日")
         self.assertIn("重要新闻", result)
         self.assertNotIn("**", result)
+
+    def test_custom_title(self):
+        """测试自定义主题标题"""
+        result = news_to_audio.build_tts_text("1. 内容", "2026年03月18日", title="工程机器 破碎机 每日简讯")
+        self.assertIn("工程机器 破碎机 每日简讯", result)
 
 
 if __name__ == "__main__":
