@@ -43,9 +43,15 @@ def call_llm(prompt, text=""):
 
 def is_theme_matched(content):
     """
-    判断内容是否符合主题
+    判断内容是否符合主题，并且是近期（24小时内）发生的新闻
     """
-    prompt = f"请判断以下新闻内容是否与主题“{THEME_CONFIG}”紧密相关。如果相关，请仅回复“是”；如果不相关，请仅回复“否”。不要输出其他任何字符。"
+    today_str = datetime.date.today().strftime('%Y-%m-%d')
+    prompt = (
+        f"当前日期是 {today_str}。请判断以下新闻内容是否满足两个条件：\n"
+        f"1. 属于近24小时内发生的新事件（如果是几天前或更早的旧闻请直接判断为否）。\n"
+        f"2. 与主题“{THEME_CONFIG}”紧密相关。\n\n"
+        "如果同时满足上述两个条件，请仅回复“是”；否则请仅回复“否”。不要输出其他任何字符。"
+    )
     result = call_llm(prompt, content)
     return "是" in result
 
@@ -153,15 +159,22 @@ def generate_briefs(output_file, brief_file):
     with open(output_file, 'r', encoding='utf-8') as f:
         content = f.read()
         
-    prompt = """请从以下新闻合集中，挑选出最重要、最有价值的 15 条新闻（如果不足15条则全部挑选）。
-然后将这 15 条新闻转化为简讯。
+    # 为避免传入内容超出大模型的 Context 长度限制（如 128K），
+    # 在最后生成简讯聚合时没必要传入长篇幅原文。
+    # 我们用正则将“新闻正文”后面的长文本去掉，只保留标题、链接和单条摘要！
+    import re
+    lean_content = re.sub(r'\*\*新闻正文\*\*.*?(?=\n---\n|$)', '', content, flags=re.DOTALL)
+        
+    today_str = datetime.date.today().strftime('%Y-%m-%d')
+    prompt = f"""当前日期是 {today_str}。请从以下新闻合集中，挑选出最重要、最有价值的 15 条近期（24小时内）发生的新闻（如果不足15条则全部挑选）。请务必剔除那些明显是好几天前的旧闻。
+然后将这些挑选出的新闻转化为简讯。
 要求：
 1. 每条简讯字数严格控制在 100 字以内。
 2. 语言简练，直击要点，剥离冗余信息。
 3. 请按照“1. xxx\n2. xxx”这样的编号格式输出。
 """
     print("开始生成最终简讯...")
-    brief_result = call_llm(prompt, content)
+    brief_result = call_llm(prompt, lean_content)
     
     with open(brief_file, 'w', encoding='utf-8') as f:
         #f.write(f"# 每日新闻简讯 ({datetime.date.today().strftime('%Y-%m-%d')})\n\n")
@@ -197,52 +210,56 @@ def process_news(target_dir=None):
     # 计算当前已有的条数，用于继续编号
     valid_count = previous_content.count("### ")
     
-    # 用于线程安全的锁
-    file_lock = threading.Lock()      # 写文件锁
-    counter_lock = threading.Lock()   # 计数器锁
-    context_lock = threading.Lock()   # 更新上下文锁
+    # 用于文件写入的锁
+    file_lock = threading.Lock()
+
+    # 第一阶段：并发判断所有新闻是否符合主题
+    print("阶段一：并发判断所有新闻是否符合主题...")
+    matched_news = []
+    matched_lock = threading.Lock()
     
-    def process_single(item):
-        """单条新闻处理：去重 -> 主题匹配 -> 简讯摘要 -> 写文件"""
-        nonlocal valid_count, previous_content
-        
-        # 2. 判断是否雷同（读取previous_content时加锁防止脏读）
-        with context_lock:
-            prev = previous_content
-        if is_duplicate(item, prev):
-            print(f"[-] 内容雷同或已存在，跳过: {item['title'][:15]}...")
-            return
-        
-        # 3. 调用大模型判断主题
-        if not is_theme_matched(item['content']):
+    def check_theme(item):
+        if is_theme_matched(item['content']):
+            with matched_lock:
+                matched_news.append(item)
+            print(f"[+] 符合主题: {item['title'][:15]}...")
+        else:
             print(f"[-] 不符合主题，跳过: {item['title'][:15]}...")
-            return
-        
-        # 4. 生成简讯摘要
+            
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(check_theme, item) for item in news_items]
+        for future in as_completed(futures):
+            if future.exception():
+                print(f"[!] 主题判断异常: {future.exception()}")
+
+    # 第二阶段：遍历所有符合主题的新闻，顺序完成去重和合并
+    print(f"阶段二：符合主题的新闻共 {len(matched_news)} 条，开始顺序去重和合并...")
+    unique_news = []
+    
+    for item in matched_news:
+        if is_duplicate(item, previous_content):
+            print(f"[-] 内容雷同或已存在，去重/合并跳过: {item['title'][:15]}...")
+        else:
+            valid_count += 1
+            item['idx'] = valid_count
+            unique_news.append(item)
+            # 及时更新上下文，确保后续新闻去重判断最准确，避免并发导致雷同新闻写入
+            previous_content += f"\n### {valid_count}. {item['title']}\n"
+            
+    # 第三阶段：并发生成简讯并写入文件
+    print(f"阶段三：去重后新增 {len(unique_news)} 条独立新闻，开始生成简讯摘要并写入...")
+    
+    def process_brief_and_write(item):
         print(f"[~] 生成简讯摘要: {item['title'][:15]}...")
         item['summary'] = summarize_news(item)
-        
-        # 5. 写入文件（计数与写入原子化）
-        with counter_lock:
-            nonlocal valid_count
-            valid_count += 1
-            idx = valid_count
-        
-        print(f"[+] 符合要求，写入文件: {item['title'][:15]}...")
-        write_to_md(item, output_md_file, idx, file_lock)
-        
-        # 更新上下文，确保同批次不会重复
-        with context_lock:
-            previous_content += f"\n### {idx}. {item['title']}\n"
-    
-    # 使用20个并发线程处理所有新闻
-    print(f"使用20个并发线程处理 {len(news_items)} 条新闻...")
+        print(f"[+] 写入文件: {item['title'][:15]}...")
+        write_to_md(item, output_md_file, item['idx'], file_lock)
+
     with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(process_single, item) for item in news_items]
+        futures = [executor.submit(process_brief_and_write, item) for item in unique_news]
         for future in as_completed(futures):
-            # 捕获单条任务异常，不影响整体
             if future.exception():
-                print(f"[!] 某条新闻处理失败: {future.exception()}")
+                print(f"[!] 简讯生成或写入异常: {future.exception()}")
         
     # 6. 生成简讯
     generate_briefs(output_md_file, output_brief_md_file)

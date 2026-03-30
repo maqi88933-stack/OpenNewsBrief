@@ -28,7 +28,7 @@ MAX_HOURS = 12
 
 def fetch_rss_xml(keyword):
     """
-    爬取核心逻辑：从百度新闻（默认）或 Bing 新闻（备选）提取数据。
+    爬取核心逻辑：从 Google News（默认）、Bing 新闻（备选）或 百度新闻（兜底）提取数据。
     使用 Playwright 模拟浏览器。
     """
     encoded_kw = urllib.parse.quote(keyword)
@@ -76,21 +76,25 @@ def fetch_rss_xml(keyword):
             print(f"    [!] 网络请求失败 [{url[:30]}...]: {str(e).splitlines()[0][:60]}...")
             return None
 
-    # 1. 优先尝试 百度
-    print(f"    [i] 尝试从 百度新闻 获取: {keyword}")
-    body = _fetch_with_playwright(baidu_url)
-    if body and (b"baidu.com" in body or b"result-op news" in body):
+    # 1. 优先尝试 Google News
+    print(f"    [i] 尝试从 Google News RSS 获取: {keyword}")
+    body = _fetch_with_playwright(google_url)
+    if body:
         return body
-        
+
     # 2. 备选尝试 Bing
-    print(f"    [i] 百度 结果不可用，尝试 Bing 新闻 RSS: {keyword}")
+    print(f"    [i] Google News 结果不可用，尝试 Bing 新闻 RSS: {keyword}")
     body = _fetch_with_playwright(bing_url)
     if body:
         return body
     
-    # 3. 最后的兜底 Google News
-    print(f"    [i] Bing 结果不可用，尝试 Google News RSS: {keyword}")
-    return _fetch_with_playwright(google_url)
+    # 3. 最后的兜底 百度
+    print(f"    [i] Bing 结果不可用，尝试 百度新闻 获取: {keyword}")
+    body = _fetch_with_playwright(baidu_url)
+    if body and (b"baidu.com" in body or b"result-op news" in body):
+        return body
+
+    return None
 
 class _BaiduNewsHTMLParser(HTMLParser):
     """

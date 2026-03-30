@@ -2,6 +2,8 @@
 import unittest
 import os
 import datetime
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from news_crawler import parse_and_deduplicate, save_to_markdown_file, run_crawler
 
 class TestNewsCrawler(unittest.TestCase):
