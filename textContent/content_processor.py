@@ -24,6 +24,9 @@ try:
 except Exception as e:
     raise RuntimeError(f"无法从 main.py 导入 THEME_CONFIG，请检查工程目录结构与运行入口：{e}")
 
+# 每日简报条数：生成简讯和封面提示词时统一使用该数字
+BRIEF_COUNT = 15
+
 def call_llm(prompt, text=""):
     """
     调用大模型通用接口，通过 util/llm.py 的 Deepseek 实现
@@ -153,7 +156,7 @@ def write_to_md(news_item, output_file, index, file_lock):
 
 def generate_briefs(output_file, brief_file, language="zh-CN"):
     """
-    读取写入的 MD 文件，用大模型判断获取其中15条重要的新闻并做成简讯（每条100字以内），写入简讯文件
+    读取写入的 MD 文件，用大模型判断获取其中 BRIEF_COUNT 条重要的新闻并做成简讯（每条100字以内），写入简讯文件
     :param language: 目标语言
     """
     if not os.path.exists(output_file):
@@ -170,7 +173,7 @@ def generate_briefs(output_file, brief_file, language="zh-CN"):
     lean_content = re.sub(r'\*\*新闻正文\*\*.*?(?=\n---\n|$)', '', content, flags=re.DOTALL)
         
     today_str = datetime.date.today().strftime('%Y-%m-%d')
-    prompt = f"""当前日期是 {today_str}。请从以下新闻合集中，挑选出最重要、最有价值的 15 条近期（24小时内）发生的新闻（如果不足15条则全部挑选）。请务必剔除那些明显是好几天前的旧闻。
+    prompt = f"""当前日期是 {today_str}。请从以下新闻合集中，挑选出最重要、最有价值的 {BRIEF_COUNT} 条近期（24小时内）发生的新闻（如果不足{BRIEF_COUNT}条则全部挑选）。请务必剔除那些明显是好几天前的旧闻。
 然后将这些挑选出的新闻转化为简讯。
 必须使用 {language} 输出结果。
 要求：

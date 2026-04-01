@@ -226,7 +226,7 @@ def step_video_title(brief_path: str, topic: dict) -> str:
     llm = LLmFactory().getDeepseek()
     prompt = (
         f"以下是今天的新闻简报内容：\n\n{brief_content}\n\n"
-        f"请从中挑选出今天最重磅、最值得关注的 1-2 条新闻，"
+        f"请从中挑选出今天最重磅、最值得关注的 3 条新闻，"
         f"用简短有力的中文（不超过20字）写成吸引眼球的标题，"
         f"然后按照以下格式输出视频文件名（不要加扩展名，不要加任何解释）：\n"
         f"<最炸裂新闻短标题> | {topic_title} {date_short}\n"
