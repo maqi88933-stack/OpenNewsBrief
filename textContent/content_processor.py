@@ -122,9 +122,9 @@ def is_duplicate(news, previous_content):
     if news['title'] in previous_content:
         return True
         
-    # 为了避免Token爆炸，取历史内容的后3000字符来做比对
-    context = previous_content[-3000:] 
-    prompt = f"以下是之前已经收录的新闻摘要/片段：\n{context}\n\n请判断以下新的新闻是否与上述已收录的新闻讲的是同一件事情（雷同）。如果是雷同新闻，请仅回复“是”；如果不雷同，请仅回复“否”。不要输出其他任何字符。\n新新闻标题：{news['title']}\n新新闻内容片段：{news['content'][:200]}"
+    # 为了避免Token爆炸，取历史内容的后6000字符来做比对（包含前两日简讯）
+    context = previous_content[-6000:] 
+    prompt = f"以下是之前已经收录的新闻摘要/片段（包含前两日简讯及今日已处理新闻）：\n{context}\n\n请判断以下新的新闻是否与上述已收录的新闻讲的是同一件事情（雷同）。如果是雷同新闻，请仅回复“是”；如果不雷同，请仅回复“否”。不要输出其他任何字符。\n新新闻标题：{news['title']}\n新新闻内容片段：{news['content'][:200]}"
     
     result = call_llm(prompt)
     return "是" in result
@@ -245,10 +245,25 @@ def process_news(target_dir=None, theme=None, title_dir=None, language="zh-CN"):
 
     # 第二阶段：遍历所有符合主题的新闻，顺序完成去重和合并
     print(f"阶段二：符合主题的新闻共 {len(matched_news)} 条，开始顺序去重和合并...")
+    
+    # 整合前天和昨天的简讯，用于跨日去重
+    historical_briefs = ""
+    for days_ago in [2, 1]:  # 先前天，再昨天
+        date_str = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
+        if title_dir:
+            brief_file = os.path.join(script_dir, date_str, title_dir, f"news_brief_{date_str}.md")
+        else:
+            brief_file = os.path.join(script_dir, date_str, f"news_brief_{date_str}.md")
+            
+        if os.path.exists(brief_file):
+            with open(brief_file, 'r', encoding='utf-8') as f:
+                historical_briefs += f"\n--- {date_str} 简讯 ---\n" + f.read() + "\n"
+                
+    full_dedup_context = historical_briefs + "\n" + previous_content
     unique_news = []
     
     for item in matched_news:
-        if is_duplicate(item, previous_content):
+        if is_duplicate(item, full_dedup_context):
             print(f"[-] 内容雷同或已存在，去重/合并跳过: {item['title'][:15]}...")
         else:
             valid_count += 1
@@ -256,6 +271,7 @@ def process_news(target_dir=None, theme=None, title_dir=None, language="zh-CN"):
             unique_news.append(item)
             # 及时更新上下文，确保后续新闻去重判断最准确，避免并发导致雷同新闻写入
             previous_content += f"\n### {valid_count}. {item['title']}\n"
+            full_dedup_context += f"\n### {valid_count}. {item['title']}\n"
             
     # 第三阶段：并发生成简讯并写入文件
     print(f"阶段三：去重后新增 {len(unique_news)} 条独立新闻，开始生成简讯摘要并写入...")

@@ -358,6 +358,7 @@ def parse_and_deduplicate(xml_data, keyword):
         expired_count = 0
         seen_links = set()
         seen_titles = set()
+        pending_items = []
         for item in items:
             title = item.get("title", "").strip()
             link = item.get("link", "").strip()
@@ -367,19 +368,31 @@ def parse_and_deduplicate(xml_data, keyword):
                 continue
             seen_links.add(link)
             seen_titles.add(title)
-            print(f"    - 正在抓取正文(HTML模式): {title[:20]}...")
+            pending_items.append({
+                "title": title,
+                "link": link,
+                "date": item.get("date") or datetime.date.today().strftime("%Y-%m-%d"),
+            })
+            if len(pending_items) >= 10:
+                break
+
+        def fetch_html_article(item):
+            print(f"    - 正在抓取正文(HTML模式): {item['title'][:20]}...")
             import random
             import time
             time.sleep(random.uniform(0.5, 1.2))
-            article_content = fetch_article_content(link, "")
-            news_list.append({
-                "title": title,
-                "link": link,
-                "content": article_content,
-                "date": item.get("date") or datetime.date.today().strftime("%Y-%m-%d"),
-            })
-            if len(news_list) >= 10:
-                break
+            content = fetch_article_content(item['link'], "")
+            return {
+                "title": item["title"],
+                "link": item["link"],
+                "content": content,
+                "date": item["date"],
+            }
+
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            news_list = list(executor.map(fetch_html_article, pending_items))
+            
         return news_list, expired_count
         
     try:
@@ -395,6 +408,7 @@ def parse_and_deduplicate(xml_data, keyword):
     seen_links = set()
     seen_titles = set()
     expired_count = 0
+    pending_items = []
     
     for item in root.findall('.//item'):
         title_elem = item.find('title')
@@ -427,21 +441,30 @@ def parse_and_deduplicate(xml_data, keyword):
         if link not in seen_links and title not in seen_titles:
             seen_links.add(link)
             seen_titles.add(title)
-            
-            print(f"    - 正在抓取正文: {title[:20]}...")
-            import random
-            import time
-            time.sleep(random.uniform(1.2, 2.5))
-            article_content = fetch_article_content(link, desc)
-            
-            news_list.append({
+            pending_items.append({
                 "title": title,
                 "link": link,
-                "content": article_content,
-                "date": today_date.strftime("%Y-%m-%d")
+                "desc": desc
             })
-            if len(news_list) >= 10:
+            if len(pending_items) >= 10:
                 break
+
+    def fetch_xml_article(item):
+        print(f"    - 正在抓取正文: {item['title'][:20]}...")
+        import random
+        import time
+        time.sleep(random.uniform(0.5, 1.5))
+        content = fetch_article_content(item['link'], item['desc'])
+        return {
+            "title": item["title"],
+            "link": item["link"],
+            "content": content,
+            "date": today_date.strftime("%Y-%m-%d")
+        }
+
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        news_list = list(executor.map(fetch_xml_article, pending_items))
                     
     return news_list, expired_count
 
