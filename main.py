@@ -198,6 +198,80 @@ def step_play(audio_path: str):
 
 
 # ─────────────────────────────────────────────
+# 步骤 6：LLM 提取最炸裂新闻 → 生成视频文件名
+# ─────────────────────────────────────────────
+def step_video_title(brief_path: str, topic: dict) -> str:
+    """
+    读取简报内容，让 LLM 挑选当天最值得关注的一条新闻，
+    并生成适合作为视频文件名的标题字符串。
+    格式示例：突发！OpenAI估值破1220亿 | 阿里云全模态升级 | AI每日速递 0401
+    :return: 合法的视频文件名（不含扩展名），已去除不能用于文件名的特殊字符
+    """
+    import re
+    from util.llm import LLmFactory
+
+    today = datetime.date.today()
+    # 月日格式，如 0401
+    date_short = today.strftime("%m%d")
+    topic_title = topic["title"]
+
+    # 读取简报全文
+    if not os.path.exists(brief_path):
+        # 简报不存在时回退到默认文件名
+        return f"{topic_title} {date_short}"
+
+    with open(brief_path, "r", encoding="utf-8") as f:
+        brief_content = f.read()
+
+    llm = LLmFactory().getDeepseek()
+    prompt = (
+        f"以下是今天的新闻简报内容：\n\n{brief_content}\n\n"
+        f"请从中挑选出今天最重磅、最值得关注的 1-2 条新闻，"
+        f"用简短有力的中文（不超过20字）写成吸引眼球的标题，"
+        f"然后按照以下格式输出视频文件名（不要加扩展名，不要加任何解释）：\n"
+        f"<最炸裂新闻短标题> | {topic_title} {date_short}\n"
+        f"例如：突发！OpenAI估值破1220亿 | AI每日速递 {date_short}"
+    )
+    print("[主程序] 正在调用大模型生成视频文件名...")
+    result = llm.invoke(prompt)
+    raw_title = result.content.strip().splitlines()[0].strip()
+
+    # 去除文件名中不合法的字符（Windows/Linux 通用）
+    safe_title = re.sub(r'[\\/:*?"<>|]', '', raw_title)
+    # 去除首尾多余空白
+    safe_title = safe_title.strip()
+
+    print(f"[主程序] 智能视频文件名: {safe_title}")
+    return safe_title
+
+
+# ─────────────────────────────────────────────
+# 步骤 7：合成视频
+# ─────────────────────────────────────────────
+def step_video(audio_path: str, video_title: str) -> str:
+    """
+    根据音频和封面图合成视频，使用 LLM 生成的智能标题作为文件名。
+    :param audio_path: MP3 音频文件路径
+    :param video_title: 不含扩展名的视频文件名
+    :return: 生成的视频文件路径
+    """
+    from video.Audio2Video import create_video
+
+    audio_dir = os.path.dirname(audio_path)
+    # 封面图固定命名为 Gemini_Generated_Image.png，与现有流程一致
+    image_path = os.path.join(audio_dir, "Gemini_Generated_Image.png")
+    output_path = os.path.join(audio_dir, f"{video_title}.mp4")
+
+    if not os.path.exists(image_path):
+        print(f"[警告] 封面图不存在: {image_path}，跳过视频合成")
+        return ""
+
+    create_video(audio_path, image_path, output_path)
+    print(f"[主程序] 视频文件: {output_path}")
+    return output_path
+
+
+# ─────────────────────────────────────────────
 # 主流水线入口
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
@@ -227,11 +301,19 @@ if __name__ == "__main__":
         # 4. 音频合成
         audio_path = step_audio(brief_path, topic)
 
-        # 5. 打印路径
+        # 5. LLM 生成视频文件名
+        video_title = step_video_title(brief_path, topic)
+
+        # 6. 合成视频
+        video_path = step_video(audio_path, video_title)
+
+        # 7. 打印路径
         print("\n" + "=" * 50)
         print(f"✅ 主题「{topic['title']}」处理完成")
         print(f"✅ 封面提示词已保存，可用于 Google Imagen 生成封面图片")
         print(f"✅ 音频文件路径: {audio_path}")
+        if video_path:
+            print(f"✅ 视频文件路径: {video_path}")
         print("=" * 50)
 
     print(f"\n{'═' * 50}")
