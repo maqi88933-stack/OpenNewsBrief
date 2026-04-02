@@ -304,8 +304,7 @@ if __name__ == "__main__":
         # 5. LLM 生成视频文件名
         video_title = step_video_title(brief_path, topic)
 
-        # 6. 合成视频
-        video_path = step_video(audio_path, video_title)
+      
 
         # 7. 打印路径
         print("\n" + "=" * 50)

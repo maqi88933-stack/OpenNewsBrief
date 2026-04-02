@@ -184,8 +184,8 @@ if __name__ == "__main__":
     today = date.today().strftime("%Y-%m-%d")
     md_file_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        "../textContent",
-        today,
+        "..", "textContent",
+        today, "AI_每日简报",
         f"news_brief_{today}.md",
     )
     
