@@ -302,7 +302,7 @@ if __name__ == "__main__":
         audio_path = step_audio(brief_path, topic)
 
         # 5. LLM 生成视频文件名
-        video_title = step_video_title(brief_path, topic)
+        #video_title = step_video_title(brief_path, topic)
 
       
 
