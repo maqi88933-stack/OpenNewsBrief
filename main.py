@@ -311,8 +311,6 @@ if __name__ == "__main__":
         print(f"✅ 主题「{topic['title']}」处理完成")
         print(f"✅ 封面提示词已保存，可用于 Google Imagen 生成封面图片")
         print(f"✅ 音频文件路径: {audio_path}")
-        if video_path:
-            print(f"✅ 视频文件路径: {video_path}")
         print("=" * 50)
 
     print(f"\n{'═' * 50}")
