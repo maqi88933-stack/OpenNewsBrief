@@ -24,7 +24,7 @@ except Exception as e:
 
 # 在这里配置新闻有效时间的时限（单位：小时）
 # 如果新闻的发布实际距离现在超过该配置的小时数，则判定为过时并被丢弃
-MAX_HOURS = 12
+MAX_HOURS =24
 
 def fetch_rss_xml(keyword):
     """

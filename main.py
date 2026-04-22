@@ -22,25 +22,29 @@ TOPICS = [
         "title": "AI 每日简报",
         "theme": "AI大模型、智能体、最新的科技前沿动态",
         "keywords": [
-            # 国际头部开发商
-            "OpenAI", "Anthropic", "Google", "x-ai",
-            "GPT", "Claude", "Gemini", "Mistral", "Grok", "Claude Code", "Codex", "antigravity", "stitch google",
-            "OpencClaw",
-            # 国内主流大模型开发商及其模型名称
-            "通义千问",
-            "腾讯", "混元大模型",
-            "字节跳动", "豆包",
-            "智谱AI", "GLM",
-            "月之暗面", "Kimi",
-            "DeepSeek",
-            "MiniMax",
-            "昆仑万维", "天工大模型",
-            "阶跃星辰",
-            "MiniCPM",
-            # 芯片及计算硬件开发商
-            "Nvidia", "AMD", "Intel", "英伟达", "英特尔",
-            # 智能体领域
-            "AI Agent", "智能体", "AutoGPT",
+            # 国际头部开发商及核心产品
+            "OpenAI 最新消息",  "GPT 最新消息", "ChatGPT Images 最新消息",
+            "Anthropic 最新动态", "Claude 最新消息",
+            "Google AI最新进展", "Gemini 最新消息", "Gemma 最新消息",
+            "xAI 最新动态", "Grok 最新消息",
+            "Meta AI最新动态", "Llama 最新消息",
+            "Mistral 最新消息", "Codex 最新消息", "Claude Code 最新动态", "antigravity 最新动态", "stitch google 最新动态", "OpenDevin 最新消息", "Hermes Agent 最新动态",
+            # 国内主流大模型开发商及其核心产品
+            "阿里 AI最新动态", "通义千问 最新消息", "Qwen 最新消息",
+            "腾讯 AI最新进展", "混元大模型 最新消息", "Hunyuan 最新消息",
+            "字节跳动 AI最新", "豆包 最新动态", "Doubao 最新消息",
+            "智谱AI 最新动态", "GLM 最新消息",
+            "月之暗面 最新消息", "Kimi 最新动态",
+            "DeepSeek 最新消息", "深度求索 最新动态",
+            "MiniMax 最新消息", "海螺AI 最新动态",
+            "昆仑万维 AI最新动态", "天工大模型 最新动态",
+            "阶跃星辰 最新动态", "Stepfun 最新消息",
+            "面壁智能 最新动态", "MiniCPM 最新消息",
+            "百川智能 最新动态", "Baichuan 最新消息",
+            # 芯片及计算硬件最新动态
+            "Nvidia 最新动态", "英伟达 最新进展", "Blackwell 最新消息", "AMD AI最新动态", "Intel AI最新进展", "英特尔 AI最新",
+            # 智能体与前沿技术领域
+            "AI Agent 最新突破", "智能体 最新应用", "AutoGPT 最新消息", "Devin 最新进展", "RAG 最新技术", "具身智能 最新突破", "Embodied AI 最新进展",
         ],
         "language": "zh-CN"
     },
