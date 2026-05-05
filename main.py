@@ -8,6 +8,7 @@ import os
 import sys
 import datetime
 import subprocess
+import re
 
 # 将工程根目录加入路径
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -22,29 +23,29 @@ TOPICS = [
         "title": "AI 每日简报",
         "theme": "AI大模型、智能体、最新的科技前沿动态",
         "keywords": [
-            # 国际头部开发商及核心产品
-            "OpenAI 最新消息",  "GPT 最新消息", "ChatGPT Images 最新消息",
-            "Anthropic 最新动态", "Claude 最新消息",
-            "Google AI最新进展", "Gemini 最新消息", "Gemma 最新消息",
-            "xAI 最新动态", "Grok 最新消息",
-            "Meta AI最新动态", "Llama 最新消息",
-            "Mistral 最新消息", "Codex 最新消息", "Claude Code 最新动态", "antigravity 最新动态", "stitch google 最新动态", "OpenDevin 最新消息", "Hermes Agent 最新动态",
-            # 国内主流大模型开发商及其核心产品
-            "阿里 AI最新动态", "通义千问 最新消息", "Qwen 最新消息",
-            "腾讯 AI最新进展", "混元大模型 最新消息", "Hunyuan 最新消息",
-            "字节跳动 AI最新", "豆包 最新动态", "Doubao 最新消息",
-            "智谱AI 最新动态", "GLM 最新消息",
-            "月之暗面 最新消息", "Kimi 最新动态",
-            "DeepSeek 最新消息", "深度求索 最新动态",
-            "MiniMax 最新消息", "海螺AI 最新动态",
-            "昆仑万维 AI最新动态", "天工大模型 最新动态",
-            "阶跃星辰 最新动态", "Stepfun 最新消息",
-            "面壁智能 最新动态", "MiniCPM 最新消息",
-            "百川智能 最新动态", "Baichuan 最新消息",
-            # 芯片及计算硬件最新动态
-            "Nvidia 最新动态", "英伟达 最新进展", "Blackwell 最新消息", "AMD AI最新动态", "Intel AI最新进展", "英特尔 AI最新",
-            # 智能体与前沿技术领域
-            "AI Agent 最新突破", "智能体 最新应用", "AutoGPT 最新消息", "Devin 最新进展", "RAG 最新技术", "具身智能 最新突破", "Embodied AI 最新进展",
+            # 国际头部模型与版本
+            "OpenAI 最新消息",
+            "OpenAI Codex 最新消息",
+            "GPT-5.5 最新消息",
+            "Anthropic 最新动态",
+            "Claude 最新消息",
+            "Claude Code 最新消息",
+            "Claude 4 最新消息",
+            "Google DeepMind 最新动态",
+            "xAI 最新动态",
+            # AI 编程与智能体
+            "AI 编程智能体 最新消息",
+            # 国内主流模型与产品
+            "腾讯混元 最新消息",
+            "豆包 最新动态",
+            "DeepSeek 最新消息",
+            "智谱AI 最新动态",
+            # AI 基础设施
+            "英伟达 最新进展",
+            "Blackwell 最新消息",
+            "AMD Instinct 最新消息",
+            # 具身与机器人方向
+            "具身智能 最新突破",
         ],
         "language": "zh-CN"
     },
@@ -73,6 +74,145 @@ LANGUAGE = TOPICS[0].get("language", "zh-CN")
 def safe_dir_name(title: str) -> str:
     """将主题标题转换为安全的文件夹名（去掉特殊字符，空格替换为下划线）"""
     return title.replace("/", "_").replace("\\", "_").replace(" ", "_")
+
+
+def extract_brief_titles(brief_path: str):
+    titles = []
+    if not os.path.exists(brief_path):
+        return titles
+    with open(brief_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            match = re.match(r"^\d+\.\s+(.+)$", line)
+            if match:
+                titles.append(match.group(1).strip())
+    return titles
+
+
+def split_display_lines(text: str, max_chars: int = 18):
+    clean_text = re.sub(r"\s+", " ", text).strip()
+    if not clean_text:
+        return []
+
+    lines = []
+    current = ""
+    for char in clean_text:
+        current += char
+        if len(current) >= max_chars:
+            lines.append(current)
+            current = ""
+    if current:
+        lines.append(current)
+    return lines[:2]
+
+
+def load_cover_font(size: int, bold: bool = False):
+    from PIL import ImageFont
+
+    font_candidates = [
+        "C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/segoeuib.ttf" if bold else "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
+    ]
+    for font_path in font_candidates:
+        if os.path.exists(font_path):
+            return ImageFont.truetype(font_path, size)
+    return ImageFont.load_default()
+
+
+def create_local_cover_image(brief_path: str, output_path: str, topic: dict) -> str:
+    from PIL import Image, ImageDraw
+
+    size = 1080
+    image = Image.new("RGB", (size, size), "#F2F2F7")
+    draw = ImageDraw.Draw(image)
+
+    top_color = (232, 240, 255)
+    bottom_color = (245, 247, 250)
+    for y in range(size):
+        ratio = y / max(size - 1, 1)
+        color = tuple(
+            int(top_color[i] + (bottom_color[i] - top_color[i]) * ratio)
+            for i in range(3)
+        )
+        draw.line((0, y, size, y), fill=color)
+
+    draw.rounded_rectangle((72, 92, 1008, 988), radius=56, fill="white")
+    draw.rounded_rectangle((118, 142, 214, 176), radius=17, fill="#007AFF")
+
+    title_font = load_cover_font(52, bold=True)
+    meta_font = load_cover_font(26)
+    body_font = load_cover_font(32)
+
+    today = datetime.date.today()
+    date_text = f"{today.year}.{today.month:02d}.{today.day:02d}"
+    draw.text((128, 202), topic["title"], font=title_font, fill="#111111")
+    draw.text((128, 272), date_text, font=meta_font, fill="#6E6E73")
+
+    titles = extract_brief_titles(brief_path)[:5]
+    y = 360
+    for index, headline in enumerate(titles, 1):
+        headline_lines = split_display_lines(headline)
+        if not headline_lines:
+            continue
+        draw.text((128, y), f"{index}. {headline_lines[0]}", font=body_font, fill="#1C1C1E")
+        y += 48
+        if len(headline_lines) > 1:
+            draw.text((172, y), headline_lines[1], font=body_font, fill="#3A3A3C")
+            y += 44
+        y += 18
+        if y > 860:
+            break
+
+    draw.rounded_rectangle((128, 900, 952, 932), radius=16, fill="#E5F1FF")
+    draw.text((128, 950), "OpenNewsBrief", font=meta_font, fill="#8E8E93")
+
+    image.save(output_path)
+    return output_path
+
+
+def ensure_cover_image(brief_path: str, audio_path: str, topic: dict) -> str:
+    audio_dir = os.path.dirname(audio_path)
+    image_path = os.path.join(audio_dir, "Gemini_Generated_Image.png")
+    if os.path.exists(image_path):
+        return image_path
+
+    os.makedirs(audio_dir, exist_ok=True)
+    create_local_cover_image(brief_path, image_path, topic)
+    print(f"[主程序] 已生成本地封面图: {image_path}")
+    return image_path
+
+
+def run_topic_pipeline(topic: dict) -> dict:
+    result = {
+        "topic": topic["title"],
+        "crawled_dir": "",
+        "brief_path": "",
+        "cover_prompt": "",
+        "audio_path": "",
+        "video_path": "",
+    }
+
+    crawled_dir = step_crawl(topic)
+    result["crawled_dir"] = crawled_dir
+
+    brief_path = step_process(crawled_dir, topic)
+    result["brief_path"] = brief_path
+    if not os.path.exists(brief_path):
+        print(f"[警告] 主题「{topic['title']}」简报文件不存在: {brief_path}，跳过后续步骤")
+        return result
+
+    result["cover_prompt"] = step_cover_prompt(brief_path, topic)
+
+    audio_path = step_audio(brief_path, topic)
+    result["audio_path"] = audio_path
+    if not audio_path or not os.path.exists(audio_path):
+        return result
+
+    video_title = step_video_title(brief_path, topic)
+    ensure_cover_image(brief_path, audio_path, topic)
+    result["video_path"] = step_video(audio_path, video_title)
+    return result
 
 
 # ─────────────────────────────────────────────
@@ -288,33 +428,14 @@ if __name__ == "__main__":
         print(f"\n{'─' * 50}")
         print(f"  开始处理主题：{topic['title']}")
         print(f"{'─' * 50}")
-
-        # 1. 爬虫
-        crawled_dir = step_crawl(topic)
-
-        # 2. 内容处理 & 简报生成
-        brief_path = step_process(crawled_dir, topic)
-
-        if not os.path.exists(brief_path):
-            print(f"[警告] 主题「{topic['title']}」简报文件不存在: {brief_path}，跳过后续步骤")
-            continue
-
-        # 3. 生成封面提示词
-        cover_prompt = step_cover_prompt(brief_path, topic)
-
-        # 4. 音频合成
-        audio_path = step_audio(brief_path, topic)
-
-        # 5. LLM 生成视频文件名
-        #video_title = step_video_title(brief_path, topic)
-
-      
+        result = run_topic_pipeline(topic)
 
         # 7. 打印路径
         print("\n" + "=" * 50)
         print(f"✅ 主题「{topic['title']}」处理完成")
         print(f"✅ 封面提示词已保存，可用于 Google Imagen 生成封面图片")
-        print(f"✅ 音频文件路径: {audio_path}")
+        print(f"✅ 音频文件路径: {result['audio_path']}")
+        print(f"✅ 视频文件路径: {result['video_path'] or '未生成'}")
         print("=" * 50)
 
     print(f"\n{'═' * 50}")

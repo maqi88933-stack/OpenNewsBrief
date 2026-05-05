@@ -5,6 +5,7 @@ import json
 import datetime
 import requests
 import threading
+from difflib import SequenceMatcher
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==========================================
@@ -26,6 +27,27 @@ except Exception as e:
 
 # 每日简报条数：生成简讯和封面提示词时统一使用该数字
 BRIEF_COUNT = 15
+
+
+def normalize_title(text):
+    if not text:
+        return ""
+    return re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", text).lower()
+
+
+def is_similar_title(left, right):
+    left_norm = normalize_title(left)
+    right_norm = normalize_title(right)
+    if not left_norm or not right_norm:
+        return False
+    if left_norm == right_norm:
+        return True
+
+    shorter, longer = sorted((left_norm, right_norm), key=len)
+    if len(shorter) >= 8 and shorter in longer:
+        return True
+
+    return SequenceMatcher(None, left_norm, right_norm).ratio() >= 0.82
 
 def call_llm(prompt, text=""):
     """
@@ -124,6 +146,11 @@ def is_duplicate(news, previous_content):
         
     if news['title'] in previous_content:
         return True
+
+    previous_titles = re.findall(r"^###\s+\d+\.\s*(.+)$", previous_content, flags=re.MULTILINE)
+    for title in previous_titles:
+        if is_similar_title(news['title'], title):
+            return True
         
     # 为了避免Token爆炸，取历史内容的后6000字符来做比对（包含前两日简讯）
     context = previous_content[-6000:] 
@@ -173,7 +200,7 @@ def generate_briefs(output_file, brief_file, language="zh-CN"):
     lean_content = re.sub(r'\*\*新闻正文\*\*.*?(?=\n---\n|$)', '', content, flags=re.DOTALL)
         
     today_str = datetime.date.today().strftime('%Y-%m-%d')
-    prompt = f"""当前日期是 {today_str}。请从以下新闻合集中，挑选出最重要、最有价值的 {BRIEF_COUNT} 条近期（24小时内）发生的新闻（如果不足{BRIEF_COUNT}条则全部挑选）。请务必剔除那些明显是好几天前的旧闻。
+    prompt = f"""当前日期是 {today_str}。请从以下新闻合集中，挑选出最重要、最有价值的 {BRIEF_COUNT} 条近期（24小时内）发生的新闻（如果不足{BRIEF_COUNT}条则全部挑选）。请务必剔除那些明显是好几天前的旧闻。如果多条新闻其实是同一件事，只保留一条，不要重复表达。
 然后将这些挑选出的新闻转化为简讯。
 必须使用 {language} 输出结果。
 要求：
@@ -229,22 +256,27 @@ def process_news(target_dir=None, theme=None, title_dir=None, language="zh-CN"):
 
     # 第一阶段：并发判断所有新闻是否符合主题
     print("阶段一：并发判断所有新闻是否符合主题...")
-    matched_news = []
-    matched_lock = threading.Lock()
-    
-    def check_theme(item):
-        if is_theme_matched(item['content'], theme=theme):
-            with matched_lock:
-                matched_news.append(item)
+    matched_indexes = set()
+
+    def check_theme(index, item):
+        matched = is_theme_matched(item['content'], theme=theme)
+        if matched:
             print(f"[+] 符合主题: {item['title'][:15]}...")
         else:
             print(f"[-] 不符合主题，跳过: {item['title'][:15]}...")
-            
+        return index, matched
+
     with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(check_theme, item) for item in news_items]
+        futures = [executor.submit(check_theme, index, item) for index, item in enumerate(news_items)]
         for future in as_completed(futures):
             if future.exception():
                 print(f"[!] 主题判断异常: {future.exception()}")
+                continue
+            index, matched = future.result()
+            if matched:
+                matched_indexes.add(index)
+
+    matched_news = [item for index, item in enumerate(news_items) if index in matched_indexes]
 
     # 第二阶段：遍历所有符合主题的新闻，顺序完成去重和合并
     print(f"阶段二：符合主题的新闻共 {len(matched_news)} 条，开始顺序去重和合并...")

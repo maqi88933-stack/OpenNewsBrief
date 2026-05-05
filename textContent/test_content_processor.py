@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import unittest
 import os
-import tempfile
+import shutil
+import uuid
 from unittest.mock import patch, MagicMock
 
 # 确保能正确引入待测模块
@@ -12,9 +13,10 @@ import content_processor
 class TestContentProcessor(unittest.TestCase):
     def setUp(self):
         # 创建一个临时目录和文件用于测试
-        self.test_dir = tempfile.TemporaryDirectory()
-        self.mock_crawled_dir = os.path.join(self.test_dir.name, "crawler_data")
-        os.makedirs(self.mock_crawled_dir)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.test_dir = os.path.join(project_root, f"tmp_content_processor_{uuid.uuid4().hex}")
+        os.makedirs(self.test_dir, exist_ok=True)
+        self.mock_crawled_dir = self.test_dir
         
         # 准备一个爬虫格式的测试MD文件
         self.sample_md_filepath = os.path.join(self.mock_crawled_dir, "test_news.md")
@@ -52,12 +54,12 @@ class TestContentProcessor(unittest.TestCase):
             f.write(sample_md_content)
             
         # 预设输出文件
-        self.output_md_file = os.path.join(self.test_dir.name, "processed_output.md")
-        self.brief_md_file = os.path.join(self.test_dir.name, "brief_output.md")
+        self.output_md_file = os.path.join(self.test_dir, "processed_output.md")
+        self.brief_md_file = os.path.join(self.test_dir, "brief_output.md")
 
     def tearDown(self):
         # 销毁临时目录
-        self.test_dir.cleanup()
+        shutil.rmtree(self.test_dir, ignore_errors=True)
 
     @patch('content_processor.call_llm')
     def test_is_theme_matched(self, mock_call_llm):
@@ -84,7 +86,7 @@ class TestContentProcessor(unittest.TestCase):
         self.assertEqual(text, "")
         
         # 存在时返回内容
-        test_file = os.path.join(self.test_dir.name, "exist.md")
+        test_file = os.path.join(self.test_dir, "exist.md")
         with open(test_file, 'w', encoding='utf-8') as f:
             f.write("Some previous content")
             
@@ -108,6 +110,14 @@ class TestContentProcessor(unittest.TestCase):
         # 标题不在上下文中，需大模型判断 - 重复
         mock_call_llm.return_value = "是"
         self.assertTrue(content_processor.is_duplicate(news, "### 1. 相似的新闻\n"))
+
+    @patch('content_processor.call_llm')
+    def test_is_duplicate_for_similar_titles(self, mock_call_llm):
+        news = {"title": "OpenAI发布新版GPT-5 Agent平台", "content": "正文"}
+        previous_content = "### 1. OpenAI 发布新版 GPT5 Agent 平台\n"
+
+        self.assertTrue(content_processor.is_duplicate(news, previous_content))
+        mock_call_llm.assert_not_called()
 
     def test_write_to_md(self):
         import threading

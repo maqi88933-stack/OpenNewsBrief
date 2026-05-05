@@ -3,8 +3,17 @@ import unittest
 import os
 import datetime
 import sys
+from unittest.mock import patch
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from news_crawler import parse_and_deduplicate, save_to_markdown_file, run_crawler
+from news_crawler import (
+    build_query_variants,
+    build_source_urls,
+    get_core_keyword,
+    parse_and_deduplicate,
+    save_to_markdown_file,
+    title_matches_keyword,
+    run_crawler,
+)
 
 class TestNewsCrawler(unittest.TestCase):
     def setUp(self):
@@ -59,6 +68,66 @@ class TestNewsCrawler(unittest.TestCase):
         self.assertEqual(results[0]["title"], "Today News 1", "提取的新闻标题不对")
         self.assertEqual(results[0]["link"], "http://example.com/1", "提取的新闻链接不对")
         self.assertTrue("content" in results[0], "结果中必须包含 content 正文本段")
+
+    def test_build_source_urls_force_recent(self):
+        google_url, bing_url, baidu_url = build_source_urls("OpenAI 最新消息")
+
+        self.assertIn("when%3A1d", google_url)
+        self.assertIn("sortbydate", bing_url)
+        self.assertIn("tn=news", baidu_url)
+
+    def test_get_core_keyword_removes_noise_suffix(self):
+        self.assertEqual(get_core_keyword("OpenAI 最新消息"), "OpenAI")
+        self.assertEqual(get_core_keyword("Claude Code 最新动态"), "Claude Code")
+        self.assertEqual(get_core_keyword("Google AI最新进展"), "Google AI")
+
+    def test_build_query_variants_adds_core_keyword(self):
+        variants = build_query_variants("OpenAI 最新消息")
+
+        self.assertEqual(variants[0], "OpenAI 最新消息")
+        self.assertIn("OpenAI", variants)
+
+    def test_title_matches_keyword_uses_core_keyword(self):
+        self.assertTrue(title_matches_keyword("OpenAI发布新模型与API更新", "OpenAI 最新消息"))
+        self.assertTrue(title_matches_keyword("Claude Code 新增多模型支持", "Claude Code 最新动态"))
+        self.assertFalse(title_matches_keyword("微软发布 Windows 更新", "OpenAI 最新消息"))
+
+    @patch("news_crawler.fetch_article_content", return_value="mock content")
+    def test_parse_and_deduplicate_prefers_newest_items(self, _mock_fetch):
+        now = datetime.datetime.now().astimezone()
+        newest = now.strftime('%a, %d %b %Y %H:%M:%S %z')
+        middle = (now - datetime.timedelta(hours=2)).strftime('%a, %d %b %Y %H:%M:%S %z')
+        oldest = (now - datetime.timedelta(hours=8)).strftime('%a, %d %b %Y %H:%M:%S %z')
+
+        mock_xml = f"""<?xml version="1.0" encoding="utf-8" ?>
+        <rss version="2.0">
+            <channel>
+                <item>
+                    <title>Older But Valid</title>
+                    <link>http://example.com/older</link>
+                    <pubDate>{oldest}</pubDate>
+                </item>
+                <item>
+                    <title>Newest News</title>
+                    <link>http://example.com/newest</link>
+                    <pubDate>{newest}</pubDate>
+                </item>
+                <item>
+                    <title>Middle News</title>
+                    <link>http://example.com/middle</link>
+                    <pubDate>{middle}</pubDate>
+                </item>
+            </channel>
+        </rss>
+        """
+
+        results, expired_count = parse_and_deduplicate(mock_xml, self.keyword)
+
+        self.assertEqual(expired_count, 0)
+        self.assertEqual(
+            [item["title"] for item in results],
+            ["Newest News", "Middle News", "Older But Valid"]
+        )
 
     def test_save_to_markdown_file(self):
         # 测试 2: 验证文件和文件夹生成逻辑与内容完整度验证

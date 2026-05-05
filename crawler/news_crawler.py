@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 import datetime
 import email.utils
 import os
+import re
 import sys
 from html.parser import HTMLParser
 from typing import Optional, List, Dict, Tuple
@@ -25,33 +26,115 @@ except Exception as e:
 # 在这里配置新闻有效时间的时限（单位：小时）
 # 如果新闻的发布实际距离现在超过该配置的小时数，则判定为过时并被丢弃
 MAX_HOURS =24
+RECENT_QUERY_SUFFIX = " when:1d"
+KEYWORD_NOISE_SUFFIXES = [
+    " 最新消息",
+    " 最新动态",
+    " 最新进展",
+    " 最新技术",
+    " 最新应用",
+    " 最新突破",
+    "最新消息",
+    "最新动态",
+    "最新进展",
+    "最新技术",
+    "最新应用",
+    "最新突破",
+]
+GENERIC_MATCH_TOKENS = {"ai", "news", "latest", "update", "updates", "model", "models"}
+
+
+def normalize_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+def get_core_keyword(keyword: str) -> str:
+    core = normalize_whitespace(keyword)
+    for suffix in KEYWORD_NOISE_SUFFIXES:
+        if core.endswith(suffix):
+            core = core[:-len(suffix)].strip()
+            break
+    return core or normalize_whitespace(keyword)
+
+
+def build_query_variants(keyword: str) -> List[str]:
+    original = normalize_whitespace(keyword)
+    core = get_core_keyword(keyword)
+
+    variants = []
+    for value in (original, core):
+        if value and value not in variants:
+            variants.append(value)
+    return variants
+
+
+def normalize_match_text(text: str) -> str:
+    return re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", (text or "").lower())
+
+
+def title_matches_keyword(title: str, keyword: str) -> bool:
+    normalized_title = normalize_match_text(title)
+    if not normalized_title:
+        return False
+
+    core_keyword = get_core_keyword(keyword)
+    normalized_core = normalize_match_text(core_keyword)
+    if normalized_core and normalized_core in normalized_title:
+        return True
+
+    for token in normalize_whitespace(core_keyword).split(" "):
+        normalized_token = normalize_match_text(token)
+        if not normalized_token:
+            continue
+        if normalized_token in GENERIC_MATCH_TOKENS:
+            continue
+        if len(normalized_token) < 3:
+            continue
+        if normalized_token in normalized_title:
+            return True
+    return False
+
+
+def build_source_urls(keyword):
+    recent_keyword = f"{keyword}{RECENT_QUERY_SUFFIX}"
+    encoded_recent_kw = urllib.parse.quote(recent_keyword)
+    encoded_kw = urllib.parse.quote(keyword)
+
+    baidu_url = (
+        "https://www.baidu.com/s"
+        f"?tn=news&word={encoded_kw}"
+    )
+    bing_url = (
+        "https://www.bing.com/news/search"
+        f"?q={encoded_recent_kw}"
+        "&format=rss"
+        "&setlang=zh-hans"
+        "&setmkt=zh-CN"
+        "&mkt=zh-CN"
+        "&qft=sortbydate%3D%221%22"
+    )
+    google_url = (
+        "https://news.google.com/rss/search"
+        f"?q={encoded_recent_kw}"
+        "&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+    )
+    return google_url, bing_url, baidu_url
+
+
+def parse_pubdate(pubdate_str):
+    if not pubdate_str:
+        return None
+    try:
+        return email.utils.parsedate_to_datetime(pubdate_str).astimezone()
+    except Exception:
+        return None
 
 def fetch_rss_xml(keyword):
     """
     爬取核心逻辑：从 Google News（默认）、Bing 新闻（备选）或 百度新闻（兜底）提取数据。
     使用 Playwright 模拟浏览器。
     """
-    encoded_kw = urllib.parse.quote(keyword)
-    
-    # 百度新闻搜索 URL
-    baidu_url = (
-        "https://www.baidu.com/s"
-        f"?tn=news&word={encoded_kw}"
-    )
-    # Bing 新闻 RSS URL (备选)
-    bing_url = (
-        "https://www.bing.com/news/search"
-        f"?q={encoded_kw}"
-        "&format=rss"
-        "&setlang=zh-hans"
-        "&setmkt=zh-CN"
-        "&mkt=zh-CN"
-    )
-    google_url = (
-        "https://news.google.com/rss/search"
-        f"?q={encoded_kw}"
-        "&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
-    )
+    google_url, bing_url, baidu_url = build_source_urls(keyword)
 
     def _fetch_with_playwright(url: str):
         try:
@@ -95,6 +178,30 @@ def fetch_rss_xml(keyword):
         return body
 
     return None
+
+
+def collect_news_for_keyword(keyword: str):
+    best_news = []
+    best_expired_count = -1
+    best_query = keyword
+
+    for index, query in enumerate(build_query_variants(keyword)):
+        if index > 0:
+            print(f"    [i] 首轮结果不理想，尝试更宽松关键词: {query}")
+        xml_data = fetch_rss_xml(query)
+        news_items, expired_count = parse_and_deduplicate(xml_data, keyword)
+
+        if len(news_items) > len(best_news) or (
+            len(news_items) == len(best_news) and expired_count > best_expired_count
+        ):
+            best_news = news_items
+            best_expired_count = expired_count
+            best_query = query
+
+        if news_items:
+            break
+
+    return best_news, max(best_expired_count, 0), best_query
 
 class _BaiduNewsHTMLParser(HTMLParser):
     """
@@ -156,13 +263,8 @@ def _parse_baidu_html_results(html_bytes: bytes, keyword: str) -> List[Dict]:
     today_date = datetime.datetime.now().astimezone().date()
     for title, link in parser.items:
         # 关键词过滤
-        if keyword:
-            if any("\u4e00" <= ch <= "\u9fff" for ch in keyword):
-                if keyword not in title:
-                    continue
-            else:
-                if keyword.lower() not in title.lower():
-                    continue
+        if keyword and not title_matches_keyword(title, keyword):
+            continue
         
         key = (title, link)
         if key in seen:
@@ -253,13 +355,8 @@ def _parse_bing_html_results(html_bytes: bytes, keyword: str) -> List[Dict]:
     results: List[Dict] = []
     today_date = datetime.datetime.now().astimezone().date()
     for title, link in parser.items:
-        if keyword:
-            if any("\u4e00" <= ch <= "\u9fff" for ch in keyword):
-                if keyword not in title:
-                    continue
-            else:
-                if keyword.lower() not in title.lower():
-                    continue
+        if keyword and not title_matches_keyword(title, keyword):
+            continue
         if "壁纸" in title or "必应" in title:
             continue
         key = (title, link)
@@ -410,6 +507,7 @@ def parse_and_deduplicate(xml_data, keyword):
     expired_count = 0
     pending_items = []
     
+    parsed_items = []
     for item in root.findall('.//item'):
         title_elem = item.find('title')
         link_elem = item.find('link')
@@ -424,30 +522,41 @@ def parse_and_deduplicate(xml_data, keyword):
         if not title or not link:
             continue
             
+        published_at = parse_pubdate(pubdate_str)
         is_expired = False
-        if pubdate_str:
-            try:
-                dt = email.utils.parsedate_to_datetime(pubdate_str).astimezone()
-                time_diff = now_time - dt
-                if time_diff.total_seconds() > MAX_HOURS * 3600:
-                    is_expired = True
-            except Exception:
-                pass
-                
+        if published_at is not None:
+            time_diff = now_time - published_at
+            if time_diff.total_seconds() > MAX_HOURS * 3600:
+                is_expired = True
+        
         if is_expired:
             expired_count += 1
             continue
-            
-        if link not in seen_links and title not in seen_titles:
-            seen_links.add(link)
-            seen_titles.add(title)
-            pending_items.append({
-                "title": title,
-                "link": link,
-                "desc": desc
-            })
-            if len(pending_items) >= 10:
-                break
+
+        parsed_items.append({
+            "title": title,
+            "link": link,
+            "desc": desc,
+            "published_at": published_at
+        })
+
+    parsed_items.sort(
+        key=lambda item: item["published_at"] or datetime.datetime.min.replace(tzinfo=now_time.tzinfo),
+        reverse=True
+    )
+
+    for item in parsed_items:
+        if item["link"] in seen_links or item["title"] in seen_titles:
+            continue
+        seen_links.add(item["link"])
+        seen_titles.add(item["title"])
+        pending_items.append({
+            "title": item["title"],
+            "link": item["link"],
+            "desc": item["desc"]
+        })
+        if len(pending_items) >= 10:
+            break
 
     def fetch_xml_article(item):
         print(f"    - 正在抓取正文: {item['title'][:20]}...")
@@ -516,8 +625,9 @@ def run_crawler(keywords=None, title_dir=None):
     for kw in kw_list:
         print(f"\n>>>> 正在检索关键词：{kw}")
         try:
-            xml_data = fetch_rss_xml(kw)
-            news_items, expired_count = parse_and_deduplicate(xml_data, kw)
+            news_items, expired_count, used_query = collect_news_for_keyword(kw)
+            if used_query != kw:
+                print(f"    [i] 最终采用更宽松检索词: {used_query}")
             save_to_markdown_file(kw, news_items, expired_count, title_dir=title_dir)
         except KeyboardInterrupt:
             raise
