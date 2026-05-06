@@ -6,6 +6,7 @@ news_to_audio.py 的单元测试
 import os
 import sys
 import unittest
+import uuid
 from unittest.mock import AsyncMock, patch, MagicMock
 
 # 确保能引入被测模块
@@ -71,15 +72,15 @@ class TestGetOutputPath(unittest.TestCase):
     """测试输出路径生成"""
 
     def test_date_dir_created(self):
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmp:
+        with patch.object(news_to_audio.os, "makedirs") as mock_makedirs:
+            tmp = os.getcwd()
             path = news_to_audio.get_output_path(
                 "/textContent/2026-03-18/news_brief_2026-03-18.md",
                 tmp
             )
             self.assertTrue(path.endswith(".mp3"))
             self.assertIn("2026-03-18", path)
-            self.assertTrue(os.path.isdir(os.path.dirname(path)))
+            mock_makedirs.assert_called_once()
 
 
 class TestReadMdFile(unittest.TestCase):
@@ -121,6 +122,69 @@ class TestBuildTtsText(unittest.TestCase):
         """测试自定义主题标题"""
         result = news_to_audio.build_tts_text("1. 内容", "2026年03月18日", title="工程机器 破碎机 每日简讯")
         self.assertIn("工程机器 破碎机 每日简讯", result)
+
+
+class TestSegmentedAudio(unittest.TestCase):
+    def test_build_tts_segments_splits_intro_news_and_outro(self):
+        segments = news_to_audio.build_tts_segments(
+            "1. OpenAI 发布新功能\n2. Claude Code 更新",
+            "2026年03月18日",
+            title="AI 每日简报",
+        )
+
+        self.assertEqual([item["role"] for item in segments], ["overview", "news", "news", "outro"])
+        self.assertEqual(segments[0]["slide_index"], 0)
+        self.assertEqual(segments[1]["slide_index"], 1)
+        self.assertEqual(segments[2]["slide_index"], 2)
+        self.assertEqual(segments[3]["slide_index"], 2)
+
+    def test_write_timing_file_records_real_segment_durations(self):
+        import json
+
+        audio_path = os.path.join(os.getcwd(), f"brief_{uuid.uuid4().hex}.mp3")
+        timing_path = audio_path + ".timing.json"
+        try:
+            segments = [
+                {"role": "overview", "slide_index": 0, "duration": 1.5, "text": "intro"},
+                {"role": "news", "slide_index": 1, "duration": 3.0, "text": "news"},
+                {"role": "outro", "slide_index": 1, "duration": 0.8, "text": "outro"},
+            ]
+            created_path = news_to_audio.write_timing_file(audio_path, segments)
+
+            with open(created_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        finally:
+            if os.path.exists(timing_path):
+                os.remove(timing_path)
+
+        self.assertEqual(data["audio_path"], audio_path)
+        self.assertAlmostEqual(data["total_duration"], 5.3)
+        self.assertEqual(data["segments"][1]["slide_index"], 1)
+
+    def test_convert_md_to_audio_generates_each_segment_and_timing(self):
+        output_path = os.path.join(os.getcwd(), f"brief_{uuid.uuid4().hex}.mp3")
+
+        async def fake_convert_to_audio(_text, _path, is_english=False):
+            return None
+
+        with patch.object(news_to_audio, "read_md_file", return_value="1. 第一条新闻\n2. 第二条新闻"):
+            with patch.object(news_to_audio, "get_output_path", return_value=output_path):
+                with patch.object(news_to_audio.os, "makedirs"):
+                    with patch.object(news_to_audio, "convert_to_audio", side_effect=fake_convert_to_audio) as mock_convert:
+                        with patch.object(news_to_audio, "get_audio_duration", side_effect=[1.0, 2.0, 3.0, 0.5]):
+                            with patch.object(news_to_audio, "concat_audio_files", return_value=output_path) as mock_concat:
+                                with patch.object(news_to_audio, "write_timing_file", return_value=output_path + ".timing.json") as mock_timing:
+                                    result = news_to_audio.convert_md_to_audio(
+                                        "news_brief_2026-03-18.md",
+                                        os.getcwd(),
+                                        title="AI 每日简报",
+                                    )
+
+        self.assertEqual(result, output_path)
+        self.assertEqual(mock_convert.call_count, 4)
+        self.assertEqual(len(mock_concat.call_args.args[0]), 4)
+        timing_segments = mock_timing.call_args.args[1]
+        self.assertEqual([item["duration"] for item in timing_segments], [1.0, 2.0, 3.0, 0.5])
 
 
 if __name__ == "__main__":

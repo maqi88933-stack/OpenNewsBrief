@@ -9,6 +9,7 @@ import sys
 import datetime
 import subprocess
 import re
+import json
 
 # 将工程根目录加入路径
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -89,6 +90,43 @@ def extract_brief_titles(brief_path: str):
     return titles
 
 
+def estimate_news_slide_durations(brief_path: str, topic: dict, total_duration: float) -> list:
+    headlines = extract_brief_titles(brief_path)
+    if not headlines:
+        return []
+
+    today = datetime.date.today()
+    intro_text = f"欢迎收听{topic['title']}，以下是 {today.year}年{today.month:02d}月{today.day:02d}日 的简讯。"
+    outro_text = "以上就是今天的全部新闻简讯，感谢收听，我们明天见。"
+    weights = [max(len(intro_text), 18)]
+    weights.extend(max(len(headline), 12) for headline in headlines)
+    weights[-1] += max(len(outro_text), 18)
+
+    total_weight = sum(weights)
+    if total_weight <= 0 or total_duration <= 0:
+        return []
+
+    durations = [total_duration * weight / total_weight for weight in weights]
+    durations[-1] += total_duration - sum(durations)
+    return durations
+
+
+def load_slide_durations_from_timing(audio_path: str, slide_count: int) -> list:
+    timing_path = audio_path + ".timing.json"
+    if slide_count <= 0 or not os.path.exists(timing_path):
+        return []
+
+    with open(timing_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    durations = [0.0] * slide_count
+    for segment in data.get("segments", []):
+        slide_index = int(segment.get("slide_index", 0))
+        if 0 <= slide_index < slide_count:
+            durations[slide_index] += float(segment.get("duration", 0.0))
+    return durations if any(durations) else []
+
+
 def split_display_lines(text: str, max_chars: int = 18):
     clean_text = re.sub(r"\s+", " ", text).strip()
     if not clean_text:
@@ -106,6 +144,25 @@ def split_display_lines(text: str, max_chars: int = 18):
     return lines[:2]
 
 
+def wrap_display_lines(text: str, max_chars: int, max_lines: int):
+    clean_text = re.sub(r"\s+", " ", text or "").strip()
+    if not clean_text:
+        return []
+
+    lines = []
+    current = ""
+    for char in clean_text:
+        current += char
+        if len(current) >= max_chars:
+            lines.append(current)
+            current = ""
+            if len(lines) >= max_lines:
+                break
+    if current and len(lines) < max_lines:
+        lines.append(current)
+    return lines
+
+
 def load_cover_font(size: int, bold: bool = False):
     from PIL import ImageFont
 
@@ -118,6 +175,15 @@ def load_cover_font(size: int, bold: bool = False):
         if os.path.exists(font_path):
             return ImageFont.truetype(font_path, size)
     return ImageFont.load_default()
+
+
+def draw_wrapped_text(draw, xy, text, font, fill, max_chars: int, max_lines: int, line_gap: int):
+    x, y = xy
+    lines = wrap_display_lines(text, max_chars, max_lines)
+    for line in lines:
+        draw.text((x, y), line, font=font, fill=fill)
+        y += line_gap
+    return y
 
 
 def create_local_cover_image(brief_path: str, output_path: str, topic: dict) -> str:
@@ -149,18 +215,14 @@ def create_local_cover_image(brief_path: str, output_path: str, topic: dict) -> 
     draw.text((128, 202), topic["title"], font=title_font, fill="#111111")
     draw.text((128, 272), date_text, font=meta_font, fill="#6E6E73")
 
-    titles = extract_brief_titles(brief_path)[:5]
+    titles = extract_brief_titles(brief_path)[:12]
     y = 360
     for index, headline in enumerate(titles, 1):
-        headline_lines = split_display_lines(headline)
+        headline_lines = wrap_display_lines(headline, 26, 1)
         if not headline_lines:
             continue
         draw.text((128, y), f"{index}. {headline_lines[0]}", font=body_font, fill="#1C1C1E")
-        y += 48
-        if len(headline_lines) > 1:
-            draw.text((172, y), headline_lines[1], font=body_font, fill="#3A3A3C")
-            y += 44
-        y += 18
+        y += 44
         if y > 860:
             break
 
@@ -169,6 +231,57 @@ def create_local_cover_image(brief_path: str, output_path: str, topic: dict) -> 
 
     image.save(output_path)
     return output_path
+
+
+def create_news_detail_image(headline: str, index: int, total: int, output_path: str, topic: dict) -> str:
+    from PIL import Image, ImageDraw
+
+    size = 1080
+    image = Image.new("RGB", (size, size), "#F2F2F7")
+    draw = ImageDraw.Draw(image)
+
+    draw.rounded_rectangle((72, 92, 1008, 988), radius=56, fill="white")
+    draw.rounded_rectangle((118, 142, 214, 176), radius=17, fill="#34C759")
+
+    title_font = load_cover_font(46, bold=True)
+    meta_font = load_cover_font(28)
+    body_font = load_cover_font(42, bold=True)
+
+    today = datetime.date.today()
+    date_text = f"{today.year}.{today.month:02d}.{today.day:02d}"
+    draw.text((128, 202), topic["title"], font=title_font, fill="#111111")
+    draw.text((128, 270), f"{date_text}  {index}/{total}", font=meta_font, fill="#6E6E73")
+
+    y = draw_wrapped_text(draw, (128, 388), headline, body_font, "#1C1C1E", 18, 6, 58)
+    draw.rounded_rectangle((128, min(y + 52, 850), 952, min(y + 84, 882)), radius=16, fill="#E8F7EE")
+    draw.text((128, 950), "OpenNewsBrief", font=meta_font, fill="#8E8E93")
+
+    image.save(output_path)
+    return output_path
+
+
+def create_news_slide_images(brief_path: str, audio_path: str, topic: dict) -> list:
+    audio_dir = os.path.dirname(audio_path)
+    slide_dir = os.path.join(audio_dir, "news_slides")
+    os.makedirs(slide_dir, exist_ok=True)
+
+    headlines = extract_brief_titles(brief_path)
+    if not headlines:
+        return [ensure_cover_image(brief_path, audio_path, topic)]
+
+    image_paths = []
+    overview_path = os.path.join(slide_dir, "slide_00_overview.png")
+    create_local_cover_image(brief_path, overview_path, topic)
+    image_paths.append(overview_path)
+
+    total = len(headlines)
+    for index, headline in enumerate(headlines, 1):
+        slide_path = os.path.join(slide_dir, f"slide_{index:02d}.png")
+        create_news_detail_image(headline, index, total, slide_path, topic)
+        image_paths.append(slide_path)
+
+    print(f"[主程序] 已生成新闻轮播图: {len(image_paths)} 张")
+    return image_paths
 
 
 def ensure_cover_image(brief_path: str, audio_path: str, topic: dict) -> str:
@@ -211,7 +324,7 @@ def run_topic_pipeline(topic: dict) -> dict:
 
     video_title = step_video_title(brief_path, topic)
     ensure_cover_image(brief_path, audio_path, topic)
-    result["video_path"] = step_video(audio_path, video_title)
+    result["video_path"] = step_video(audio_path, video_title, brief_path, topic)
     return result
 
 
@@ -392,7 +505,7 @@ def step_video_title(brief_path: str, topic: dict) -> str:
 # ─────────────────────────────────────────────
 # 步骤 7：合成视频
 # ─────────────────────────────────────────────
-def step_video(audio_path: str, video_title: str) -> str:
+def step_video(audio_path: str, video_title: str, brief_path: str = None, topic: dict = None) -> str:
     """
     根据音频和封面图合成视频，使用 LLM 生成的智能标题作为文件名。
     :param audio_path: MP3 音频文件路径
@@ -410,7 +523,19 @@ def step_video(audio_path: str, video_title: str) -> str:
         print(f"[警告] 封面图不存在: {image_path}，跳过视频合成")
         return ""
 
-    create_video(audio_path, image_path, output_path)
+    image_paths = None
+    if brief_path and topic:
+        image_paths = create_news_slide_images(brief_path, audio_path, topic)
+
+    slide_durations = None
+    if brief_path and topic:
+        expected_count = len(image_paths) if image_paths else 0
+        slide_durations = load_slide_durations_from_timing(audio_path, expected_count)
+        if not slide_durations:
+            from video.Audio2Video import get_audio_duration
+            slide_durations = estimate_news_slide_durations(brief_path, topic, get_audio_duration(audio_path))
+
+    create_video(audio_path, image_path, output_path, image_paths=image_paths, slide_durations=slide_durations)
     print(f"[主程序] 视频文件: {output_path}")
     return output_path
 

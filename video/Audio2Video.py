@@ -1,115 +1,248 @@
 # -*- coding: utf-8 -*-
-"""
-将音频和对应的封面合成视频文件
-"""
-
-import os
 import argparse
+import math
+import os
+import re
 import subprocess
+import wave
+
 import imageio_ffmpeg
 from PIL import Image
 
 
-def create_video(audio_path: str, image_path: str, output_path: str) -> str:
-    """
-    将指定的音频和图片文件合并为视频，并在底部添加跳动的音频波形图
-    :param audio_path: 音频文件(.mp3, .wav 等)绝对或相对路径
-    :param image_path: 封面图片(.jpg, .png 等)绝对或相对路径
-    :param output_path: 输出视频文件(.mp4)绝对或相对路径
-    :return: 最终生成的视频路径
-    """
-    # 1. 检查文件是否存在
-    if not os.path.exists(audio_path):
-        raise FileNotFoundError(f"输入的音频文件不存在: {audio_path}")
-    
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"输入的图片文件不存在: {image_path}")
-        
-    print(f"[1/3] 加载输入文件并获取图片尺寸...")
-    
-    # 获取图片尺寸以调整波形图和最终视频
+def get_audio_duration(audio_path: str) -> float:
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    process = subprocess.run(
+        [ffmpeg_exe, "-i", audio_path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    stderr = process.stderr.decode("utf-8", errors="ignore")
+    match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", stderr)
+    if not match:
+        return 0.0
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+
+def build_slide_durations(total_duration: float, slide_count: int) -> list[float]:
+    if slide_count <= 0:
+        return []
+    if slide_count == 1:
+        return [max(total_duration, 0.1)]
+
+    total_duration = max(float(total_duration), 0.1)
+    if total_duration < float(slide_count) * 2.0:
+        durations = [total_duration / slide_count] * slide_count
+        durations[-1] += total_duration - sum(durations)
+        return durations
+
+    overview_duration = max(2.0, min(4.0, total_duration * 0.25))
+    detail_duration = (total_duration - overview_duration) / (slide_count - 1)
+
+    if detail_duration < 2.0:
+        durations = [total_duration / slide_count] * slide_count
+    else:
+        durations = [overview_duration] + [detail_duration] * (slide_count - 1)
+
+    durations[-1] += total_duration - sum(durations)
+    return durations
+
+
+def create_keyboard_click_track(output_path: str, switch_times: list[float], total_duration: float) -> str:
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    sample_rate = 44100
+    total_samples = max(1, int(total_duration * sample_rate))
+    click_samples = int(0.075 * sample_rate)
+    switch_samples = sorted(int(max(0.0, switch_time) * sample_rate) for switch_time in switch_times)
+    switch_index = 0
+
+    with wave.open(output_path, "w") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        frames = []
+        for pos in range(total_samples):
+            while switch_index < len(switch_samples) and pos >= switch_samples[switch_index] + click_samples:
+                switch_index += 1
+
+            sample = 0.0
+            if switch_index < len(switch_samples) and pos >= switch_samples[switch_index]:
+                i = pos - switch_samples[switch_index]
+                envelope = max(0.0, 1.0 - i / click_samples)
+                tone = math.sin(2 * math.pi * 1800 * (i / sample_rate))
+                tick = math.sin(2 * math.pi * 3200 * (i / sample_rate))
+                sample = (tone * 0.45 + tick * 0.25) * envelope
+
+            value = int(max(-1.0, min(1.0, sample)) * 12000)
+            frames.append(value.to_bytes(2, byteorder="little", signed=True))
+            if len(frames) >= 4096:
+                wav_file.writeframes(b"".join(frames))
+                frames = []
+        if frames:
+            wav_file.writeframes(b"".join(frames))
+    return output_path
+
+
+def _image_size(image_path: str) -> tuple[int, int]:
     with Image.open(image_path) as img:
         width, height = img.size
-        # 确保尺寸是偶数 (libx264 编码要求)
-        width = width - (width % 2)
-        height = height - (height % 2)
+    return width - (width % 2), height - (height % 2)
 
-    # 波形图高度设为图片高度的 15%左右，最大不超过 200px
+
+def _run_ffmpeg(cmd: list[str]):
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr.decode("utf-8", errors="ignore")
+        print(f"视频合成失败: {err_msg}")
+        raise RuntimeError(f"FFmpeg 合成视频出错:\n{err_msg}")
+
+
+def _create_single_image_video(ffmpeg_exe: str, audio_path: str, image_path: str, output_path: str, width: int, height: int) -> str:
     wave_height = min(int(height * 0.15), 200)
-    # 波形图宽度设为宽度的 60%，左右各留 20% 空白
     wave_width = int(width * 0.6)
-    wave_width = wave_width - (wave_width % 2) # 必须保证是偶数
+    wave_width = wave_width - (wave_width % 2)
     wave_x = int(width * 0.2)
-    # 波形图颜色: cyan (或者其它鲜艳颜色)
-    wave_color = "cyan"
 
-    # 确保输出目录存在
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-
-    print(f"[2/3] 开始合成带有音频波形图的视频文件(这可能需要一些时间)...")
-    
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    
-    # 使用 ffmpeg filter_complex 生成波形图并叠加在图片底部
-    # [1:a] 取音频，生成波形图 [wave];
-    # [0:v][wave] 将原始图片和波形图叠加 (overlay=wave_x:H-h 居中位于底部) [outv];
-    # 对输出视频按 [outv]scale 调整为偶数尺寸 [finalv]
     cmd = [
         ffmpeg_exe, "-y",
         "-loop", "1", "-i", image_path,
         "-i", audio_path,
-        "-filter_complex", 
-        f"[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors={wave_color}[wave];[0:v][wave]overlay={wave_x}:H-h[outv];[outv]scale={width}:{height}[finalv]",
+        "-filter_complex",
+        f"[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=cyan[wave];"
+        f"[0:v][wave]overlay={wave_x}:H-h[outv];[outv]scale={width}:{height}[finalv]",
         "-map", "[finalv]",
         "-map", "1:a",
         "-c:v", "libx264",
         "-c:a", "aac",
         "-preset", "ultrafast",
         "-shortest",
-        output_path
+        output_path,
     ]
-    
-    try:
-        # 执行命令，如果失败将捕获错误日志
-        process = subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-    except subprocess.CalledProcessError as e:
-        err_msg = e.stderr.decode('utf-8', errors='ignore')
-        print(f"❌ 视频合成失败: {err_msg}")
-        raise RuntimeError(f"FFmpeg合成视频出错:\n{err_msg}")
-
-    print(f"✅ [3/3] 视频合成成功: {output_path}")
+    _run_ffmpeg(cmd)
     return output_path
+
+
+def _create_slideshow_video(
+    ffmpeg_exe: str,
+    audio_path: str,
+    image_paths: list[str],
+    output_path: str,
+    width: int,
+    height: int,
+    slide_durations: list[float] | None = None,
+) -> str:
+    total_duration = get_audio_duration(audio_path)
+    if total_duration <= 0:
+        total_duration = float(len(image_paths) * 4)
+    durations = slide_durations if slide_durations and len(slide_durations) == len(image_paths) else build_slide_durations(total_duration, len(image_paths))
+    durations[-1] += total_duration - sum(durations)
+
+    switch_times = []
+    elapsed = 0.0
+    for duration in durations[:-1]:
+        elapsed += duration
+        switch_times.append(elapsed)
+
+    click_path = output_path + ".keyboard_clicks.wav"
+    try:
+        create_keyboard_click_track(click_path, switch_times, total_duration)
+
+        cmd = [ffmpeg_exe, "-y"]
+        for image_path, duration in zip(image_paths, durations):
+            cmd.extend(["-loop", "1", "-t", f"{max(duration, 0.1):.3f}", "-i", image_path])
+        audio_index = len(image_paths)
+        click_index = len(image_paths) + 1
+        cmd.extend(["-i", audio_path, "-i", click_path])
+
+        video_parts = []
+        for index in range(len(image_paths)):
+            video_parts.append(
+                f"[{index}:v]scale={width}:{height},setsar=1,"
+                f"trim=duration={max(durations[index], 0.1):.3f},setpts=PTS-STARTPTS[v{index}]"
+            )
+        concat_inputs = "".join(f"[v{index}]" for index in range(len(image_paths)))
+        filter_complex = (
+            ";".join(video_parts)
+            + f";{concat_inputs}concat=n={len(image_paths)}:v=1:a=0,format=yuv420p[finalv];"
+            + f"[{audio_index}:a][{click_index}:a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        )
+
+        cmd.extend([
+            "-filter_complex", filter_complex,
+            "-map", "[finalv]",
+            "-map", "[aout]",
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-r", "30",
+            "-preset", "ultrafast",
+            "-movflags", "+faststart",
+            "-shortest",
+            output_path,
+        ])
+        _run_ffmpeg(cmd)
+    finally:
+        try:
+            if os.path.exists(click_path):
+                os.remove(click_path)
+        except OSError:
+            pass
+    return output_path
+
+
+def create_video(
+    audio_path: str,
+    image_path: str,
+    output_path: str,
+    image_paths: list[str] | None = None,
+    slide_durations: list[float] | None = None,
+) -> str:
+    if not os.path.exists(audio_path):
+        raise FileNotFoundError(f"输入的音频文件不存在: {audio_path}")
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"输入的图片文件不存在: {image_path}")
+
+    slide_paths = image_paths or [image_path]
+    for slide_path in slide_paths:
+        if not os.path.exists(slide_path):
+            raise FileNotFoundError(f"输入的图片文件不存在: {slide_path}")
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    width, height = _image_size(slide_paths[0])
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
+    print("[1/3] 加载输入文件...")
+    if len(slide_paths) > 1:
+        print(f"[2/3] 合成 {len(slide_paths)} 张新闻轮播图，并叠加键盘切换音...")
+        final_video = _create_slideshow_video(ffmpeg_exe, audio_path, slide_paths, output_path, width, height, slide_durations)
+    else:
+        print("[2/3] 合成单图视频，并保留音频波形效果...")
+        final_video = _create_single_image_video(ffmpeg_exe, audio_path, image_path, output_path, width, height)
+
+    print(f"[3/3] 视频合成成功: {final_video}")
+    return final_video
 
 
 if __name__ == "__main__":
     import datetime
-    
-    # 默认获取今天的日期
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    
-    # 构建默认路径
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    audio_dir = os.path.join(base_dir, "audioContent", today)
 
-    #AI_每日简报
-    audio_dir = os.path.join(audio_dir, "AI_每日简报")
-    
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    audio_dir = os.path.join(base_dir, "audioContent", today, "AI_每日简报")
     default_audio = os.path.join(audio_dir, f"news_brief_{today}.mp3")
     default_image = os.path.join(audio_dir, "Gemini_Generated_Image.png")
     default_output = os.path.join(audio_dir, f"video_{today}.mp4")
-    
-    parser = argparse.ArgumentParser(description="将音频和图片合成视频")
-    parser.add_argument("-a", "--audio", type=str, default=default_audio, help="输入的音频文件路径")
-    parser.add_argument("-i", "--image", type=str, default=default_image, help="输入的图片文件路径 (默认: 同目录下的 Gemini_Generated_Image.png)")
-    parser.add_argument("-o", "--output", type=str, default=default_output, help="输出的视频文件路径 (.mp4)")
+
+    parser = argparse.ArgumentParser(description="将音频和图片合成为视频")
+    parser.add_argument("-a", "--audio", type=str, default=default_audio, help="输入音频文件路径")
+    parser.add_argument("-i", "--image", type=str, default=default_image, help="输入图片文件路径")
+    parser.add_argument("-o", "--output", type=str, default=default_output, help="输出 MP4 路径")
     args = parser.parse_args()
 
-    # 如果有传递具体的 audio 且未指定 image，则覆盖 image 路径为该 audio 所在目录下的 Gemini_Generated_Image.png
     if args.audio != default_audio and args.image == default_image:
         args.image = os.path.join(os.path.dirname(args.audio), "Gemini_Generated_Image.png")
         args.output = os.path.join(os.path.dirname(args.audio), "video_output.mp4")
 
-    print(f"[{today}] 准备合并以下文件为视频：")
-    print(f" 音频：{args.audio}")
-    print(f" 图片：{args.image}")
     create_video(args.audio, args.image, args.output)

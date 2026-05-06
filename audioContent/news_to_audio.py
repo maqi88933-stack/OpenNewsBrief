@@ -5,10 +5,14 @@
 """
 
 import asyncio
+import json
 import os
 import re
+import subprocess
 import sys
 from datetime import date, datetime
+
+import imageio_ffmpeg
 
 
 # TTS 语音配置
@@ -76,6 +80,49 @@ def build_tts_text(md_content: str, date_str: str, title: str = "AI 每日简报
     return intro + clean_text + outro
 
 
+def extract_numbered_news(md_content: str) -> list:
+    items = []
+    for line in md_content.splitlines():
+        match = re.match(r"^\s*\d+\.\s+(.+?)\s*$", line)
+        if match:
+            text = clean_markdown(match.group(1)).strip()
+            if text:
+                items.append(text)
+    return items
+
+
+def build_tts_segments(md_content: str, date_str: str, title: str = "AI 每日简报", language: str = "zh-CN") -> list:
+    is_english = "English" in language or "en" in language.lower()
+    intro_template = INTRO_TEMPLATE_EN if is_english else INTRO_TEMPLATE_ZH
+    outro = OUTRO_EN if is_english else OUTRO_ZH
+    news_items = extract_numbered_news(md_content)
+
+    if not news_items:
+        return [{
+            "role": "overview",
+            "slide_index": 0,
+            "text": build_tts_text(md_content, date_str, title=title, language=language),
+        }]
+
+    segments = [{
+        "role": "overview",
+        "slide_index": 0,
+        "text": intro_template.format(date=date_str, title=title).strip(),
+    }]
+    for index, item in enumerate(news_items, 1):
+        segments.append({
+            "role": "news",
+            "slide_index": index,
+            "text": item,
+        })
+    segments.append({
+        "role": "outro",
+        "slide_index": len(news_items),
+        "text": outro.strip(),
+    })
+    return segments
+
+
 def get_output_path(md_path: str, base_dir: str, title_dir: str = None) -> str:
     """
     根据 MD 文件路径推断输出音频路径
@@ -108,6 +155,79 @@ def get_output_path(md_path: str, base_dir: str, title_dir: str = None) -> str:
         output_dir = os.path.join(base_dir, date_dir)
     os.makedirs(output_dir, exist_ok=True)
     return os.path.join(output_dir, filename + ".mp3")
+
+
+def get_audio_duration(audio_path: str) -> float:
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    process = subprocess.run(
+        [ffmpeg_exe, "-i", audio_path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    stderr = process.stderr.decode("utf-8", errors="ignore")
+    match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", stderr)
+    if not match:
+        return 0.0
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+
+def concat_audio_files(segment_paths: list, output_path: str) -> str:
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    concat_path = output_path + ".concat.txt"
+    try:
+        with open(concat_path, "w", encoding="utf-8") as f:
+            for segment_path in segment_paths:
+                safe_path = os.path.abspath(segment_path).replace("\\", "/").replace("'", "'\\''")
+                f.write(f"file '{safe_path}'\n")
+        cmd = [
+            ffmpeg_exe, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_path,
+            "-c", "copy",
+            output_path,
+        ]
+        process = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+        if process.returncode != 0:
+            cmd = [
+                ffmpeg_exe, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_path,
+                "-c:a", "libmp3lame",
+                output_path,
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    finally:
+        try:
+            if os.path.exists(concat_path):
+                os.remove(concat_path)
+        except OSError:
+            pass
+    return output_path
+
+
+def write_timing_file(audio_path: str, segments: list) -> str:
+    timing_path = audio_path + ".timing.json"
+    payload = {
+        "audio_path": audio_path,
+        "total_duration": sum(float(item.get("duration", 0.0)) for item in segments),
+        "segments": [
+            {
+                "role": item.get("role", ""),
+                "slide_index": int(item.get("slide_index", 0)),
+                "duration": float(item.get("duration", 0.0)),
+                "text": item.get("text", ""),
+                "audio_path": item.get("audio_path", ""),
+            }
+            for item in segments
+        ],
+    }
+    with open(timing_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return timing_path
 
 
 def extract_date_str(md_path: str, language: str = "zh-CN") -> str:
@@ -164,17 +284,32 @@ def convert_md_to_audio(md_path: str, output_base_dir: str = None, title: str = 
     print(f"[1/3] 读取文件: {md_path}")
     md_content = read_md_file(md_path)
 
-    # 2. 构建 TTS 文本
+    # 2. 构建分段 TTS 文本
     print("[2/3] 处理文本...")
     date_str = extract_date_str(md_path, language=language)
-    tts_text = build_tts_text(md_content, date_str, title=title, language=language)
+    segments = build_tts_segments(md_content, date_str, title=title, language=language)
 
-    # 3. 转换并保存音频
+    # 3. 逐段转换、记录真实时长，再合并为最终音频
     output_path = get_output_path(md_path, output_base_dir, title_dir=title_dir)
-    print(f"[3/3] 转换音频 -> {output_path}")
-    asyncio.run(convert_to_audio(tts_text, output_path, is_english=is_english))
+    segment_dir = os.path.join(
+        os.path.dirname(output_path),
+        os.path.splitext(os.path.basename(output_path))[0] + "_segments",
+    )
+    os.makedirs(segment_dir, exist_ok=True)
 
-    print(f"✅ 音频生成成功: {output_path}")
+    print(f"[3/3] 分段转换音频 -> {output_path}")
+    segment_paths = []
+    for index, segment in enumerate(segments):
+        segment_path = os.path.join(segment_dir, f"{index:02d}_{segment['role']}.mp3")
+        asyncio.run(convert_to_audio(segment["text"], segment_path, is_english=is_english))
+        segment["audio_path"] = segment_path
+        segment["duration"] = get_audio_duration(segment_path)
+        segment_paths.append(segment_path)
+
+    concat_audio_files(segment_paths, output_path)
+    write_timing_file(output_path, segments)
+
+    print(f"音频生成成功: {output_path}")
     return output_path
 
 
