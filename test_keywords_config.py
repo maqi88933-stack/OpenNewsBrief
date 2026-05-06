@@ -13,8 +13,11 @@ class TestKeywordConfig(unittest.TestCase):
             "Claude Code 最新消息",
             "Claude 4 最新消息",
             "Google DeepMind 最新动态",
+            "AI coding agent latest news",
+            "AI developer tools latest news",
             "豆包 最新动态",
             "DeepSeek 最新消息",
+            "NVIDIA Blackwell latest news",
             "AMD Instinct 最新消息",
             "AI 编程智能体 最新消息",
         }
@@ -26,9 +29,11 @@ class TestKeywordConfig(unittest.TestCase):
 
         removed = {
             "GPT 最新消息",
+            "OpenAI 最新消息",
             "ChatGPT 最新消息",
             "ChatGPT Images 最新消息",
             "Sora 最新消息",
+            "Claude 最新消息",
             "Google AI最新进展",
             "Gemini 最新消息",
             "Meta AI最新动态",
@@ -43,6 +48,7 @@ class TestKeywordConfig(unittest.TestCase):
             "Kimi 最新动态",
             "MiniMax 最新消息",
             "Stepfun 最新消息",
+            "英伟达 最新进展",
         }
         for item in removed:
             self.assertNotIn(item, keywords)

@@ -24,25 +24,25 @@ TOPICS = [
         "theme": "AI大模型、智能体、最新的科技前沿动态",
         "keywords": [
             # 国际头部模型与版本
-            "OpenAI 最新消息",
             "OpenAI Codex 最新消息",
             "GPT-5.5 最新消息",
             "Anthropic 最新动态",
-            "Claude 最新消息",
             "Claude Code 最新消息",
             "Claude 4 最新消息",
             "Google DeepMind 最新动态",
             "xAI 最新动态",
             # AI 编程与智能体
             "AI 编程智能体 最新消息",
+            "AI coding agent latest news",
+            "AI developer tools latest news",
             # 国内主流模型与产品
             "腾讯混元 最新消息",
             "豆包 最新动态",
             "DeepSeek 最新消息",
             "智谱AI 最新动态",
             # AI 基础设施
-            "英伟达 最新进展",
             "Blackwell 最新消息",
+            "NVIDIA Blackwell latest news",
             "AMD Instinct 最新消息",
             # 具身与机器人方向
             "具身智能 最新突破",
