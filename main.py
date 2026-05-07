@@ -468,8 +468,8 @@ def step_video_title(brief_path: str, topic: dict) -> str:
     from util.llm import LLmFactory
 
     today = datetime.date.today()
-    # 月日格式，如 0401
-    date_short = today.strftime("%m%d")
+    # 年月日格式，如 2026-05-07
+    date_short = today.strftime("%Y-%m-%d")
     topic_title = topic["title"]
 
     # 读取简报全文
@@ -486,8 +486,8 @@ def step_video_title(brief_path: str, topic: dict) -> str:
         f"请从中挑选出今天最重磅、最值得关注的 3 条新闻，"
         f"用简短有力的中文（不超过20字）写成吸引眼球的标题，"
         f"然后按照以下格式输出视频文件名（不要加扩展名，不要加任何解释）：\n"
-        f"<最炸裂新闻短标题> | {topic_title} {date_short}\n"
-        f"例如：突发！OpenAI估值破1220亿 | AI每日速递 {date_short}"
+        f"<最炸裂新闻短标题> | {topic_title} |({date_short})\n"
+        f"例如：突发！OpenAI估值破1220亿|AI每日速递|({date_short})\n"
     )
     print("[主程序] 正在调用大模型生成视频文件名...")
     result = llm.invoke(prompt)
