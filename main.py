@@ -459,9 +459,9 @@ def step_play(audio_path: str):
 # ─────────────────────────────────────────────
 def step_video_title(brief_path: str, topic: dict) -> str:
     """
-    读取简报内容，让 LLM 挑选当天最值得关注的一条新闻，
+    读取简报内容，让 LLM 提取当天前 2 条值得关注的新闻，
     并生成适合作为视频文件名的标题字符串。
-    格式示例：突发！OpenAI估值破1220亿 | 阿里云全模态升级 | AI每日速递 0401
+    格式示例：突发OpenAI估值破1220亿 阿里云全模态升级 (2026-05-07)
     :return: 合法的视频文件名（不含扩展名），已去除不能用于文件名的特殊字符
     """
     import re
@@ -483,15 +483,26 @@ def step_video_title(brief_path: str, topic: dict) -> str:
     llm = LLmFactory().getDeepseek()
     prompt = (
         f"以下是今天的新闻简报内容：\n\n{brief_content}\n\n"
-        f"请从中挑选出今天最重磅、最值得关注的 3 条新闻，"
-        f"用简短有力的中文（不超过20字）写成吸引眼球的标题，"
-        f"然后按照以下格式输出视频文件名（不要加扩展名，不要加任何解释）：\n"
-        f"<最炸裂新闻短标题> | {topic_title} |({date_short})\n"
-        f"例如：突发！OpenAI估值破1220亿|AI每日速递|({date_short})\n"
+        f"请从中提取前 2 条最适合作为标题的新闻，"
+        f"分别用简短有力的中文（每条不超过20字）写成吸引眼球的短标题。\n"
+        f"只输出 2 行，每行一个短标题，不要编号，不要日期，不要加任何解释。\n"
     )
     print("[主程序] 正在调用大模型生成视频文件名...")
     result = llm.invoke(prompt)
-    raw_title = result.content.strip().splitlines()[0].strip()
+    news_titles = []
+    for line in result.content.strip().splitlines():
+        title = line.strip()
+        if not title:
+            continue
+        title = re.sub(r"^\s*\d+[\.\、\)\-]\s*", "", title)
+        title = title.strip(" -|｜，,。")
+        if title:
+            news_titles.append(title)
+        if len(news_titles) >= 2:
+            break
+
+    raw_title = " ".join(news_titles[:2]) if news_titles else topic_title
+    raw_title = f"{raw_title} ({date_short})"
 
     # 去除文件名中不合法的字符（Windows/Linux 通用）
     safe_title = re.sub(r'[\\/:*?"<>|]', '', raw_title)
@@ -566,4 +577,3 @@ if __name__ == "__main__":
     print(f"\n{'═' * 50}")
     print("  所有主题处理完毕！")
     print(f"{'═' * 50}")
-

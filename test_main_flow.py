@@ -1,12 +1,44 @@
 import unittest
 import os
 import uuid
+import datetime
+import sys
+import types
 from unittest.mock import patch
 
 import main
 
 
 class TestMainFlow(unittest.TestCase):
+    def test_step_video_title_uses_first_two_news_and_date(self):
+        topic = {"title": "AI 每日简报"}
+        brief_content = "1. OpenAI 发布新模型\n2. 国产芯片突破\n3. 机器人量产\n"
+
+        class FakeDate(datetime.date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 5, 7)
+
+        class FakeLlm:
+            def invoke(self, _prompt):
+                return type("Result", (), {
+                    "content": "1. OpenAI发布新模型\n2. 国产芯片突破\n3. 机器人量产"
+                })()
+
+        class FakeLLmFactory:
+            def getDeepseek(self):
+                return FakeLlm()
+
+        fake_llm_module = types.SimpleNamespace(LLmFactory=FakeLLmFactory)
+
+        with patch("builtins.open", unittest.mock.mock_open(read_data=brief_content)):
+            with patch.object(main.os.path, "exists", return_value=True):
+                with patch.object(main.datetime, "date", FakeDate):
+                    with patch.dict(sys.modules, {"util.llm": fake_llm_module}):
+                        title = main.step_video_title("demo.md", topic)
+
+        self.assertEqual(title, "OpenAI发布新模型 国产芯片突破 (2026-05-07)")
+
     def test_estimate_news_slide_durations_matches_overview_and_news_count(self):
         brief_path = "demo_brief.md"
         topic = {"title": "AI 每日简报"}
