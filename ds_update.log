@@ -1,0 +1,174 @@
+2026-05-08 11:47:45,755 __init__.py[line:13](Pid:9000 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: cookies.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 11:53:43,909 __init__.py[line:13](Pid:58108 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: cookies.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 11:53:43,915 __init__.py[line:13](Pid:17796 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: cookies.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 11:59:23,420 __init__.py[line:13](Pid:9108 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: C:\Users\Lenovo\AppData\Local\bbup-app\data\1274586220.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m拒绝访问。 (os error 5)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 11:59:46,920 __init__.py[line:13](Pid:23696 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: C:\Users\Lenovo\AppData\Local\bbup-app\data\1274586220.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m拒绝访问。 (os error 5)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 12:00:47,278 __init__.py[line:13](Pid:42112 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: cookies.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 12:00:56,257 __init__.py[line:13](Pid:40192 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: cookies.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 12:00:56,280 __init__.py[line:13](Pid:37892 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: cookies.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 12:00:56,304 __init__.py[line:13](Pid:50480 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: cookies.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 12:01:23,040 __init__.py[line:13](Pid:25996 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mopen cookies file: D:\tmp\OpenNewsBrief_biliup_cookie.json[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+│
+╰─▶ [1m系统找不到指定的文件。 (os error 2)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:295:36[23m
+2026-05-08 12:01:38,926 __init__.py[line:13](Pid:54796 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mUnknown Error[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:299:31[23m
+│
+├─▶ [1merror sending request for url (https://passport.bilibili.com/x/passport-login/oauth2/info?access_key=ab4064983c80c86a4d8202b549b31352&actionKey=appkey&appkey=783bbb7264451d82&sign=b2c248d00ca5458e1a3b6a35c1f9d1a2&ts=1778212898)[22m
+│   ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:299:31[23m
+│
+├─▶ [1mclient error (Connect)[22m
+│   ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:299:31[23m
+│
+├─▶ [1mtcp connect error[22m
+│   ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:299:31[23m
+│
+╰─▶ [1m以一种访问权限不允许的方式做了一个访问套接字的尝试。 (os error 10013)[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:299:31[23m
