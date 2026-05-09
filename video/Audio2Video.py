@@ -100,19 +100,25 @@ def _run_ffmpeg(cmd: list[str]):
         raise RuntimeError(f"FFmpeg 合成视频出错:\n{err_msg}")
 
 
+def _waveform_layout(width: int, height: int) -> tuple[int, int, int, int]:
+    wave_height = min(int(height * 0.12), 160)
+    wave_width = int(width * 0.72)
+    wave_width = max(2, wave_width - (wave_width % 2))
+    wave_x = int((width - wave_width) / 2)
+    wave_y = height - wave_height - max(24, int(height * 0.035))
+    return wave_width, wave_height, wave_x, wave_y
+
+
 def _create_single_image_video(ffmpeg_exe: str, audio_path: str, image_path: str, output_path: str, width: int, height: int) -> str:
-    wave_height = min(int(height * 0.15), 200)
-    wave_width = int(width * 0.6)
-    wave_width = wave_width - (wave_width % 2)
-    wave_x = int(width * 0.2)
+    wave_width, wave_height, wave_x, wave_y = _waveform_layout(width, height)
 
     cmd = [
         ffmpeg_exe, "-y",
         "-loop", "1", "-i", image_path,
         "-i", audio_path,
         "-filter_complex",
-        f"[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=cyan[wave];"
-        f"[0:v][wave]overlay={wave_x}:H-h[outv];[outv]scale={width}:{height}[finalv]",
+        f"[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue,format=rgba,colorkey=0x000000:0.04:0.0[wave];"
+        f"[0:v][wave]overlay={wave_x}:{wave_y}[outv];[outv]scale={width}:{height}[finalv]",
         "-map", "[finalv]",
         "-map", "1:a",
         "-c:v", "libx264",
@@ -156,6 +162,7 @@ def _create_slideshow_video(
         audio_index = len(image_paths)
         click_index = len(image_paths) + 1
         cmd.extend(["-i", audio_path, "-i", click_path])
+        wave_width, wave_height, wave_x, wave_y = _waveform_layout(width, height)
 
         video_parts = []
         for index in range(len(image_paths)):
@@ -166,8 +173,11 @@ def _create_slideshow_video(
         concat_inputs = "".join(f"[v{index}]" for index in range(len(image_paths)))
         filter_complex = (
             ";".join(video_parts)
-            + f";{concat_inputs}concat=n={len(image_paths)}:v=1:a=0,format=yuv420p[finalv];"
-            + f"[{audio_index}:a][{click_index}:a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+            + f";{concat_inputs}concat=n={len(image_paths)}:v=1:a=0[basev];"
+            + f"[{audio_index}:a]asplit=2[voice][waveaudio];"
+            + f"[waveaudio]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue,format=rgba,colorkey=0x000000:0.04:0.0[wave];"
+            + f"[basev][wave]overlay={wave_x}:{wave_y},format=yuv420p[finalv];"
+            + f"[voice][{click_index}:a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
         )
 
         cmd.extend([

@@ -120,6 +120,33 @@ def test_slideshow_video_uses_multiple_news_images():
         with Image.open(first_frame) as frame:
             colors = frame.convert("RGB").resize((1, 1)).getpixel((0, 0))
         assert colors != (0, 0, 0)
+
+        waveform_frame = os.path.join(workdir, "waveform_frame.png")
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(),
+                "-y",
+                "-ss",
+                "1",
+                "-i",
+                final_video,
+                "-frames:v",
+                "1",
+                waveform_frame,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        with Image.open(waveform_frame) as frame:
+            width, height = frame.size
+            bottom = frame.convert("RGB").crop((0, int(height * 0.75), width, height))
+            waveform_pixels = sum(
+                1
+                for r, g, b in bottom.getdata()
+                if r < 180 and g > 150 and b > 150
+            )
+        assert waveform_pixels > 20
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 

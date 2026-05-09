@@ -25,3 +25,19 @@
 2026-05-08 12:05:41  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:529: All files uploaded successfully, checkpoint removed
 2026-05-08 12:05:42  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:365: ResponseData { code: 0, data: Some(Object {"aid": Number(116536975033366), "bvid": String("BV196dMBpEXL"), "push_intro": Object {"show": Number(0), "text": String("")}, "submitact_banner": Object {"hotact_text": String(""), "hotact_url": String(""), "list": Null}}), message: "0", ttl: Some(1) }
 2026-05-08 12:05:42  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:367: APP接口投稿成功
+2026-05-09 09:01:48  INFO ThreadId(19) stream_gears::server: crates\stream-gears\src\server.rs:449: Tracing initialized with daily rotation
+2026-05-09 09:01:48  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:304: user: ai博客每日简报
+2026-05-09 09:01:48  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:339: number of concurrent futures: 3
+2026-05-09 09:01:48  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:363: No checkpoint found, starting fresh upload
+2026-05-09 09:01:50  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=akbd&zone=cs: 1359
+2026-05-09 09:01:52  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=bldsa&zone=cs: 2041
+2026-05-09 09:01:53  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=bda2&zone=cs: 1620
+2026-05-09 09:01:55  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=tx&zone=cs: 1786
+2026-05-09 09:01:57  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=estx&zone=cs: 1804
+2026-05-09 09:01:57  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:402: Line { os: Upos, probe_url: "//bb27c891csbd.aikobo.cn/OK", query: "probe_version=20250923&upcdn=akbd&zone=cs", cost: 1359 }
+2026-05-09 09:01:57  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:149: pre_upload: {"build":2140000,"name":"谷歌面试引入AI助手考核应用能力 OpenAI推GPT-5.5专供关键设施防御 (2026-05-09).mp4","profile":"ugcupos/bup","r":"upos","size":39264922,"ssl":0,"version":"2.14.0"}
+2026-05-09 09:02:04  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:506: Upload completed: 谷歌面试引入AI助手考核应用能力 OpenAI推GPT-5.5专供关键设施防御 (2026-05-09).mp4 => cost 6.78s, 5.79 MB/s.
+2026-05-09 09:02:04  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:517: Checkpoint saved: 1 files uploaded
+2026-05-09 09:02:04  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:529: All files uploaded successfully, checkpoint removed
+2026-05-09 09:02:04  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:365: ResponseData { code: 0, data: Some(Object {"aid": Number(116541907604875), "bvid": String("BV1i4RDBuE6z"), "push_intro": Object {"show": Number(0), "text": String("")}, "submitact_banner": Object {"hotact_text": String(""), "hotact_url": String(""), "list": Null}}), message: "0", ttl: Some(1) }
+2026-05-09 09:02:04  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:367: APP接口投稿成功
