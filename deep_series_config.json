@@ -1,0 +1,53 @@
+{
+  "series": [
+    {
+      "title": "AI未来三年系列",
+      "description": "围绕未来三年 AI 对搜索、软件、记忆、协议、私有化和内容生产的影响做深度讨论。",
+      "episodes": [
+        {
+          "title": "AI 为什么会替代搜索？",
+          "question": "AI 为什么会替代搜索？",
+          "generated": false,
+          "generated_at": "2026-05-10 17:52:37",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\script.md",
+          "audio_path": "",
+          "video_path": "",
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-09\\publish_assets.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\agent_interaction.log",
+          "review_ready": true,
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\script_notes.md"
+        },
+        {
+          "title": "为什么 Agent 会重构软件？",
+          "question": "为什么 Agent 会重构软件？"
+        },
+        {
+          "title": "AI 为什么需要记忆？",
+          "question": "AI 为什么需要记忆？",
+          "generated": true,
+          "generated_at": "2026-05-09 17:59:32",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\script.md",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\AI_为什么需要记忆？_2026-05-09.mp4",
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\publish_assets.json"
+        },
+        {
+          "title": "为什么 MCP 很关键？",
+          "question": "为什么 MCP 很关键？"
+        },
+        {
+          "title": "私有化 AI 为什么会爆发？",
+          "question": "私有化 AI 为什么会爆发？"
+        },
+        {
+          "title": "AI 内容工厂会出现吗？",
+          "question": "AI 内容工厂会出现吗？"
+        }
+      ]
+    }
+  ]
+}

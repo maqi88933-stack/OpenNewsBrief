@@ -10,6 +10,10 @@ colorama==0.4.6
 dataclasses-json==0.6.7
 distro==1.9.0
 edge-tts==7.2.7
+ChatTTS==0.2.5
+torch
+torchaudio
+transformers==4.41.2
 frozenlist==1.8.0
 greenlet==3.3.2
 h11==0.16.0

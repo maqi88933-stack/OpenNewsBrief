@@ -18,6 +18,8 @@ import imageio_ffmpeg
 # TTS 语音配置
 VOICE_ZH = "zh-CN-XiaoxiaoNeural"
 VOICE_EN = "en-US-AriaNeural"
+TTS_RATE = os.environ.get("OPENNEWSBRIEF_TTS_RATE", "+18%")
+TTS_ENGINE = os.environ.get("OPENNEWSBRIEF_TTS_ENGINE", "chattts").lower()
 
 # 博客开场白和结束语模板
 INTRO_TEMPLATE_ZH = "欢迎收听{title}，以下是 {date} 的简讯。\n\n"
@@ -257,10 +259,16 @@ def extract_date_str(md_path: str, language: str = "zh-CN") -> str:
 
 
 async def convert_to_audio(tts_text: str, output_path: str, is_english: bool = False):
-    """调用 edge-tts 将文本转换为 MP3 音频文件"""
+    """将文本转换为 MP3 音频文件"""
+    if TTS_ENGINE == "chattts":
+        from audioContent.chattts_engine import synthesize_text
+
+        synthesize_text(tts_text, output_path)
+        return
+
     import edge_tts
     voice = VOICE_EN if is_english else VOICE_ZH
-    communicate = edge_tts.Communicate(tts_text, voice)
+    communicate = edge_tts.Communicate(tts_text, voice, rate=TTS_RATE)
     await communicate.save(output_path)
 
 
