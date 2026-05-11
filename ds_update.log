@@ -172,3 +172,11 @@ RuntimeError: [1mUnknown Error[22m
 │
 ╰─▶ [1m以一种访问权限不允许的方式做了一个访问套接字的尝试。 (os error 10013)[22m
     ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:299:31[23m
+2026-05-11 10:48:38,434 __init__.py[line:13](Pid:24044 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+OSError: [Errno 22] Invalid argument
+2026-05-11 10:48:38,436 __init__.py[line:13](Pid:24044 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+OSError: [Errno 22] Invalid argument

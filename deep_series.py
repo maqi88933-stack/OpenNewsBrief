@@ -191,10 +191,13 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
 def clean_script_output(text: str) -> str:
     lines = [line.strip() for line in (text or "").splitlines()]
     cleaned = []
+    rule_lines = {"---", "***", "___"}
     for line in lines:
         if not line:
             if cleaned:
                 cleaned.append("")
+            continue
+        if line in rule_lines:
             continue
         if not cleaned:
             if line.startswith(("好的，作为", "好的,作为", "下面是", "以下是", "根据你提供", "根据您提供")):
@@ -276,11 +279,11 @@ def parse_dialogue_script(script: str) -> List[Dict]:
     return [item for item in segments if item["text"]]
 
 
-async def _save_tts(text: str, output_path: str, voice: str) -> None:
+async def _save_tts(text: str, output_path: str, voice: str, role: str = "narrator") -> None:
     if DEEP_TTS_ENGINE == "chattts":
         from audioContent.chattts_engine import synthesize_text
 
-        synthesize_text(text, output_path)
+        synthesize_text(text, output_path, role=role)
         return
 
     import edge_tts
@@ -305,7 +308,7 @@ def convert_dialogue_to_audio(script_path: str, output_path: str) -> str:
     for index, segment in enumerate(segments):
         voice = FEMALE_VOICE if segment["speaker"] == "female" else MALE_VOICE
         segment_path = os.path.join(segment_dir, f"{index:03d}_{segment['speaker']}.mp3")
-        asyncio.run(_save_tts(segment["text"], segment_path, voice))
+        asyncio.run(_save_tts(segment["text"], segment_path, voice, role=segment["speaker"]))
         segment["audio_path"] = segment_path
         segment["duration"] = get_audio_duration(segment_path)
         segment["role"] = segment["speaker"]
@@ -464,6 +467,8 @@ def mark_episode_generated(config: Dict, series_title: str, episode_title: str, 
     episode = find_episode(series, episode_title)
     episode["generated"] = bool(result.get("video_path"))
     episode["generated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    episode["published"] = False
+    episode["published_at"] = ""
     for key in ("research_path", "audit_path", "script_path", "script_notes_path", "audio_path", "video_path", "publish_assets_path"):
         if result.get(key):
             episode[key] = result[key]
@@ -535,6 +540,8 @@ def run_episode_by_titles(series_title: str, episode_title: str) -> Dict:
             episode[key] = result[key]
     episode["audio_path"] = ""
     episode["video_path"] = ""
+    episode["published"] = False
+    episode["published_at"] = ""
     episode["review_ready"] = True
     save_config(config)
     return result

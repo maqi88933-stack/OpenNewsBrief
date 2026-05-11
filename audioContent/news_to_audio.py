@@ -263,7 +263,7 @@ async def convert_to_audio(tts_text: str, output_path: str, is_english: bool = F
     if TTS_ENGINE == "chattts":
         from audioContent.chattts_engine import synthesize_text
 
-        synthesize_text(tts_text, output_path)
+        synthesize_text(tts_text, output_path, role="narrator")
         return
 
     import edge_tts

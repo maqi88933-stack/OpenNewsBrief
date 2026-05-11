@@ -1,18 +1,38 @@
+import asyncio
 import os
 import shutil
+import sys
 import tempfile
+import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import deep_series
+
+
+class FakeCommunicate:
+    calls = []
+
+    def __init__(self, text, voice, rate=None):
+        self.text = text
+        self.voice = voice
+        self.rate = rate
+        self.output_path = ""
+        FakeCommunicate.calls.append(self)
+
+    async def save(self, output_path):
+        self.output_path = output_path
 
 
 class TestDeepSeries(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.tmpdir, "deep_series_config.json")
+        self.original_tts_engine = deep_series.DEEP_TTS_ENGINE
+        FakeCommunicate.calls.clear()
 
     def tearDown(self):
+        deep_series.DEEP_TTS_ENGINE = self.original_tts_engine
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_load_config_creates_ai_future_series(self):
@@ -44,10 +64,55 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual([item["speaker"] for item in segments], ["female", "male", "narrator"])
         self.assertIn("目标驱动", segments[1]["text"])
 
+    def test_clean_script_output_strips_markdown_rule_header(self):
+        raw = "---\n\n女：你有没有想过，如果AI不只是聊天，而是能直接替你干活，那该多爽？\n\n男：比如呢？"
+
+        cleaned = deep_series.clean_script_output(raw)
+
+        self.assertFalse(cleaned.startswith("---"))
+        self.assertEqual(
+            cleaned,
+            "女：你有没有想过，如果AI不只是聊天，而是能直接替你干活，那该多爽？\n\n男：比如呢？",
+        )
+
+    def test_save_tts_uses_chattts_for_gendered_dialogue_when_chattts_enabled(self):
+        fake_chattts = types.SimpleNamespace(synthesize_text=MagicMock())
+        fake_edge_tts = types.SimpleNamespace(Communicate=FakeCommunicate)
+        deep_series.DEEP_TTS_ENGINE = "chattts"
+
+        with patch.dict(sys.modules, {
+            "audioContent.chattts_engine": fake_chattts,
+            "edge_tts": fake_edge_tts,
+        }):
+            asyncio.run(deep_series._save_tts("第一句女声", "female.mp3", deep_series.FEMALE_VOICE, role="female"))
+            asyncio.run(deep_series._save_tts("第一句男声", "male.mp3", deep_series.MALE_VOICE, role="male"))
+
+        fake_chattts.synthesize_text.assert_any_call("第一句女声", "female.mp3", role="female")
+        fake_chattts.synthesize_text.assert_any_call("第一句男声", "male.mp3", role="male")
+        self.assertEqual(fake_chattts.synthesize_text.call_count, 2)
+        self.assertEqual(FakeCommunicate.calls, [])
+
+    def test_save_tts_keeps_chattts_for_narrator(self):
+        fake_chattts = types.SimpleNamespace(synthesize_text=MagicMock())
+        fake_edge_tts = types.SimpleNamespace(Communicate=FakeCommunicate)
+        deep_series.DEEP_TTS_ENGINE = "chattts"
+
+        with patch.dict(sys.modules, {
+            "audioContent.chattts_engine": fake_chattts,
+            "edge_tts": fake_edge_tts,
+        }):
+            asyncio.run(deep_series._save_tts("旁白总结", "narrator.mp3", deep_series.MALE_VOICE, role="narrator"))
+
+        fake_chattts.synthesize_text.assert_called_once_with("旁白总结", "narrator.mp3", role="narrator")
+        self.assertEqual(FakeCommunicate.calls, [])
+
     def test_mark_episode_generated_records_video_state(self):
         config = deep_series.load_config(self.config_path)
         series_title = config["series"][0]["title"]
         episode_title = config["series"][0]["episodes"][0]["title"]
+        episode = config["series"][0]["episodes"][0]
+        episode["published"] = True
+        episode["published_at"] = "2026-05-11 10:00:00"
         result = {"video_path": "D:\\output\\demo.mp4", "script_path": "script.md"}
 
         deep_series.mark_episode_generated(config, series_title, episode_title, result)
@@ -56,6 +121,8 @@ class TestDeepSeries(unittest.TestCase):
         self.assertTrue(episode["generated"])
         self.assertEqual(episode["video_path"], "D:\\output\\demo.mp4")
         self.assertEqual(episode["script_path"], "script.md")
+        self.assertFalse(episode["published"])
+        self.assertEqual(episode["published_at"], "")
         self.assertIn("generated_at", episode)
 
     @patch("deep_series.call_llm", return_value='{"title":"深度标题","desc":"深度简介","tags":"AI,科技"}')

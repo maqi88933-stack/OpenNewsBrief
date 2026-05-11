@@ -7,14 +7,14 @@
         {
           "title": "AI 为什么会替代搜索？",
           "question": "AI 为什么会替代搜索？",
-          "generated": false,
-          "generated_at": "2026-05-10 17:52:37",
+          "generated": true,
+          "generated_at": "2026-05-10 23:12:56",
           "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\research.md",
           "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\audit.md",
           "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\script.md",
-          "audio_path": "",
-          "video_path": "",
-          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-09\\publish_assets.json",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\AI_为什么会替代搜索？_2026-05-10.mp4",
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\publish_assets.json",
           "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\agent_interaction.log",
           "review_ready": true,
           "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\script_notes.md"
@@ -46,6 +46,23 @@
         {
           "title": "AI 内容工厂会出现吗？",
           "question": "AI 内容工厂会出现吗？"
+        },
+        {
+          "title": "AI Agent——从聊天到替你干活，还有多远？",
+          "question": "AI Agent——从聊天到替你干活，还有多远？",
+          "generated": true,
+          "generated_at": "2026-05-11 11:39:57",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\script_notes.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\AI_Agent——从聊天到替你干活，还有多远？_2026-05-11.mp4",
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\publish_assets.json",
+          "published": true,
+          "published_at": "2026-05-11 11:42:45"
         }
       ]
     }

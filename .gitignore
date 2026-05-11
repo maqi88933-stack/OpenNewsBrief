@@ -9,3 +9,6 @@ __pycache__/
 [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
 .test_output/
 /test_output
+#忽略tmp开头的文件和文件夹
+tmp*
+chattts_speakers.json

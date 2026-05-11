@@ -463,8 +463,18 @@ class NewsBriefApp:
             fg=SUBTEXT_COLOR,
         ).pack(anchor="w", pady=(8, 12))
 
-        self.deep_publish_list = tk.Listbox(
-            inner,
+        self.deep_publish_tab = "pending"
+        self.deep_publish_notebook = ttk.Notebook(inner)
+        self.deep_publish_notebook.pack(fill="x")
+
+        pending_frame = tk.Frame(self.deep_publish_notebook, bg=CARD_COLOR)
+        published_frame = tk.Frame(self.deep_publish_notebook, bg=CARD_COLOR)
+        self.deep_publish_notebook.add(pending_frame, text="待发布")
+        self.deep_publish_notebook.add(published_frame, text="已发布")
+        self.deep_publish_notebook.bind("<<NotebookTabChanged>>", self.on_deep_publish_tab_changed)
+
+        self.deep_pending_publish_list = tk.Listbox(
+            pending_frame,
             height=5,
             exportselection=False,
             bg=PANEL_COLOR,
@@ -474,7 +484,20 @@ class NewsBriefApp:
             highlightbackground="#EEEEF2",
             font=("Microsoft YaHei UI", 10),
         )
-        self.deep_publish_list.pack(fill="x")
+        self.deep_pending_publish_list.pack(fill="x")
+        self.deep_published_list = tk.Listbox(
+            published_frame,
+            height=5,
+            exportselection=False,
+            bg=PANEL_COLOR,
+            fg=TEXT_COLOR,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground="#EEEEF2",
+            font=("Microsoft YaHei UI", 10),
+        )
+        self.deep_published_list.pack(fill="x")
+        self.deep_publish_list = self.deep_pending_publish_list
 
         btn_row = tk.Frame(inner, bg=CARD_COLOR)
         btn_row.pack(fill="x", pady=(12, 0))
@@ -519,6 +542,7 @@ class NewsBriefApp:
             cursor="hand2",
         )
         self.deep_publish_all_button.pack(fill="x", pady=(10, 0))
+        self.update_deep_publish_buttons()
         self.refresh_deep_publish_list()
 
     def build_result_card(self, parent):
@@ -554,16 +578,18 @@ class NewsBriefApp:
             fg=TEXT_COLOR,
         ).pack(side="left")
 
-        tk.Label(
+        tk.Entry(
             row,
             textvariable=text_var,
-            anchor="w",
-            justify="left",
             font=("Microsoft YaHei UI", 9),
-            bg=CARD_COLOR,
+            bg=PANEL_COLOR,
             fg=SUBTEXT_COLOR,
-            wraplength=240,
-        ).pack(side="left", fill="x", expand=True)
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground="#EEEEF2",
+            readonlybackground=PANEL_COLOR,
+            state="readonly",
+        ).pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=5)
 
         tk.Button(
             row,
@@ -699,6 +725,9 @@ class NewsBriefApp:
         self.deep_episode_question_var.set("")
 
     def get_generated_deep_episodes(self, series=None):
+        return self.get_deep_publish_episodes(series=series, tab_name="pending")
+
+    def get_deep_publish_episodes(self, series=None, tab_name="pending"):
         target_series = series
         if target_series is None:
             series_index = self.get_selected_deep_series_index()
@@ -708,16 +737,44 @@ class NewsBriefApp:
         items = []
         for episode in target_series.get("episodes", []):
             video_path = episode.get("video_path", "")
-            if episode.get("generated") and video_path and os.path.exists(video_path):
+            if not (episode.get("generated") and video_path and os.path.exists(video_path)):
+                continue
+            is_published = bool(episode.get("published"))
+            if tab_name == "published":
+                if is_published:
+                    items.append((target_series, episode))
+            elif not is_published:
                 items.append((target_series, episode))
         return items
 
-    def refresh_deep_publish_list(self):
-        if not hasattr(self, "deep_publish_list"):
+    def on_deep_publish_tab_changed(self, _event=None):
+        if not hasattr(self, "deep_publish_notebook"):
             return
-        self.deep_publish_list.delete(0, "end")
-        for _series, episode in self.get_generated_deep_episodes():
-            self.deep_publish_list.insert("end", episode.get("title", "未命名主题"))
+        current_tab = self.deep_publish_notebook.tab(self.deep_publish_notebook.select(), "text")
+        self.deep_publish_tab = "published" if current_tab == "已发布" else "pending"
+        self.deep_publish_list = self.deep_published_list if self.deep_publish_tab == "published" else self.deep_pending_publish_list
+        self.update_deep_publish_buttons()
+
+    def update_deep_publish_buttons(self):
+        if not hasattr(self, "deep_publish_selected_button"):
+            return
+        if getattr(self, "deep_publish_tab", "pending") == "published":
+            self.deep_publish_selected_button.config(state="disabled", bg=BUTTON_DISABLED)
+            self.deep_publish_all_button.config(state="disabled", bg=BUTTON_DISABLED)
+        else:
+            self.deep_publish_selected_button.config(state="normal", bg=SUCCESS_COLOR)
+            self.deep_publish_all_button.config(state="normal", bg=SUCCESS_COLOR)
+
+    def refresh_deep_publish_list(self):
+        if not hasattr(self, "deep_pending_publish_list"):
+            return
+        self.deep_pending_publish_list.delete(0, "end")
+        self.deep_published_list.delete(0, "end")
+        for _series, episode in self.get_deep_publish_episodes(tab_name="pending"):
+            self.deep_pending_publish_list.insert("end", episode.get("title", "未命名主题"))
+        for _series, episode in self.get_deep_publish_episodes(tab_name="published"):
+            self.deep_published_list.insert("end", episode.get("title", "未命名主题"))
+        self.on_deep_publish_tab_changed()
 
     def get_selected_topics(self):
         return [topic for topic, var in self.topic_vars if var.get()]
@@ -997,8 +1054,11 @@ class NewsBriefApp:
     def start_publish_selected_deep_video(self):
         if self.is_running or self.is_publishing:
             return
+        if getattr(self, "deep_publish_tab", "pending") == "published":
+            self.append_log("已发布列表中的视频不能再次发布，请先重新生成。\n")
+            return
         generated = self.get_generated_deep_episodes()
-        selection = self.deep_publish_list.curselection()
+        selection = self.deep_pending_publish_list.curselection()
         if not selection or selection[0] >= len(generated):
             self.append_log("请先在待发布列表选择一个视频。\n")
             return
@@ -1049,6 +1109,7 @@ class NewsBriefApp:
             "publish_title": episode.get("publish_title", ""),
             "publish_desc": episode.get("publish_desc", ""),
             "publish_tags": episode.get("publish_tags", ""),
+            "published": bool(episode.get("published")),
         }
         assets_path = result.get("publish_assets_path")
         if assets_path and os.path.exists(assets_path):
@@ -1075,6 +1136,15 @@ class NewsBriefApp:
             except Exception as exc:
                 self.append_log(f"AI 发布信息生成失败：{exc}\n")
         return result
+
+    def mark_deep_episode_published(self, series_title, episode_title):
+        if not series_title or not episode_title:
+            return
+        series = deep_series.find_series(self.deep_config, series_title)
+        episode = deep_series.find_episode(series, episode_title)
+        episode["published"] = True
+        episode["published_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        deep_series.save_config(self.deep_config)
 
     def get_publish_video_path(self):
         video_path = self.latest_result.get("video_path")
@@ -1149,7 +1219,7 @@ class NewsBriefApp:
         tags = BILIBILI_TAGS
         latest_result = getattr(self, "latest_result", {})
         if latest_result.get("series"):
-            title = latest_result.get("publish_title") or title
+            title = self.format_deep_publish_title(latest_result.get("series", ""), latest_result.get("publish_title") or title)
             desc = (
                 f"{latest_result.get('series', '')} / {latest_result.get('episode', '')}\n"
                 "本视频为 OpenNewsBrief 深度系列内容，基于调研、审稿和脚本生成流程制作。"
@@ -1176,9 +1246,19 @@ class NewsBriefApp:
         ])
         return command
 
+    def format_deep_publish_title(self, series_title, title):
+        series_title = (series_title or "").strip()
+        title = (title or "").strip()
+        if not series_title:
+            return title
+        prefix = f"{series_title}："
+        return title if title.startswith(prefix) else prefix + title
+
     def publish_to_bilibili(self, video_path):
         try:
-            self.publish_video_once(video_path)
+            if self.publish_video_once(video_path):
+                latest_result = getattr(self, "latest_result", {})
+                self.mark_deep_episode_published(latest_result.get("series", ""), latest_result.get("episode", ""))
         finally:
             self.finish_publish()
 
@@ -1207,10 +1287,12 @@ class NewsBriefApp:
             return_code = process.wait()
             if return_code == 0:
                 self.append_log("B站发布完成。\n")
+                return True
             else:
                 self.append_log(f"B站发布失败，退出码：{return_code}\n")
         except Exception:
             self.append_log(traceback.format_exc())
+        return False
 
     def publish_many_to_bilibili(self, results):
         try:
@@ -1221,7 +1303,8 @@ class NewsBriefApp:
                     continue
                 self.latest_result = result
                 self.update_result_panel(result)
-                self.publish_video_once(video_path)
+                if self.publish_video_once(video_path):
+                    self.mark_deep_episode_published(result.get("series", ""), result.get("episode", ""))
         finally:
             self.finish_publish()
 
@@ -1237,6 +1320,9 @@ class NewsBriefApp:
                 self.deep_run_series_button.config(state="normal", bg="#2C2C2E")
                 self.deep_generate_video_button.config(state="normal", bg=PRIMARY_COLOR)
             self.status_var.set(f"发布完成 {datetime.datetime.now().strftime('%H:%M:%S')}")
+            self.refresh_deep_lists()
+            self.refresh_deep_publish_list()
+            self.update_deep_publish_buttons()
 
         self.root.after(0, _finish)
 
@@ -1420,8 +1506,13 @@ class NewsBriefApp:
         return button
 
     def get_episode_status(self, episode):
+        return self.get_deep_episode_status(episode)
+
+    def get_deep_episode_status(self, episode):
+        if episode.get("generated") and episode.get("video_path") and episode.get("published"):
+            return "已发布"
         if episode.get("generated") and episode.get("video_path"):
-            return "已生成"
+            return "待发布"
         if episode.get("review_ready") and episode.get("script_path"):
             return "待生成视频"
         return "未生成"
