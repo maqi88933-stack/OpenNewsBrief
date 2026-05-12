@@ -7,7 +7,6 @@ import subprocess
 import wave
 
 import imageio_ffmpeg
-from PIL import Image
 
 
 def get_audio_duration(audio_path: str) -> float:
@@ -85,10 +84,20 @@ def create_keyboard_click_track(output_path: str, switch_times: list[float], tot
     return output_path
 
 
-def _image_size(image_path: str) -> tuple[int, int]:
-    with Image.open(image_path) as img:
-        width, height = img.size
-    return width - (width % 2), height - (height % 2)
+def _video_size() -> tuple[int, int]:
+    return 1920, 1080
+
+
+def _fit_video_filter(input_label: str, index: str, width: int, height: int, duration: float | None = None) -> str:
+    duration_filter = ""
+    if duration is not None:
+        duration_filter = f",trim=duration={max(duration, 0.1):.3f},setpts=PTS-STARTPTS"
+    return (
+        f"{input_label}scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},boxblur=24:2,setsar=1[bg{index}];"
+        f"{input_label}scale={width}:{height}:force_original_aspect_ratio=decrease,setsar=1[fg{index}];"
+        f"[bg{index}][fg{index}]overlay=(W-w)/2:(H-h)/2{duration_filter}[v{index}]"
+    )
 
 
 def _run_ffmpeg(cmd: list[str]):
@@ -117,8 +126,9 @@ def _create_single_image_video(ffmpeg_exe: str, audio_path: str, image_path: str
         "-loop", "1", "-i", image_path,
         "-i", audio_path,
         "-filter_complex",
-        f"[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue,format=rgba,colorkey=0x000000:0.04:0.0[wave];"
-        f"[0:v][wave]overlay={wave_x}:{wave_y}[outv];[outv]scale={width}:{height}[finalv]",
+        _fit_video_filter("[0:v]", "0", width, height)
+        + f";[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue,format=rgba,colorkey=0x000000:0.04:0.0[wave];"
+        + f"[v0][wave]overlay={wave_x}:{wave_y},format=yuv420p[finalv]",
         "-map", "[finalv]",
         "-map", "1:a",
         "-c:v", "libx264",
@@ -139,6 +149,7 @@ def _create_slideshow_video(
     width: int,
     height: int,
     slide_durations: list[float] | None = None,
+    transition_clicks: bool = True,
 ) -> str:
     total_duration = get_audio_duration(audio_path)
     if total_duration <= 0:
@@ -154,21 +165,21 @@ def _create_slideshow_video(
 
     click_path = output_path + ".keyboard_clicks.wav"
     try:
-        create_keyboard_click_track(click_path, switch_times, total_duration)
-
         cmd = [ffmpeg_exe, "-y"]
         for image_path, duration in zip(image_paths, durations):
             cmd.extend(["-loop", "1", "-t", f"{max(duration, 0.1):.3f}", "-i", image_path])
         audio_index = len(image_paths)
+        cmd.extend(["-i", audio_path])
         click_index = len(image_paths) + 1
-        cmd.extend(["-i", audio_path, "-i", click_path])
+        if transition_clicks:
+            create_keyboard_click_track(click_path, switch_times, total_duration)
+            cmd.extend(["-i", click_path])
         wave_width, wave_height, wave_x, wave_y = _waveform_layout(width, height)
 
         video_parts = []
         for index in range(len(image_paths)):
             video_parts.append(
-                f"[{index}:v]scale={width}:{height},setsar=1,"
-                f"trim=duration={max(durations[index], 0.1):.3f},setpts=PTS-STARTPTS[v{index}]"
+                _fit_video_filter(f"[{index}:v]", str(index), width, height, durations[index])
             )
         concat_inputs = "".join(f"[v{index}]" for index in range(len(image_paths)))
         filter_complex = (
@@ -176,14 +187,17 @@ def _create_slideshow_video(
             + f";{concat_inputs}concat=n={len(image_paths)}:v=1:a=0[basev];"
             + f"[{audio_index}:a]asplit=2[voice][waveaudio];"
             + f"[waveaudio]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue,format=rgba,colorkey=0x000000:0.04:0.0[wave];"
-            + f"[basev][wave]overlay={wave_x}:{wave_y},format=yuv420p[finalv];"
-            + f"[voice][{click_index}:a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+            + f"[basev][wave]overlay={wave_x}:{wave_y},format=yuv420p[finalv]"
         )
+        audio_map = "[voice]"
+        if transition_clicks:
+            filter_complex += f";[voice][{click_index}:a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+            audio_map = "[aout]"
 
         cmd.extend([
             "-filter_complex", filter_complex,
             "-map", "[finalv]",
-            "-map", "[aout]",
+            "-map", audio_map,
             "-c:v", "libx264",
             "-c:a", "aac",
             "-r", "30",
@@ -208,6 +222,7 @@ def create_video(
     output_path: str,
     image_paths: list[str] | None = None,
     slide_durations: list[float] | None = None,
+    transition_clicks: bool = True,
 ) -> str:
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"输入的音频文件不存在: {audio_path}")
@@ -220,13 +235,23 @@ def create_video(
             raise FileNotFoundError(f"输入的图片文件不存在: {slide_path}")
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    width, height = _image_size(slide_paths[0])
+    width, height = _video_size()
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
     print("[1/3] 加载输入文件...")
     if len(slide_paths) > 1:
-        print(f"[2/3] 合成 {len(slide_paths)} 张新闻轮播图，并叠加键盘切换音...")
-        final_video = _create_slideshow_video(ffmpeg_exe, audio_path, slide_paths, output_path, width, height, slide_durations)
+        sound_text = "并叠加键盘切换音" if transition_clicks else "不叠加切换音"
+        print(f"[2/3] 合成 {len(slide_paths)} 张新闻轮播图，{sound_text}...")
+        final_video = _create_slideshow_video(
+            ffmpeg_exe,
+            audio_path,
+            slide_paths,
+            output_path,
+            width,
+            height,
+            slide_durations,
+            transition_clicks=transition_clicks,
+        )
     else:
         print("[2/3] 合成单图视频，并保留音频波形效果...")
         final_video = _create_single_image_video(ffmpeg_exe, audio_path, image_path, output_path, width, height)

@@ -41,6 +41,26 @@ def test_waveform_effect():
     try:
         final_video = create_video(audio_path, image_path, output_path)
         assert os.path.exists(final_video)
+
+        first_frame = os.path.join(workdir, "first_frame.png")
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(),
+                "-y",
+                "-ss",
+                "0",
+                "-i",
+                final_video,
+                "-frames:v",
+                "1",
+                first_frame,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        with Image.open(first_frame) as frame:
+            assert frame.size == (1920, 1080)
     except Exception as e:
         raise
     finally:
@@ -118,6 +138,7 @@ def test_slideshow_video_uses_multiple_news_images():
             stderr=subprocess.PIPE,
         )
         with Image.open(first_frame) as frame:
+            assert frame.size == (1920, 1080)
             colors = frame.convert("RGB").resize((1, 1)).getpixel((0, 0))
         assert colors != (0, 0, 0)
 
@@ -144,9 +165,9 @@ def test_slideshow_video_uses_multiple_news_images():
             waveform_pixels = sum(
                 1
                 for r, g, b in bottom.getdata()
-                if r < 180 and g > 150 and b > 150
+                if r < 230 and g > 180 and b > 200
             )
-        assert waveform_pixels > 20
+        assert waveform_pixels > 500
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 

@@ -12,3 +12,6 @@ __pycache__/
 #忽略tmp开头的文件和文件夹
 tmp*
 chattts_speakers.json
+deep_series_config.json
+deep_series_config.yaml
+deep_series_config.json

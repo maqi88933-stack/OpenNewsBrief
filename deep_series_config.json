@@ -17,35 +17,96 @@
           "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\publish_assets.json",
           "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\agent_interaction.log",
           "review_ready": true,
-          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\script_notes.md"
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么会替代搜索？\\2026-05-10\\script_notes.md",
+          "published": true,
+          "published_at": "2026-05-11 11:42:45"
         },
         {
           "title": "为什么 Agent 会重构软件？",
-          "question": "为什么 Agent 会重构软件？"
+          "question": "为什么 Agent 会重构软件？",
+          "generated": true,
+          "generated_at": "2026-05-11 15:23:19",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\script_notes.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\为什么_Agent_会重构软件？_2026-05-11.mp4",
+          "published": true,
+          "published_at": "2026-05-11 15:29:09",
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_Agent_会重构软件？\\2026-05-11\\publish_assets.json"
         },
         {
           "title": "AI 为什么需要记忆？",
           "question": "AI 为什么需要记忆？",
           "generated": true,
-          "generated_at": "2026-05-09 17:59:32",
-          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\research.md",
-          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\audit.md",
-          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\script.md",
-          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\dialogue.mp3",
-          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\AI_为什么需要记忆？_2026-05-09.mp4",
-          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-09\\publish_assets.json"
+          "generated_at": "2026-05-11 16:15:07",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\script.md",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\AI_为什么需要记忆？_2026-05-11.mp4",
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\publish_assets.json",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\script_notes.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_为什么需要记忆？\\2026-05-11\\agent_interaction.log",
+          "published": true,
+          "published_at": "2026-05-11 16:21:41",
+          "review_ready": true
         },
         {
           "title": "为什么 MCP 很关键？",
-          "question": "为什么 MCP 很关键？"
+          "question": "为什么 MCP 很关键？",
+          "generated": true,
+          "generated_at": "2026-05-11 17:12:16",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\script_notes.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\为什么_MCP_很关键？_2026-05-11.mp4",
+          "published": true,
+          "published_at": "2026-05-11 17:16:55",
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\为什么_MCP_很关键？\\2026-05-11\\publish_assets.json"
         },
         {
           "title": "私有化 AI 为什么会爆发？",
-          "question": "私有化 AI 为什么会爆发？"
+          "question": "私有化 AI 为什么会爆发？",
+          "generated": true,
+          "generated_at": "2026-05-11 17:51:57",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\script_notes.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\私有化_AI_为什么会爆发？_2026-05-11.mp4",
+          "published": true,
+          "published_at": "2026-05-11 17:53:02",
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\私有化_AI_为什么会爆发？\\2026-05-11\\publish_assets.json"
         },
         {
           "title": "AI 内容工厂会出现吗？",
-          "question": "AI 内容工厂会出现吗？"
+          "question": "AI 内容工厂会出现吗？",
+          "generated": true,
+          "generated_at": "2026-05-12 10:59:53",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\script_notes.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\AI_内容工厂会出现吗？_2026-05-12.mp4",
+          "published": false,
+          "published_at": "",
+          "review_ready": true,
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\documentary_package.md",
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_内容工厂会出现吗？\\2026-05-12\\cover.png"
         },
         {
           "title": "AI Agent——从聊天到替你干活，还有多远？",
@@ -63,6 +124,32 @@
           "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\publish_assets.json",
           "published": true,
           "published_at": "2026-05-11 11:42:45"
+        }
+      ]
+    },
+    {
+      "title": "AI 如何重构企业",
+      "description": "AI 如何重构企业",
+      "episodes": [
+        {
+          "title": "AI 为什么会吞掉 SaaS",
+          "question": "AI 为什么会吞掉 SaaS"
+        },
+        {
+          "title": "Agent 为什么是下一代操作系统",
+          "question": "Agent 为什么是下一代操作系统"
+        },
+        {
+          "title": "为什么企业最终会选择私有化 AI",
+          "question": "为什么企业最终会选择私有化 AI"
+        },
+        {
+          "title": "AI 内容工厂会取代 MCN 吗",
+          "question": "AI 内容工厂会取代 MCN 吗"
+        },
+        {
+          "title": "未来公司可能只需要 3 个人",
+          "question": "未来公司可能只需要 3 个人"
         }
       ]
     }
