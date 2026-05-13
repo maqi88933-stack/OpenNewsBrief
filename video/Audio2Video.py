@@ -4,6 +4,7 @@ import math
 import os
 import re
 import subprocess
+import tempfile
 import wave
 
 import imageio_ffmpeg
@@ -111,11 +112,47 @@ def _run_ffmpeg(cmd: list[str]):
 
 def _waveform_layout(width: int, height: int) -> tuple[int, int, int, int]:
     wave_height = min(int(height * 0.12), 160)
+    wave_height = max(2, wave_height - (wave_height % 2))
     wave_width = int(width * 0.72)
     wave_width = max(2, wave_width - (wave_width % 2))
     wave_x = int((width - wave_width) / 2)
     wave_y = height - wave_height - max(24, int(height * 0.035))
     return wave_width, wave_height, wave_x, wave_y
+
+
+def _concat_file_path(path: str) -> str:
+    return os.path.abspath(path).replace("\\", "/").replace("'", r"'\''")
+
+
+def _write_image_concat_file(image_paths: list[str], durations: list[float], output_path: str) -> str:
+    fd, concat_path = tempfile.mkstemp(
+        prefix="slides_",
+        suffix=".txt",
+        dir=os.path.dirname(os.path.abspath(output_path)),
+        text=True,
+    )
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        for image_path, duration in zip(image_paths, durations):
+            f.write(f"file '{_concat_file_path(image_path)}'\n")
+            f.write(f"duration {max(duration, 0.1):.3f}\n")
+        f.write(f"file '{_concat_file_path(image_paths[-1])}'\n")
+    return concat_path
+
+
+def _create_waveform_video(ffmpeg_exe: str, audio_path: str, output_path: str, width: int, height: int) -> str:
+    wave_width, wave_height, _, _ = _waveform_layout(width, height)
+    cmd = [
+        ffmpeg_exe, "-y",
+        "-i", audio_path,
+        "-filter_complex",
+        f"showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue:rate=30,format=yuv420p",
+        "-an",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        output_path,
+    ]
+    _run_ffmpeg(cmd)
+    return output_path
 
 
 def _create_single_image_video(ffmpeg_exe: str, audio_path: str, image_path: str, output_path: str, width: int, height: int) -> str:
@@ -164,34 +201,31 @@ def _create_slideshow_video(
         switch_times.append(elapsed)
 
     click_path = output_path + ".keyboard_clicks.wav"
+    waveform_path = output_path + ".waveform.mp4"
+    concat_path = ""
     try:
-        cmd = [ffmpeg_exe, "-y"]
-        for image_path, duration in zip(image_paths, durations):
-            cmd.extend(["-loop", "1", "-t", f"{max(duration, 0.1):.3f}", "-i", image_path])
-        audio_index = len(image_paths)
+        concat_path = _write_image_concat_file(image_paths, durations, output_path)
+        cmd = [ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", concat_path]
+        audio_index = 1
         cmd.extend(["-i", audio_path])
-        click_index = len(image_paths) + 1
+        _create_waveform_video(ffmpeg_exe, audio_path, waveform_path, width, height)
+        waveform_index = 2
+        cmd.extend(["-i", waveform_path])
+        click_index = 3
         if transition_clicks:
             create_keyboard_click_track(click_path, switch_times, total_duration)
             cmd.extend(["-i", click_path])
-        wave_width, wave_height, wave_x, wave_y = _waveform_layout(width, height)
+        _, _, wave_x, wave_y = _waveform_layout(width, height)
 
-        video_parts = []
-        for index in range(len(image_paths)):
-            video_parts.append(
-                _fit_video_filter(f"[{index}:v]", str(index), width, height, durations[index])
-            )
-        concat_inputs = "".join(f"[v{index}]" for index in range(len(image_paths)))
         filter_complex = (
-            ";".join(video_parts)
-            + f";{concat_inputs}concat=n={len(image_paths)}:v=1:a=0[basev];"
-            + f"[{audio_index}:a]asplit=2[voice][waveaudio];"
-            + f"[waveaudio]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue,format=rgba,colorkey=0x000000:0.04:0.0[wave];"
-            + f"[basev][wave]overlay={wave_x}:{wave_y},format=yuv420p[finalv]"
+            _fit_video_filter("[0:v]", "0", width, height)
+            + ";[v0]fps=30[basev];"
+            + f"[{waveform_index}:v]format=rgba,colorkey=0x000000:0.04:0.0[wave];"
+            + f"[basev][wave]overlay={wave_x}:{wave_y}:eof_action=pass,format=yuv420p[finalv]"
         )
-        audio_map = "[voice]"
+        audio_map = f"{audio_index}:a"
         if transition_clicks:
-            filter_complex += f";[voice][{click_index}:a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+            filter_complex += f";[{audio_index}:a][{click_index}:a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
             audio_map = "[aout]"
 
         cmd.extend([
@@ -211,6 +245,16 @@ def _create_slideshow_video(
         try:
             if os.path.exists(click_path):
                 os.remove(click_path)
+        except OSError:
+            pass
+        try:
+            if concat_path and os.path.exists(concat_path):
+                os.remove(concat_path)
+        except OSError:
+            pass
+        try:
+            if os.path.exists(waveform_path):
+                os.remove(waveform_path)
         except OSError:
             pass
     return output_path
