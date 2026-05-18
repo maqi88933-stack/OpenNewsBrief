@@ -10,6 +10,11 @@ import wave
 import imageio_ffmpeg
 
 
+def get_waveform_color() -> str:
+    # 波形颜色由 UI 通过环境变量统一配置；这里保留一个淡灰默认值，方便独立运行时也能工作。
+    return os.environ.get("OPENNEWSBRIEF_WAVEFORM_COLOR", "#D1D1D6")
+
+
 def get_audio_duration(audio_path: str) -> float:
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     process = subprocess.run(
@@ -141,11 +146,12 @@ def _write_image_concat_file(image_paths: list[str], durations: list[float], out
 
 def _create_waveform_video(ffmpeg_exe: str, audio_path: str, output_path: str, width: int, height: int) -> str:
     wave_width, wave_height, _, _ = _waveform_layout(width, height)
+    waveform_color = get_waveform_color()
     cmd = [
         ffmpeg_exe, "-y",
         "-i", audio_path,
         "-filter_complex",
-        f"showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue:rate=30,format=yuv420p",
+        f"showwaves=s={wave_width}x{wave_height}:mode=cline:colors={waveform_color}:rate=30,format=yuv420p",
         "-an",
         "-c:v", "libx264",
         "-preset", "ultrafast",
@@ -157,6 +163,7 @@ def _create_waveform_video(ffmpeg_exe: str, audio_path: str, output_path: str, w
 
 def _create_single_image_video(ffmpeg_exe: str, audio_path: str, image_path: str, output_path: str, width: int, height: int) -> str:
     wave_width, wave_height, wave_x, wave_y = _waveform_layout(width, height)
+    waveform_color = get_waveform_color()
 
     cmd = [
         ffmpeg_exe, "-y",
@@ -164,7 +171,8 @@ def _create_single_image_video(ffmpeg_exe: str, audio_path: str, image_path: str
         "-i", audio_path,
         "-filter_complex",
         _fit_video_filter("[0:v]", "0", width, height)
-        + f";[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors=lightskyblue,format=rgba,colorkey=0x000000:0.04:0.0[wave];"
+        # 单图视频里的波形也统一从 UI 配置读取，保持整条视频链路一致。
+        + f";[1:a]showwaves=s={wave_width}x{wave_height}:mode=cline:colors={waveform_color},format=rgba,colorkey=0x000000:0.04:0.0[wave];"
         + f"[v0][wave]overlay={wave_x}:{wave_y},format=yuv420p[finalv]",
         "-map", "[finalv]",
         "-map", "1:a",

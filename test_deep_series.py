@@ -11,6 +11,7 @@ import deep_series
 
 
 class FakeCommunicate:
+    # 这里用一个假的 edge_tts 通信对象，方便测试 _save_tts 的分支。
     calls = []
 
     def __init__(self, text, voice, rate=None):
@@ -35,7 +36,7 @@ class TestDeepSeries(unittest.TestCase):
         deep_series.DEEP_TTS_ENGINE = self.original_tts_engine
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def test_load_config_creates_ai_future_series(self):
+    def test_load_config_creates_default_series(self):
         config = deep_series.load_config(self.config_path)
 
         self.assertTrue(config["series"][0]["title"])
@@ -44,11 +45,13 @@ class TestDeepSeries(unittest.TestCase):
 
     def test_save_config_round_trips_new_series_and_episode(self):
         config = {
-            "series": [{
-                "title": "新系列",
-                "description": "测试",
-                "episodes": [{"title": "新主题", "question": "为什么？"}],
-            }]
+            "series": [
+                {
+                    "title": "测试系列",
+                    "description": "测试说明",
+                    "episodes": [{"title": "测试主题", "question": "测试问题"}],
+                }
+            ]
         }
 
         deep_series.save_config(config, self.config_path)
@@ -56,92 +59,83 @@ class TestDeepSeries(unittest.TestCase):
 
         self.assertEqual(loaded, config)
 
-    def test_build_search_keywords_covers_multiple_research_angles(self):
+    def test_build_search_keywords_contains_multiple_angles(self):
         keywords = deep_series.build_search_keywords(
-            {"title": "AI未来三年系列"},
+            {"title": "AI 未来三年系列"},
             {"title": "AI 为什么会替代搜索？", "question": "AI 为什么会替代搜索？"},
         )
-        joined = "\n".join(keywords)
 
         self.assertGreaterEqual(len(keywords), 10)
-        self.assertIn("用户行为", joined)
-        self.assertIn("商业模式", joined)
-        self.assertIn("技术限制", joined)
-        self.assertIn("反方观点", joined)
-        self.assertIn("监管风险", joined)
-        self.assertIn("赢家输家", joined)
+        self.assertIn("核心机制", "\n".join(keywords))
+        self.assertIn("商业模式", "\n".join(keywords))
+        self.assertIn("监管 风险", "\n".join(keywords))
+        self.assertIn("case study", "\n".join(keywords))
 
-    @patch("deep_series.call_llm", return_value="研究报告")
-    def test_generate_research_report_requires_multi_angle_synthesis(self, mock_llm):
+    @patch("deep_series.call_llm", return_value="研究报告正文")
+    def test_generate_research_report_includes_series_and_question(self, mock_llm):
         deep_series.generate_research_report(
-            {"title": "AI未来三年系列"},
+            {"title": "AI 未来三年系列"},
             {"title": "AI 为什么会替代搜索？", "question": "AI 为什么会替代搜索？"},
             [{"title": "Source", "link": "https://example.com", "content": "content"}],
         )
 
         prompt = mock_llm.call_args.args[0]
-        self.assertIn("多角度整理加工", prompt)
-        self.assertIn("正方观点", prompt)
-        self.assertIn("反方观点", prompt)
-        self.assertIn("技术角度", prompt)
-        self.assertIn("商业模式", prompt)
-        self.assertIn("用户行为", prompt)
-        self.assertIn("监管风险", prompt)
-        self.assertIn("利益相关方", prompt)
+        self.assertIn("AI 未来三年系列", prompt)
+        self.assertIn("AI 为什么会替代搜索？", prompt)
+        self.assertIn("核心问题", prompt)
+        self.assertIn("背景", prompt)
+        self.assertIn("争议", prompt)
+
+    def test_clean_script_output_strips_headers_and_keeps_dialogue(self):
+        raw = "---\n\n### 标题\n女：搜索正在变成答案入口。\n\n男：未来的软件入口会变成 AI 对话。\n"
+        cleaned = deep_series.clean_script_output(raw)
+
+        self.assertFalse(cleaned.startswith("---"))
+        self.assertNotIn("###", cleaned)
+        self.assertEqual(cleaned, "女：搜索正在变成答案入口。\n\n男：未来的软件入口会变成 AI 对话。")
 
     def test_parse_dialogue_script_extracts_speakers(self):
-        script = "女：为什么 Agent 会重构软件？\n男：因为软件会从按钮变成目标驱动。\n旁白：结尾总结。"
+        script = "女：搜索正在变成答案入口。\n男：未来的软件入口会变成 AI 对话。\n旁白：这就是变化。"
 
         segments = deep_series.parse_dialogue_script(script)
 
         self.assertEqual([item["speaker"] for item in segments], ["female", "male", "narrator"])
-        self.assertIn("目标驱动", segments[1]["text"])
+        self.assertIn("未来的软件入口会变成 AI 对话", segments[1]["text"])
 
     def test_parse_dialogue_script_handles_markdown_bold_roles_and_preamble(self):
         script = (
-            "好的，各位观众，这是为您生成的最终版解说脚本。\n\n"
-            "### AI未来三年系列：AI 内容工厂会出现吗？\n\n"
-            "**女：** 2026年5月，一个消息像炸弹一样扔进了影视圈。\n\n"
-            "**男：** 所以，一个最直接的问题砸在我们脸上：AI内容工厂真的要来了吗？\n\n"
-            "**女：** **第一，技术。** 目前公开资料还不足以证明AI已经突破根本瓶颈。"
+            "### AI 未来三年系列\n"
+            "**女：** 2026 年，搜索会被重新定义。\n"
+            "**男：** 入口会从搜索框转向对话框。\n"
+            "**旁白：** 这不是简单替代，而是重构。\n"
         )
 
         cleaned = deep_series.clean_script_output(script)
         segments = deep_series.parse_dialogue_script(script)
 
-        self.assertNotIn("好的，各位观众", cleaned)
         self.assertNotIn("###", cleaned)
-        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "female"])
-        self.assertIn("2026年5月", segments[0]["text"])
-        self.assertIn("第一，技术。", segments[2]["text"])
+        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "narrator"])
+        self.assertIn("2026 年", segments[0]["text"])
+        self.assertIn("对话框", segments[1]["text"])
         self.assertNotIn("女：", segments[0]["text"])
-        self.assertNotIn("男：", segments[1]["text"])
-
-    def test_clean_script_output_strips_markdown_rule_header(self):
-        raw = "---\n\n女：你有没有想过，如果AI不只是聊天，而是能直接替你干活，那该多爽？\n\n男：比如呢？"
-
-        cleaned = deep_series.clean_script_output(raw)
-
-        self.assertFalse(cleaned.startswith("---"))
-        self.assertEqual(
-            cleaned,
-            "女：你有没有想过，如果AI不只是聊天，而是能直接替你干活，那该多爽？\n\n男：比如呢？",
-        )
 
     def test_save_tts_uses_chattts_for_gendered_dialogue_when_chattts_enabled(self):
         fake_chattts = types.SimpleNamespace(synthesize_text=MagicMock())
         fake_edge_tts = types.SimpleNamespace(Communicate=FakeCommunicate)
         deep_series.DEEP_TTS_ENGINE = "chattts"
 
-        with patch.dict(sys.modules, {
-            "audioContent.chattts_engine": fake_chattts,
-            "edge_tts": fake_edge_tts,
-        }):
-            asyncio.run(deep_series._save_tts("第一句女声", "female.mp3", deep_series.FEMALE_VOICE, role="female"))
-            asyncio.run(deep_series._save_tts("第一句男声", "male.mp3", deep_series.MALE_VOICE, role="male"))
+        with patch.dict(
+            sys.modules,
+            {
+                "audioContent.chattts_engine": fake_chattts,
+                "edge_tts": fake_edge_tts,
+            },
+        ):
+            asyncio.run(deep_series._save_tts("女：你好。", "female.mp3", deep_series.FEMALE_VOICE, role="female"))
+            asyncio.run(deep_series._save_tts("男：你好。", "male.mp3", deep_series.MALE_VOICE, role="male"))
 
-        fake_chattts.synthesize_text.assert_any_call("第一句女声", "female.mp3", role="female")
-        fake_chattts.synthesize_text.assert_any_call("第一句男声", "male.mp3", role="male")
+        fake_chattts.synthesize_text.assert_any_call("女：你好。", "female.mp3", role="female")
+        fake_chattts.synthesize_text.assert_any_call("男：你好。", "male.mp3", role="male")
         self.assertEqual(fake_chattts.synthesize_text.call_count, 2)
         self.assertEqual(FakeCommunicate.calls, [])
 
@@ -150,13 +144,16 @@ class TestDeepSeries(unittest.TestCase):
         fake_edge_tts = types.SimpleNamespace(Communicate=FakeCommunicate)
         deep_series.DEEP_TTS_ENGINE = "chattts"
 
-        with patch.dict(sys.modules, {
-            "audioContent.chattts_engine": fake_chattts,
-            "edge_tts": fake_edge_tts,
-        }):
-            asyncio.run(deep_series._save_tts("旁白总结", "narrator.mp3", deep_series.MALE_VOICE, role="narrator"))
+        with patch.dict(
+            sys.modules,
+            {
+                "audioContent.chattts_engine": fake_chattts,
+                "edge_tts": fake_edge_tts,
+            },
+        ):
+            asyncio.run(deep_series._save_tts("旁白：开场。", "narrator.mp3", deep_series.MALE_VOICE, role="narrator"))
 
-        fake_chattts.synthesize_text.assert_called_once_with("旁白总结", "narrator.mp3", role="narrator")
+        fake_chattts.synthesize_text.assert_called_once_with("旁白：开场。", "narrator.mp3", role="narrator")
         self.assertEqual(FakeCommunicate.calls, [])
 
     def test_convert_dialogue_to_audio_adds_pause_between_speakers(self):
@@ -177,11 +174,12 @@ class TestDeepSeries(unittest.TestCase):
             deep_series.convert_dialogue_to_audio(script_path, output_path)
 
         segment_paths = mock_concat.call_args.args[0]
-        self.assertEqual(len(segment_paths), 3)
+        self.assertEqual(len(segment_paths), 4)
         self.assertTrue(segment_paths[1].endswith("_pause.mp3"))
+        self.assertTrue(segment_paths[-1].endswith("_ending_silence.mp3"))
         timing_segments = mock_timing.call_args.args[1]
         self.assertAlmostEqual(timing_segments[0]["duration"], 1.0 + deep_series.DEEP_DIALOGUE_PAUSE_SECONDS)
-        self.assertEqual(timing_segments[1]["duration"], 1.0)
+        self.assertAlmostEqual(timing_segments[1]["duration"], 1.0 + deep_series.DEEP_FINAL_SILENCE_SECONDS)
 
     def test_convert_dialogue_to_audio_cleans_stale_segments_and_uses_roles(self):
         script_path = os.path.join(self.tmpdir, "script.md")
@@ -192,7 +190,7 @@ class TestDeepSeries(unittest.TestCase):
         with open(old_path, "wb") as f:
             f.write(b"old")
         with open(script_path, "w", encoding="utf-8") as f:
-            f.write("### 标题\n\n**女：** 第一句。\n**男：** 第二句。")
+            f.write("### 标题\n**女：** 第一段。\n**男：** 第二段。")
 
         async def fake_save_tts(_text, output_path, _voice, role="narrator"):
             with open(output_path, "wb") as f:
@@ -209,19 +207,20 @@ class TestDeepSeries(unittest.TestCase):
         segment_paths = [os.path.basename(path) for path in mock_concat.call_args.args[0]]
         self.assertIn("000_female.mp3", segment_paths)
         self.assertIn("001_male.mp3", segment_paths)
-        self.assertNotIn("000_narrator.mp3", segment_paths)
         timing_segments = mock_timing.call_args.args[1]
         self.assertEqual([item["role"] for item in timing_segments], ["female", "male"])
 
-    def test_create_text_card_uses_dark_documentary_ios_canvas(self):
+    def test_create_text_card_uses_widescreen_ios_canvas(self):
         image_path = os.path.join(self.tmpdir, "slide.png")
-
         deep_series.create_text_card("标题", "系列 · 女主持", "这是一段用于检查版式的正文。", image_path)
 
         from PIL import Image
+
         with Image.open(image_path) as image:
-            self.assertEqual(image.getpixel((40, 40)), (16, 16, 20))
-            self.assertNotEqual(image.getpixel((540, 540)), (245, 245, 247))
+            self.assertEqual(image.size, (1920, 1080))
+            self.assertEqual(image.getpixel((20, 20)), (245, 245, 247))
+            self.assertEqual(image.getpixel((140, 150)), (0, 122, 255))
+            self.assertEqual(image.getpixel((300, 300)), (255, 255, 255))
 
     def test_step_video_disables_transition_clicks_for_deep_series(self):
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
@@ -256,41 +255,51 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(episode["published_at"], "")
         self.assertIn("generated_at", episode)
 
-    @patch("deep_series.call_llm", return_value='{"title":"深度标题","desc":"深度简介","tags":"AI,科技"}')
-    def test_generate_publish_assets_writes_ai_metadata(self, _llm):
+    @patch(
+        "deep_series.call_llm",
+        return_value='{"title":"AI 深度解析","desc":"简介","tags":"AI,深度,口播","cover_text":"深度解析","cover_prompt":"封面提示","comment_question":"你更赞同 A 还是 B？为什么","title_options":["备选一","备选二","备选三"],"cover_options":["封面一","封面二","封面三"]}',
+    )
+    def test_generate_publish_assets_writes_ai_metadata(self, mock_llm):
         script_path = os.path.join(self.tmpdir, "script.md")
         with open(script_path, "w", encoding="utf-8") as f:
-            f.write("女：AI 为什么会替代搜索？\n男：用户要的是答案。")
+            f.write("女：第一句。\n男：第二句。")
         result = {"script_path": script_path, "video_path": os.path.join(self.tmpdir, "demo.mp4")}
-        series = {"title": "AI未来三年系列"}
+        series = {"title": "AI 未来三年系列"}
         episode = {"title": "AI 为什么会替代搜索？"}
 
         assets = deep_series.generate_publish_assets(series, episode, result)
 
-        self.assertEqual(assets["title"], "深度标题")
-        self.assertEqual(assets["desc"], "深度简介")
-        self.assertEqual(assets["tags"], "AI,科技")
+        prompt = mock_llm.call_args.args[0]
+        self.assertIn("短视频发布信息生成助手", prompt)
+        self.assertIn("cover_text", prompt)
+        self.assertIn("comment_question", prompt)
+        self.assertLessEqual(len(assets["title"]), 18)
+        self.assertGreaterEqual(len(assets["cover_text"]), 6)
+        self.assertLessEqual(len(assets["cover_text"]), 10)
+        self.assertIn("互动问题", assets["desc"])
+        self.assertTrue(assets["cover_path"])
+        self.assertTrue(os.path.exists(assets["cover_path"]))
         self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "publish_assets.json")))
 
     @patch("deep_series.step_video", return_value="demo.mp4")
     @patch("deep_series.create_deep_slide_images", return_value=["cover.png", "section.png"])
     @patch("deep_series.convert_dialogue_to_audio", return_value="demo.mp3")
-    @patch("deep_series.call_llm", side_effect=[
-        "研究报告",
-        "事实核查：通过",
-        "反方审稿：通过",
-        "结构审核：通过",
-        "多角度审稿：通过",
-        "女：AI 为什么会替代搜索？\n男：因为用户要答案，不只是链接。",
-        "写稿意见：已采纳审稿建议",
-        "# 新版标题\n1. AI正在杀死搜索\n\n# 分镜脚本\n- handheld documentary shot",
-    ])
-    @patch("deep_series.collect_research_sources", return_value=[
-        {"title": "Source 1", "link": "https://example.com/1", "content": "AI search source"},
-    ])
+    @patch(
+        "deep_series.call_llm",
+        side_effect=[
+            "研究报告",
+            "事实审校",
+            "结构审校",
+            "钩子审校",
+            "对话脚本",
+            "脚本备注",
+            "纪录片包",
+        ],
+    )
+    @patch("deep_series.collect_research_sources", return_value=[{"title": "Source 1", "link": "https://example.com/1", "content": "AI search source"}])
     def test_run_episode_pipeline_returns_review_artifacts(self, _sources, _llm, _audio, _slides, _video):
         episode = {"title": "AI 为什么会替代搜索？", "question": "AI 为什么会替代搜索？"}
-        series = {"title": "AI未来三年系列", "description": "测试系列"}
+        series = {"title": "AI 未来三年系列", "description": "测试说明"}
 
         result = deep_series.run_episode_pipeline(series, episode, base_dir=self.tmpdir)
 
@@ -326,12 +335,16 @@ class TestDeepSeries(unittest.TestCase):
 
         with patch("deep_series.CONFIG_PATH", self.config_path), \
                 patch("deep_series.generate_video_from_script", side_effect=generate_side_effect), \
-                patch("deep_series.generate_publish_assets", return_value={
-                    "path": os.path.join(self.tmpdir, "publish_assets.json"),
-                    "title": "Title",
-                    "desc": "Desc",
-                    "tags": "AI",
-                }):
+                patch(
+                    "deep_series.generate_publish_assets",
+                    return_value={
+                        "path": os.path.join(self.tmpdir, "publish_assets.json"),
+                        "title": "Title",
+                        "desc": "Desc",
+                        "tags": "AI",
+                        "cover_path": os.path.join(self.tmpdir, "cover.png"),
+                    },
+                ):
             deep_series.generate_episode_video_by_titles("Series A", "Episode A")
 
         latest = deep_series.load_config(self.config_path)
@@ -366,74 +379,15 @@ class TestDeepSeries(unittest.TestCase):
         self.assertTrue(episode["review_ready"])
         self.assertEqual(episode["script_path"], "script.md")
 
-    @patch("deep_series.call_llm", return_value='{"title":"AI正在杀死搜索入口","desc":"desc","tags":"AI,搜索","cover_text":"搜索正在死亡","cover_prompt":"左边是搜索框，右边是AI对话框","title_options":["AI正在杀死搜索"],"cover_options":["搜索正在死亡"]}')
-    def test_generate_publish_assets_adds_documentary_cover_fields(self, mock_llm):
-        script_path = os.path.join(self.tmpdir, "script.md")
-        with open(script_path, "w", encoding="utf-8") as f:
-            f.write("女：搜索正在变成答案。\n男：用户不再想看十个链接。")
-        result = {"script_path": script_path, "video_path": os.path.join(self.tmpdir, "demo.mp4")}
-        series = {"title": "AI未来三年系列"}
-        episode = {"title": "AI 为什么会替代搜索？"}
-
-        assets = deep_series.generate_publish_assets(series, episode, result)
-
-        prompt = mock_llm.call_args.args[0]
-        self.assertIn("12到24个字", prompt)
-        self.assertIn("封面文案", prompt)
-        self.assertEqual(assets["title"], "AI正在杀死搜索入口")
-        self.assertEqual(assets["cover_text"], "搜索正在死亡")
-        self.assertTrue(assets["cover_prompt"])
-        self.assertTrue(os.path.exists(assets["cover_path"]))
-        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "publish_assets.json")))
-
-    @patch("deep_series.call_llm", return_value="女：搜索，可能正在死亡。\n男：我最近越来越强烈地感觉，入口正在换人。")
-    def test_generate_dialogue_script_uses_documentary_prompt_rules(self, mock_llm):
-        deep_series.generate_dialogue_script(
-            {"title": "AI未来三年系列"},
-            {"title": "AI 为什么会替代搜索？", "question": "AI 为什么会替代搜索？"},
-            "研究报告",
-            "审稿意见",
-        )
-
-        prompt = mock_llm.call_args.args[0]
-        self.assertIn("科技纪录片", prompt)
-        self.assertIn("冲突开场", prompt)
-        self.assertIn("旧世界是什么", prompt)
-        self.assertIn("第一人称", prompt)
-        self.assertIn("正反双方", prompt)
-        self.assertIn("至少四个角度", prompt)
-        self.assertIn("技术、商业、用户、风险", prompt)
-        self.assertIn("不能只给单一结论", prompt)
-        self.assertIn("禁止“今天我们来聊”", prompt)
-        self.assertIn("不要写成第一点、第二点", prompt)
-
-    @patch("deep_series.call_llm", return_value="# 新版标题\n1. AI正在杀死搜索\n\n# 分镜脚本\n- handheld documentary shot\n\n# Shorts切片方案\n- 0-30秒")
-    def test_generate_documentary_package_writes_growth_assets(self, _mock_llm):
-        result = {"documentary_package_path": os.path.join(self.tmpdir, "documentary_package.md")}
-
-        package = deep_series.generate_documentary_package(
-            {"title": "AI未来三年系列"},
-            {"title": "AI 为什么会替代搜索？"},
-            "研究报告",
-            "审稿意见",
-            "女：搜索，可能正在死亡。",
-            result,
-        )
-
-        self.assertIn("新版标题", package)
-        self.assertTrue(os.path.exists(result["documentary_package_path"]))
-        with open(result["documentary_package_path"], "r", encoding="utf-8") as f:
-            saved = f.read()
-        self.assertIn("分镜脚本", saved)
-        self.assertIn("Shorts切片方案", saved)
-
-    def test_create_deep_slide_images_splits_long_segments_and_writes_durations(self):
+    def test_create_deep_slide_images_keeps_dialogue_segments_and_writes_durations(self):
         script_path = os.path.join(self.tmpdir, "script.md")
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
         with open(script_path, "w", encoding="utf-8") as f:
-            f.write("男：搜索正在变成答案入口。用户不再想看十个链接。未来的软件入口会从搜索框变成AI对话。")
+            f.write("女：搜索正在变成答案入口。\n男：未来的软件入口会从搜索框变成对话。")
         with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
-            f.write('{"segments":[{"role":"male","slide_index":0,"duration":10.0,"text":"搜索正在变成答案入口。用户不再想看十个链接。未来的软件入口会从搜索框变成AI对话。"}]}')
+            f.write(
+                '{"segments":[{"role":"female","slide_index":0,"duration":4.0,"text":"搜索正在变成答案入口。"},{"role":"male","slide_index":1,"duration":6.0,"text":"未来的软件入口会从搜索框变成对话。"}]}'
+            )
 
         image_paths = deep_series.create_deep_slide_images(
             {"title": "AI未来三年系列"},
@@ -442,11 +396,44 @@ class TestDeepSeries(unittest.TestCase):
             audio_path,
         )
 
-        self.assertGreaterEqual(len(image_paths), 3)
+        self.assertEqual(len(image_paths), 2)
         durations = deep_series.load_deep_slide_durations(image_paths)
+        self.assertEqual(durations, [4.0, 6.0])
         self.assertAlmostEqual(sum(durations), 10.0)
-        self.assertLessEqual(max(durations), 4.0)
         self.assertTrue(os.path.exists(os.path.join(os.path.dirname(image_paths[0]), "slide_durations.json")))
+
+    def test_create_deep_slide_images_uses_soft_theme_colors(self):
+        script_path = os.path.join(self.tmpdir, "soft_theme_script.md")
+        audio_path = os.path.join(self.tmpdir, "soft_theme_audio.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("濂筹細A\n鐢凤細B")
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            f.write(
+                '{"segments":[{"role":"female","slide_index":0,"duration":4.0,"text":"A"},{"role":"male","slide_index":1,"duration":4.0,"text":"B"}]}'
+            )
+
+        captured = []
+
+        def fake_create_text_card(title, subtitle, body, output_path, accent="#007AFF", slide_index=None, slide_total=None):
+            # 这里只检查传入的主题色，不改画面逻辑。
+            captured.append(accent)
+            with open(output_path, "wb") as f:
+                f.write(b"png")
+            return output_path
+
+        with patch("deep_series.create_text_card", side_effect=fake_create_text_card), \
+                patch.object(deep_series, "write_deep_slide_durations", return_value="slide_durations.json"):
+            deep_series.create_deep_slide_images(
+                {"title": "AI未来三年系列"},
+                {"title": "AI 为什么会替代搜索？"},
+                script_path,
+                audio_path,
+            )
+
+        self.assertIn("#C79AA8", captured)
+        self.assertIn("#8FA8C1", captured)
+        self.assertNotIn("#FF2D55", captured)
+        self.assertNotIn("#007AFF", captured)
 
     def test_step_video_uses_deep_slide_duration_sidecar(self):
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")

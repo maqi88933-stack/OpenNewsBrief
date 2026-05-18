@@ -5,7 +5,7 @@ import json
 import os
 import re
 import subprocess
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import main
 
@@ -16,22 +16,23 @@ MALE_VOICE = "zh-CN-YunxiNeural"
 DEEP_TTS_RATE = os.environ.get("OPENNEWSBRIEF_DEEP_TTS_RATE", "+16%")
 DEEP_TTS_ENGINE = os.environ.get("OPENNEWSBRIEF_TTS_ENGINE", "chattts").lower()
 DEEP_DIALOGUE_PAUSE_SECONDS = 0.45
+DEEP_FINAL_SILENCE_SECONDS = 1.0
 DEEP_VISUAL_MAX_SECONDS = 4.0
 DEEP_SLIDE_DURATIONS_FILE = "slide_durations.json"
+DEEP_PUBLISH_TITLE_MAX_CHARS = 18
+DEEP_COVER_TEXT_MAX_CHARS = 10
 
 
+# 这里保留一个最小可用的默认配置，方便首次启动时自动生成文件。
 DEFAULT_CONFIG = {
     "series": [
         {
             "title": "AI未来三年系列",
-            "description": "围绕未来三年 AI 对搜索、软件、记忆、协议、私有化和内容生产的影响做深度讨论。",
+            "description": "围绕 AI、搜索、Agent、记忆和内容生产的深度选题。",
             "episodes": [
                 {"title": "AI 为什么会替代搜索？", "question": "AI 为什么会替代搜索？"},
                 {"title": "为什么 Agent 会重构软件？", "question": "为什么 Agent 会重构软件？"},
                 {"title": "AI 为什么需要记忆？", "question": "AI 为什么需要记忆？"},
-                {"title": "为什么 MCP 很关键？", "question": "为什么 MCP 很关键？"},
-                {"title": "私有化 AI 为什么会爆发？", "question": "私有化 AI 为什么会爆发？"},
-                {"title": "AI 内容工厂会出现吗？", "question": "AI 内容工厂会出现吗？"},
             ],
         }
     ]
@@ -39,6 +40,7 @@ DEFAULT_CONFIG = {
 
 
 def load_config(path: str = None) -> Dict:
+    # 配置文件不存在时自动补一份，避免 UI 首次打开就没有数据。
     path = path or CONFIG_PATH
     if not os.path.exists(path):
         save_config(DEFAULT_CONFIG, path)
@@ -47,6 +49,7 @@ def load_config(path: str = None) -> Dict:
 
 
 def save_config(config: Dict, path: str = None) -> None:
+    # 统一在这里保存，避免分散写文件导致编码不一致。
     path = path or CONFIG_PATH
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -57,14 +60,19 @@ def find_series(config: Dict, title: str) -> Dict:
     for series in config.get("series", []):
         if series.get("title") == title:
             return series
-    raise ValueError(f"未找到深度系列: {title}")
+    raise ValueError(f"未找到系列：{title}")
 
 
 def find_episode(series: Dict, title: str) -> Dict:
     for episode in series.get("episodes", []):
         if episode.get("title") == title:
             return episode
-    raise ValueError(f"未找到深度主题: {title}")
+    raise ValueError(f"未找到主题：{title}")
+
+
+def _episode_question(episode: Dict) -> str:
+    # 选题优先用 question 字段，缺失时退回 title。
+    return (episode.get("question") or episode.get("title") or "").strip()
 
 
 def call_llm(prompt: str, text: str = "") -> str:
@@ -72,26 +80,25 @@ def call_llm(prompt: str, text: str = "") -> str:
 
     content = prompt
     if text:
-        content += "\n\n资料如下：\n" + text
+        content += "\n\n资料：\n" + text
     llm = LLmFactory().getDeepseek()
     result = llm.invoke(content)
     return result.content.strip() if hasattr(result, "content") else str(result).strip()
 
 
 def build_search_keywords(series: Dict, episode: Dict) -> List[str]:
-    question = episode.get("question") or episode.get("title", "")
+    question = _episode_question(episode)
     base_terms = [
         question,
         f"{question} 核心机制 原因",
-        f"{question} 用户行为 需求变化",
-        f"{question} 商业模式 收入 成本",
-        f"{question} 技术限制 瓶颈 幻觉",
+        f"{question} 用户需求 变化",
+        f"{question} 商业模式 成本 收入",
+        f"{question} 技术瓶颈 限制",
         f"{question} 反方观点 失败案例",
-        f"{question} 监管风险 合规 版权",
-        f"{question} 赢家输家 产业链 冲击",
+        f"{question} 监管 风险 版权",
         f"{question} 竞争格局 Google OpenAI 百度",
-        f"{question} case study data report",
-        f"{question} controversy debate criticism",
+        f"{question} case study report",
+        f"{question} controversy criticism debate",
         f"{question} timeline future prediction",
     ]
     return [term for term in base_terms if term.strip()]
@@ -100,25 +107,27 @@ def build_search_keywords(series: Dict, episode: Dict) -> List[str]:
 def collect_research_sources(series: Dict, episode: Dict, limit_per_keyword: int = 4) -> List[Dict]:
     from crawler import news_crawler
 
-    sources = []
+    sources: List[Dict] = []
     seen_links = set()
     old_max_hours = news_crawler.MAX_HOURS
     news_crawler.MAX_HOURS = 24 * 365 * 5
     try:
         for keyword in build_search_keywords(series, episode):
-            print(f"[深度研究] 搜索资料: {keyword}")
+            print(f"[深度系列] 检索关键词：{keyword}", flush=True)
             items, _expired_count, _used_query = news_crawler.collect_news_for_keyword(keyword)
-            for item in items[:limit_per_keyword]:
+            for item in (items or [])[:limit_per_keyword]:
                 link = item.get("link", "")
                 if not link or link in seen_links:
                     continue
                 seen_links.add(link)
-                sources.append({
-                    "title": item.get("title", ""),
-                    "link": link,
-                    "content": item.get("content", ""),
-                    "date": item.get("date", ""),
-                })
+                sources.append(
+                    {
+                        "title": item.get("title", ""),
+                        "link": link,
+                        "content": item.get("content", ""),
+                        "date": item.get("date", ""),
+                    }
+                )
     finally:
         news_crawler.MAX_HOURS = old_max_hours
     return sources
@@ -130,207 +139,102 @@ def sources_to_markdown(sources: List[Dict]) -> str:
         content = re.sub(r"\s+", " ", source.get("content", "")).strip()
         lines.append(
             f"### {index}. {source.get('title', '')}\n"
-            f"- 链接: {source.get('link', '')}\n"
-            f"- 日期: {source.get('date', '')}\n"
-            f"- 摘要: {content[:1200]}"
+            f"- 链接：{source.get('link', '')}\n"
+            f"- 时间：{source.get('date', '')}\n"
+            f"- 摘要：{content[:1200]}"
         )
     return "\n\n".join(lines)
 
 
 def generate_research_report(series: Dict, episode: Dict, sources: List[Dict]) -> str:
-    prompt = f"""你是深度视频研究员。请基于资料研究《{series.get('title')}》里的这一期：
-问题：{episode.get('question') or episode.get('title')}
-
-请做多角度整理加工，不要只摘新闻或只给单一结论。必须输出：
-1. 核心结论：一句话说明最值得拍成视频的趋势判断。
-2. 正方观点：为什么这个趋势可能成立，列出证据和来源。
-3. 反方观点：为什么这个趋势可能被夸大，列出反例、失败案例或资料不足处。
-4. 技术角度：底层技术、产品体验、能力边界、技术限制分别是什么。
-5. 商业模式：收入、成本、渠道、入口、平台利益会怎样变化。
-6. 用户行为：用户为什么会改变习惯，哪些人先变，哪些人不会变。
-7. 监管风险：合规、版权、安全、数据、政策和舆论风险。
-8. 利益相关方：谁会赢、谁会输、谁会被迫转型。
-9. 关键案例和可引用数据：每条都标来源编号。
-10. 时间线：过去发生了什么，现在为什么到拐点，未来三年可能怎样。
-11. 适合科技纪录片的故事结构：冲突、旧世界、变化原因、受冲击者、未来悬念。
-
-要求：
-- 只使用资料中能支撑的信息，不要编造机构、数据或日期。
-- 每个重要判断后标注来源序号，例如 [1]。
-- 如果资料不足，明确写“资料不足，不能下结论”。
-- 对正反双方都要给出最强论据，再做自己的综合判断。
-"""
+    # 研究报告只负责“把问题讲清楚”，不直接写脚本。
+    prompt = (
+        "你是深度系列的研究编辑。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{_episode_question(episode)}\n\n"
+        "请基于下面的资料写一份研究报告。\n"
+        "要求：\n"
+        "1. 先说明核心问题。\n"
+        "2. 归纳背景、数据、争议、商业视角和技术视角。\n"
+        "3. 给出后续脚本可直接使用的事实和结论。\n"
+        "4. 保持中文、简洁、可读。\n"
+    )
     return call_llm(prompt, sources_to_markdown(sources))
 
 
 def audit_research(series: Dict, episode: Dict, research_report: str, sources: List[Dict]) -> str:
+    # 用三种视角做轻量审校，避免报告只剩单一结论。
     source_text = sources_to_markdown(sources)
     roles = [
-        ("事实核查员", "检查事实、数据、日期、来源编号是否自洽，指出可能胡编的地方。"),
-        ("反方审稿人", "专门找反例、争议、过度推断和标题党风险。"),
-        ("结构编辑", "检查故事结构是否像 YouTube 深度视频，有钩子、冲突、递进、反转和结尾。"),
+        ("事实审校", "检查事实是否完整，是否有明显遗漏或夸大。"),
+        ("结构审校", "检查结构是否完整，是否适合继续写成口播脚本。"),
+        ("钩子审校", "检查开头和结尾是否足够抓人，是否能支撑深度视频。"),
     ]
     results = []
     for role, task in roles:
-        prompt = f"""你是{role}。{task}
-
-请审核下面这期研究报告：
-系列：{series.get('title')}
-主题：{episode.get('title')}
-
-输出格式：
-- 通过/不通过
-- 主要问题
-- 必须修改的建议
-"""
-        results.append(f"## {role}\n" + call_llm(prompt, research_report + "\n\n原始资料：\n" + source_text))
+        prompt = (
+            f"你正在做{role}。\n"
+            f"系列：{series.get('title', '')}\n"
+            f"主题：{_episode_question(episode)}\n"
+            f"任务：{task}\n\n"
+            "请用要点方式指出问题，并给出可执行修改建议。\n"
+        )
+        results.append(f"## {role}\n" + call_llm(prompt, research_report + "\n\n资料：\n" + source_text))
     return "\n\n".join(results)
 
 
 def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, audit_report: str) -> str:
-    prompt = f"""你是“AI科技纪录片导演 + B站增长策划 + 中文深度视频编剧”。请基于研究报告和审核意见，生成一篇男女问答式中文解说脚本。
-
-系列：{series.get('title')}
-主题：{episode.get('title')}
-问题：{episode.get('question') or episode.get('title')}
-
-要求：
-- 形式必须是“女：...”和“男：...”轮流问答，必要时可少量使用“旁白：...”。
-- 整体风格是科技纪录片 / AI产业深度分析，不要像AI自动朗读PPT。
-- 前3秒必须是冲突开场，直接制造危机感、未来感或行业变化。
-- 必须围绕一个核心观点展开，不要只讲新闻，要讲趋势、赢家、输家和未来三年变化。
-- 结构必须是：冲突开场、旧世界是什么、变化为什么开始、谁受到冲击、未来会怎样、结尾留下未来感。
-- 必须讨论正反双方，先给正方最强理由，再给反方最强质疑，最后给出有保留的综合判断。
-- 至少四个角度展开：技术、商业、用户、风险；如果资料支持，也加入监管、资本、产业链和国际竞争。
-- 不能只给单一结论，每个关键判断都要说明“为什么成立”和“哪里可能不成立”。
-- 必须明确不同利益相关方：用户、平台、创业公司、传统公司、监管者分别会受到什么影响。
-- 必须加入第一人称观点，例如“我最近越来越强烈地感觉...”“我的判断是...”。
-- 需要有停顿、留白、强调句和关键转折，避免平铺直叙。
-- 禁止“今天我们来聊”，不要写成第一点、第二点、第三点的课程结构。
-- 每个可朗读段落都必须以“女：”“男：”或“旁白：”开头。
-- 禁止输出“好的，以下是...”、Markdown 标题、**女：** 这类加粗角色名或任何解释性开头。
-- 不要输出镜头说明，不要输出 Markdown 标题，只输出可朗读脚本。
-- 严禁加入研究报告和审核意见之外的新事实。
-- 如果某个数据不确定，用“目前公开资料还不足以证明...”表达。
-"""
-    raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审核意见：\n{audit_report}")
+    # 深度系列的视频脚本不走 PPT 纯文字，而是按对话来写。
+    prompt = (
+        "你是纪录片口播脚本作者。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n"
+        f"问题：{_episode_question(episode)}\n\n"
+        "请写一份适合深度视频的对话脚本。\n"
+        "要求：\n"
+        "1. 只有主持人对话和必要旁白，不要写成 PPT 纯文字。\n"
+        "2. 节奏要紧，每段控制在 3 到 6 句。\n"
+        "3. 每隔一段留一个悬念，方便观众继续看下去。\n"
+        "4. 结尾要落到一个站得住的问题。\n"
+        "5. 每一行使用“女：/男：/旁白：”这种格式。\n"
+    )
+    raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
 
 
-SPEAKER_PATTERN = re.compile(r"^(?:[-*]\s*)?(?:\*\*)?\s*(女主持|男主持|女生|男生|旁白|女|男)\s*[:：]\s*(?:\*\*)?\s*(.*)$")
-
-
-def strip_inline_markdown(text: str) -> str:
-    text = re.sub(r"[*_`]+", "", text or "")
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def normalize_dialogue_line(line: str) -> str:
-    line = line.strip()
-    match = SPEAKER_PATTERN.match(line)
-    if match:
-        return f"{match.group(1)}：{strip_inline_markdown(match.group(2))}"
-    return strip_inline_markdown(line)
-
-
-def clean_script_output(text: str) -> str:
-    lines = [line.strip() for line in (text or "").splitlines()]
-    cleaned = []
-    rule_lines = {"---", "***", "___"}
-    seen_dialogue = False
-    for line in lines:
-        if not line:
-            if cleaned:
-                cleaned.append("")
-            continue
-        if line in rule_lines or re.match(r"^#{1,6}\s+", line):
-            continue
-        normalized = normalize_dialogue_line(line)
-        is_dialogue = SPEAKER_PATTERN.match(normalized)
-        if is_dialogue:
-            seen_dialogue = True
-            cleaned.append(normalized)
-            continue
-        if not seen_dialogue:
-            continue
-        cleaned.append(normalized)
-    while cleaned and not cleaned[0]:
-        cleaned.pop(0)
-    while cleaned and not cleaned[-1]:
-        cleaned.pop()
-    return "\n".join(cleaned).strip()
-
-
-def audit_research(series: Dict, episode: Dict, research_report: str, sources: List[Dict]) -> str:
-    source_text = sources_to_markdown(sources)
-    roles = [
-        ("事实核查员", "检查事实、数据、日期、来源编号是否自洽，指出可能编造的地方。"),
-        ("反方审稿人", "专门寻找反例、争议、过度推断和标题党风险。"),
-        ("结构编辑", "检查故事结构是否适合 YouTube 深度视频，是否有钩子、冲突、递进、反转和结尾。"),
-        ("多角度审稿人", "检查研究是否覆盖技术、商业、用户、风险、监管、赢家输家等角度，指出观点单薄和缺少正反论证的地方。"),
-    ]
-    results = []
-    for role, task in roles:
-        prompt = f"""你是{role}。{task}
-
-请审核下面这期研究报告：
-系列：{series.get('title')}
-主题：{episode.get('title')}
-
-请详细输出审稿意见：
-- 结论：通过/不通过
-- 关键问题：逐条列出，每条说明对应原文位置或来源编号
-- 风险等级：高/中/低
-- 修改建议：给出可以直接交给编剧修改的具体建议
-- 可保留内容：说明哪些内容可以继续使用"""
-        results.append(f"## {role}\n" + call_llm(prompt, research_report + "\n\n原始资料：\n" + source_text))
-    return "\n\n".join(results)
-
-
 def generate_script_notes(series: Dict, episode: Dict, research_report: str, audit_report: str, script: str) -> str:
-    prompt = f"""你是深度视频主编。请详细说明最终脚本是如何根据研究报告和审稿意见写成的。
-系列：{series.get('title')}
-主题：{episode.get('title')}
-
-输出格式：
-1. 审稿意见采纳清单：逐条说明采纳了哪些事实核查、反方审稿、结构审稿意见。
-2. 未采纳意见及原因：如果没有，写“无”。
-3. 脚本结构说明：说明开头钩子、冲突、案例、数据、争议、时间线、结尾分别放在哪里。
-4. 仍需人工重点审核：列出上线前最应该人工检查的事实、数字、表述风险。"""
+    # 这一步给后续视频生成补充节奏、镜头和素材提示。
+    prompt = (
+        "你是深度视频脚本备注作者。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        "请输出简短备注，内容包含：节奏、转场、镜头和可视化提示。\n"
+        "要求：\n"
+        "1. 不要写成 PPT 大纲。\n"
+        "2. 每段都要能对应到一张画面卡片。\n"
+        "3. 给出适合口播的停顿位置。\n"
+    )
     return call_llm(
         prompt,
-        f"研究报告：\n{research_report}\n\n审稿意见：\n{audit_report}\n\n最终脚本：\n{script}",
+        f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}\n\n脚本：\n{script}",
     )
 
 
 def generate_documentary_package(series: Dict, episode: Dict, research_report: str, audit_report: str, script: str, result: Dict) -> str:
-    prompt = f"""你是AI科技纪录片导演和B站增长策划。请把这期深度系列升级成科技纪录片级的制作包。
-
-系列：{series.get('title')}
-主题：{episode.get('title')}
-
-请严格输出以下12个部分：
-1. 新版标题（10个）：每个12到24个字，单核心、强冲突、一眼理解。
-2. 新版封面文案（10个）：每个2到8个字，必须有冲突感。
-3. 新版开场脚本（前30秒）：禁止“今天我们来聊”。
-4. 视频结构重构方案：使用冲突开场、旧世界、变化原因、受冲击者、未来、结尾未来感。
-5. 分镜脚本：每2到4秒一个画面变化。
-6. B-roll建议：只给可执行画面，不写空泛词。
-7. 运镜建议：写明机位、景别、推拉摇移、节奏和情绪。
-8. AI视频提示词：每条包含 documentary style, cinematic, handheld, shallow depth of field, natural lighting。
-9. B站完播率优化建议。
-10. 人格化表达优化。
-11. 情绪曲线设计。
-12. Shorts切片方案。
-
-要求：
-- 不新增研究报告外的新事实。
-- 不做课程PPT结构，不写第一点、第二点、第三点。
-- 强调趋势判断、行业冲突和未来三年系列化追更感。
-"""
+    # 这份包裹给发布和封面设计使用，保持信息最少但够用。
+    prompt = (
+        "你是深度视频的发布包装助手。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        "请输出一份简短的制作包，包含：\n"
+        "1. 适合封面的标题思路。\n"
+        "2. 适合封面的文案。\n"
+        "3. 适合短视频评论区互动的问题。\n"
+        "4. 适合 B-roll 的镜头关键词。\n"
+    )
     package = call_llm(
         prompt,
-        f"研究报告：\n{research_report}\n\n审稿意见：\n{audit_report}\n\n最终脚本：\n{script}",
+        f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}\n\n脚本：\n{script}",
     )
     package_path = result.get("documentary_package_path")
     if package_path:
@@ -339,31 +243,86 @@ def generate_documentary_package(series: Dict, episode: Dict, research_report: s
     return package
 
 
+SPEAKER_LINE_RE = re.compile(r"^(?P<label>[^:：]{1,20})[:：]\s*(?P<body>.+)$")
+
+
+def strip_inline_markdown(text: str) -> str:
+    text = re.sub(r"[*_`]+", "", text or "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _normalize_speaker_label(label: str) -> str:
+    label = strip_inline_markdown(label).replace(" ", "")
+    label = label.replace("（", "").replace("）", "")
+    return label
+
+
+def _speaker_kind(label: str) -> str:
+    clean = _normalize_speaker_label(label)
+    if any(token in clean for token in ("旁白", "解说", "叙述", "播报")):
+        return "narrator"
+    if any(token in clean for token in ("女", "女士")) and "男" not in clean:
+        return "female"
+    if any(token in clean for token in ("男", "先生")) and "女" not in clean:
+        return "male"
+    if any(token in clean for token in ("主持", "主持人")):
+        return "narrator"
+    return "narrator"
+
+
+def normalize_dialogue_line(line: str) -> str:
+    # 先去掉粗体、斜体等标记，再统一成“角色：内容”的格式。
+    line = strip_inline_markdown(line).strip()
+    match = SPEAKER_LINE_RE.match(line)
+    if match:
+        speaker = match.group("label").strip()
+        body = match.group("body").strip()
+        if speaker and body:
+            return f"{speaker}：{body}"
+    return line
+
+
+def clean_script_output(text: str) -> str:
+    # 去掉标题、分割线和前置说明，只保留真正可朗读的内容。
+    lines = [line.strip() for line in (text or "").splitlines()]
+    cleaned: List[str] = []
+    seen_dialogue = False
+    for raw_line in lines:
+        if not raw_line:
+            if cleaned and cleaned[-1] != "":
+                cleaned.append("")
+            continue
+        if raw_line in {"---", "***", "___"} or re.match(r"^#{1,6}\s+", raw_line):
+            continue
+        line = normalize_dialogue_line(raw_line)
+        match = SPEAKER_LINE_RE.match(line)
+        if match:
+            seen_dialogue = True
+            cleaned.append(line)
+            continue
+        if seen_dialogue:
+            cleaned.append(line)
+    while cleaned and cleaned[0] == "":
+        cleaned.pop(0)
+    while cleaned and cleaned[-1] == "":
+        cleaned.pop()
+    return "\n".join(cleaned).strip()
+
+
 def parse_dialogue_script(script: str) -> List[Dict]:
     script = clean_script_output(script)
-    segments = []
+    segments: List[Dict] = []
     current_speaker = "narrator"
-    buffer = []
-    speaker_map = {
-        "女": "female",
-        "女生": "female",
-        "女主持": "female",
-        "男": "male",
-        "男生": "male",
-        "男主持": "male",
-        "旁白": "narrator",
-    }
+    buffer: List[str] = []
     for raw_line in script.splitlines():
         line = normalize_dialogue_line(raw_line)
-        if not line:
-            continue
-        match = SPEAKER_PATTERN.match(line)
-        if match:
+        match = SPEAKER_LINE_RE.match(line)
+        if match and _speaker_kind(match.group("label")):
             if buffer:
                 segments.append({"speaker": current_speaker, "text": "\n".join(buffer).strip()})
-            current_speaker = speaker_map.get(match.group(1), "narrator")
-            buffer = [match.group(2).strip()]
-        else:
+            current_speaker = _speaker_kind(match.group("label"))
+            buffer = [match.group("body").strip()]
+        elif line:
             buffer.append(line)
     if buffer:
         segments.append({"speaker": current_speaker, "text": "\n".join(buffer).strip()})
@@ -384,6 +343,7 @@ async def _save_tts(text: str, output_path: str, voice: str, role: str = "narrat
 
 
 def clear_generated_files(directory: str, allowed_extensions: tuple = None) -> None:
+    # 只清理我们自己生成的中间文件，避免误删用户内容。
     if not os.path.isdir(directory):
         return
     for name in os.listdir(directory):
@@ -401,7 +361,7 @@ def convert_dialogue_to_audio(script_path: str, output_path: str) -> str:
     with open(script_path, "r", encoding="utf-8") as f:
         segments = parse_dialogue_script(f.read())
     if not segments:
-        raise ValueError("深度脚本为空，无法生成音频")
+        raise ValueError("脚本里没有可用于生成音频的对话内容")
 
     segment_dir = os.path.join(os.path.dirname(output_path), "dialogue_segments")
     os.makedirs(segment_dir, exist_ok=True)
@@ -410,20 +370,31 @@ def convert_dialogue_to_audio(script_path: str, output_path: str) -> str:
     audio_segments = []
     segment_paths = []
     for index, segment in enumerate(segments):
+        print(f"[深度音频] 生成第 {index + 1}/{len(segments)} 段：{segment['speaker']}", flush=True)
         voice = FEMALE_VOICE if segment["speaker"] == "female" else MALE_VOICE
         segment_path = os.path.join(segment_dir, f"{index:03d}_{segment['speaker']}.mp3")
         asyncio.run(_save_tts(segment["text"], segment_path, voice, role=segment["speaker"]))
-        segment["audio_path"] = segment_path
-        segment["duration"] = get_audio_duration(segment_path)
-        segment["role"] = segment["speaker"]
-        segment["slide_index"] = index
-        audio_segments.append(segment)
+        duration = get_audio_duration(segment_path)
+        audio_segments.append(
+            {
+                "role": segment["speaker"],
+                "slide_index": index,
+                "duration": duration,
+                "text": segment["text"],
+                "audio_path": segment_path,
+            }
+        )
         segment_paths.append(segment_path)
         if index < len(segments) - 1:
             silence_path = os.path.join(segment_dir, f"{index:03d}_pause.mp3")
             create_silence_audio(silence_path, DEEP_DIALOGUE_PAUSE_SECONDS)
-            segment["duration"] += DEEP_DIALOGUE_PAUSE_SECONDS
+            audio_segments[-1]["duration"] += DEEP_DIALOGUE_PAUSE_SECONDS
             segment_paths.append(silence_path)
+
+    ending_silence_path = os.path.join(segment_dir, f"{len(segments):03d}_ending_silence.mp3")
+    create_silence_audio(ending_silence_path, DEEP_FINAL_SILENCE_SECONDS)
+    audio_segments[-1]["duration"] += DEEP_FINAL_SILENCE_SECONDS
+    segment_paths.append(ending_silence_path)
 
     concat_audio_files(segment_paths, output_path)
     write_timing_file(output_path, audio_segments)
@@ -457,40 +428,58 @@ def _font(size: int, bold: bool = False):
     return main.load_cover_font(size, bold=bold)
 
 
-def _wrap_text(text: str, max_chars: int, max_lines: int) -> List[str]:
-    return main.wrap_display_lines(text, max_chars, max_lines)
+def _measure_text_size(draw, text: str, font) -> tuple[int, int]:
+    # 用像素宽度来计算换行，避免只按字数切分导致版式乱掉。
+    bbox = draw.textbbox((0, 0), text or " ", font=font)
+    return bbox[2] - bbox[0], bbox[3] - bbox[1]
 
 
-def create_text_card(title: str, subtitle: str, body: str, output_path: str, accent: str = "#007AFF") -> str:
-    from PIL import Image, ImageDraw
+def _wrap_text_by_width(draw, text: str, font, max_width: int) -> List[str]:
+    clean_text = re.sub(r"\s+", " ", text or "").strip()
+    if not clean_text:
+        return [""]
 
-    size = 1080
-    image = Image.new("RGB", (size, size), "#101014")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((72, 68, 1008, 1012), radius=42, fill="#1C1C1E")
-    draw.rounded_rectangle((104, 104, 270, 142), radius=19, fill=accent)
-    draw.text((124, 111), "AI FUTURE", font=_font(21, True), fill="#FFFFFF")
-    draw.line((104, 812, 976, 812), fill="#38383A", width=2)
+    lines = []
+    current = ""
+    for char in clean_text:
+        candidate = current + char
+        if current and _measure_text_size(draw, candidate, font)[0] > max_width:
+            lines.append(current)
+            current = char
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
 
-    y = 188
-    for line in _wrap_text(title, 17, 2):
-        draw.text((104, y), line, font=_font(42, True), fill="#F5F5F7")
-        y += 56
-    for line in _wrap_text(subtitle, 25, 2):
-        draw.text((104, y + 6), line, font=_font(24), fill="#A1A1AA")
-        y += 34
 
-    y = max(366, y + 56)
-    body_lines = _wrap_text(body, 14, 6)
-    for line in body_lines:
-        draw.text((104, y), line, font=_font(56, True), fill="#FFFFFF")
-        y += 78
+def _fit_text_block(
+    draw,
+    text: str,
+    max_width: int,
+    max_height: int,
+    *,
+    start_size: int,
+    min_size: int,
+    bold: bool,
+    max_lines: int,
+) -> tuple:
+    # 逐步缩小字号，优先保证文本完整且不挤出卡片。
+    for size in range(start_size, min_size - 1, -2):
+        font = _font(size, bold=bold)
+        lines = _wrap_text_by_width(draw, text, font, max_width)
+        if len(lines) > max_lines:
+            continue
+        line_height = _measure_text_size(draw, "国", font)[1]
+        total_height = len(lines) * line_height + max(0, len(lines) - 1) * int(line_height * 0.24)
+        if total_height <= max_height:
+            return font, lines
 
-    draw.rounded_rectangle((104, 858, 976, 920), radius=24, fill="#2C2C2E")
-    draw.text((128, 874), "OpenNewsBrief 深度系列", font=_font(26, True), fill="#D1D1D6")
-    draw.text((104, 946), "documentary style / trend analysis", font=_font(24), fill="#8E8E93")
-    image.save(output_path)
-    return output_path
+    font = _font(min_size, bold=bold)
+    lines = _wrap_text_by_width(draw, text, font, max_width)[:max_lines]
+    if lines and len(lines) == max_lines:
+        lines[-1] = lines[-1].rstrip("，。！？!?") + "…"
+    return font, lines
 
 
 def _load_timing_segments(audio_path: str) -> List[Dict]:
@@ -502,76 +491,137 @@ def _load_timing_segments(audio_path: str) -> List[Dict]:
     return data.get("segments", [])
 
 
-def _chunk_text(text: str, max_chars: int = 24) -> List[str]:
-    clean = re.sub(r"\s+", " ", text or "").strip()
-    if not clean:
-        return []
-    parts = [part.strip() for part in re.split(r"(?<=[。！？!?；;])", clean) if part.strip()]
-    chunks = []
-    for part in parts or [clean]:
-        while len(part) > max_chars:
-            chunks.append(part[:max_chars])
-            part = part[max_chars:]
-        if part:
-            chunks.append(part)
-    return chunks or [clean]
-
-
-def _split_visual_text(text: str, target_count: int) -> List[str]:
-    target_count = max(1, target_count)
-    chunks = _chunk_text(text)
-    if not chunks:
-        return [""]
-    if len(chunks) <= target_count:
-        while len(chunks) < target_count:
-            chunks.append(chunks[-1])
-        return chunks
-
-    grouped = []
-    index = 0
-    for group_index in range(target_count):
-        remaining_groups = target_count - group_index
-        remaining_chunks = len(chunks) - index
-        take = max(1, int(round(remaining_chunks / remaining_groups)))
-        grouped.append("".join(chunks[index:index + take]))
-        index += take
-    return grouped
-
-
 def build_deep_visual_slide_plan(script_path: str, audio_path: str) -> List[Dict]:
     timing_segments = _load_timing_segments(audio_path)
+    source_segments = []
     if timing_segments:
-        source_segments = [
-            {
-                "speaker": item.get("role") or item.get("speaker") or "narrator",
-                "text": item.get("text", ""),
-                "duration": float(item.get("duration", 0.0)),
-            }
-            for item in timing_segments
-        ]
+        for item in timing_segments:
+            text = re.sub(r"\s+", " ", item.get("text", "")).strip()
+            if not text:
+                continue
+            source_segments.append(
+                {
+                    "speaker": item.get("role") or item.get("speaker") or "narrator",
+                    "text": text,
+                    "duration": max(float(item.get("duration", 0.0)), 0.1),
+                }
+            )
     else:
         with open(script_path, "r", encoding="utf-8") as f:
-            source_segments = [
-                {**item, "duration": DEEP_VISUAL_MAX_SECONDS}
-                for item in parse_dialogue_script(f.read())
-            ]
+            for item in parse_dialogue_script(f.read()):
+                text = re.sub(r"\s+", " ", item.get("text", "")).strip()
+                if text:
+                    source_segments.append(
+                        {
+                            "speaker": item.get("speaker", "narrator"),
+                            "text": text,
+                            "duration": DEEP_VISUAL_MAX_SECONDS,
+                        }
+                    )
+    return source_segments
 
-    slide_plan = []
-    for segment in source_segments:
-        duration = max(float(segment.get("duration", 0.0)), 0.1)
-        visual_count = max(1, int((duration + DEEP_VISUAL_MAX_SECONDS - 0.001) / DEEP_VISUAL_MAX_SECONDS))
-        chunks = _split_visual_text(segment.get("text", ""), visual_count)
-        per_slide = duration / len(chunks)
-        for chunk in chunks:
-            slide_plan.append({
-                "speaker": segment.get("speaker", "narrator"),
-                "text": chunk,
-                "duration": per_slide,
-            })
-    return slide_plan
+
+def create_text_card(
+    title: str,
+    subtitle: str,
+    body: str,
+    output_path: str,
+    accent: str = "#007AFF",
+    slide_index: Optional[int] = None,
+    slide_total: Optional[int] = None,
+) -> str:
+    from PIL import Image, ImageDraw
+
+    width = 1920
+    height = 1080
+    image = Image.new("RGB", (width, height), "#F5F5F7")
+    draw = ImageDraw.Draw(image)
+
+    # 外层卡片保持 iOS 风格，尽量让画面看起来像一个完整页面，而不是 PPT 截图。
+    draw.rounded_rectangle((68, 68, 1852, 1012), radius=56, fill="#E9E9EE")
+    draw.rounded_rectangle((84, 84, 1836, 996), radius=52, fill="#FFFFFF")
+
+    # 左侧色带是深度系列的固定视觉锚点。
+    draw.rounded_rectangle((128, 128, 156, 932), radius=14, fill=accent)
+
+    # 顶部小标签只负责识别，不占正文空间。
+    draw.rounded_rectangle((190, 128, 420, 176), radius=18, fill=accent)
+    draw.text((220, 136), "OpenNewsBrief", font=_font(24, True), fill="#FFFFFF")
+
+    panel_left = 1460
+    draw.rounded_rectangle((panel_left, 210, 1740, 748), radius=36, fill="#F5F5F7")
+    if slide_index is not None:
+        number_font = _font(92, True)
+        number_text = f"{slide_index:02d}"
+        number_w, _ = _measure_text_size(draw, number_text, number_font)
+        draw.text((panel_left + int((280 - number_w) / 2), 286), number_text, font=number_font, fill=accent)
+        if slide_total:
+            total_text = f"/{slide_total:02d}"
+            total_font = _font(28, True)
+            total_w, _ = _measure_text_size(draw, total_text, total_font)
+            draw.text((panel_left + int((280 - total_w) / 2), 390), total_text, font=total_font, fill="#8E8E93")
+
+    title_font, title_lines = _fit_text_block(
+        draw,
+        title,
+        1180,
+        150,
+        start_size=58,
+        min_size=38,
+        bold=True,
+        max_lines=2,
+    )
+    y = 228
+    for line in title_lines:
+        draw.text((190, y), line, font=title_font, fill="#1D1D1F")
+        y += _measure_text_size(draw, line, title_font)[1] + 10
+
+    subtitle_font, subtitle_lines = _fit_text_block(
+        draw,
+        subtitle,
+        1180,
+        80,
+        start_size=28,
+        min_size=22,
+        bold=False,
+        max_lines=2,
+    )
+    y += 10
+    for line in subtitle_lines:
+        draw.text((190, y), line, font=subtitle_font, fill="#6E6E73")
+        y += _measure_text_size(draw, line, subtitle_font)[1] + 8
+
+    body_font, body_lines = _fit_text_block(
+        draw,
+        body,
+        1180,
+        420,
+        start_size=52,
+        min_size=30,
+        bold=False,
+        max_lines=8,
+    )
+    body_y = max(360, y + 24)
+    body_line_height = _measure_text_size(draw, "国", body_font)[1]
+    for line in body_lines:
+        draw.text((190, body_y), line, font=body_font, fill="#1D1D1F")
+        body_y += body_line_height + 18
+
+    progress_left = 190
+    progress_right = 1740
+    progress_top = 868
+    progress_bottom = 884
+    draw.rounded_rectangle((progress_left, progress_top, progress_right, progress_bottom), radius=8, fill="#E5E5EA")
+    if slide_index is not None and slide_total:
+        fill_right = progress_left + int((progress_right - progress_left) * min(max(slide_index / slide_total, 0.0), 1.0))
+        draw.rounded_rectangle((progress_left, progress_top, fill_right, progress_bottom), radius=8, fill=accent)
+
+    image.save(output_path)
+    return output_path
 
 
 def write_deep_slide_durations(slide_dir: str, durations: List[float]) -> str:
+    # 幻灯片时长单独写在侧车文件里，后续合成视频时直接读取。
     path = os.path.join(slide_dir, DEEP_SLIDE_DURATIONS_FILE)
     with open(path, "w", encoding="utf-8") as f:
         json.dump([float(item) for item in durations], f, ensure_ascii=False, indent=2)
@@ -597,17 +647,34 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
     clear_generated_files(slide_dir, (".png", ".json"))
 
     image_paths = []
-    accents = {"female": "#FF2D55", "male": "#007AFF", "narrator": "#34C759"}
+    # 深度视频里主播配色改成低饱和色，减少大蓝大红的冲击感，画面更稳一点。
+    accents = {
+        "female": "#C79AA8",   # 柔和豆沙粉，保留区分度但不刺眼。
+        "male": "#8FA8C1",     # 低饱和雾蓝，保持冷静但不硬。
+        "narrator": "#A6B2AA", # 中性灰绿，给旁白用更克制。
+    }
     labels = {"female": "女主持", "male": "男主持", "narrator": "旁白"}
     slide_plan = build_deep_visual_slide_plan(script_path, audio_path)
+    if not slide_plan:
+        slide_plan = [
+            {
+                "speaker": "narrator",
+                "text": episode.get("title", "") or series.get("title", ""),
+                "duration": DEEP_VISUAL_MAX_SECONDS,
+            }
+        ]
+    total = len(slide_plan)
     for index, segment in enumerate(slide_plan):
         image_path = os.path.join(slide_dir, f"slide_{index:03d}.png")
+        subtitle = f"{series.get('title', '')} · {labels.get(segment['speaker'], '旁白')}"
         create_text_card(
             episode.get("title", ""),
-            f"{series.get('title', '')} · {labels.get(segment['speaker'], '旁白')}",
+            subtitle,
             segment["text"],
             image_path,
             accent=accents.get(segment["speaker"], "#007AFF"),
+            slide_index=index + 1,
+            slide_total=total,
         )
         image_paths.append(image_path)
     write_deep_slide_durations(slide_dir, [item["duration"] for item in slide_plan])
@@ -626,6 +693,8 @@ def step_video(audio_path: str, video_title: str, image_paths: List[str]) -> str
     slide_durations = load_deep_slide_durations(image_paths)
     if not slide_durations:
         slide_durations = main.load_slide_durations_from_timing(audio_path, len(image_paths))
+    if not slide_durations:
+        slide_durations = [DEEP_VISUAL_MAX_SECONDS] * len(image_paths)
     create_video(
         audio_path,
         image_paths[0],
@@ -661,24 +730,27 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
         "video_path": "",
     }
 
+    print("[深度系列] 开始检索资料", flush=True)
     sources = collect_research_sources(series, episode)
+    print("[深度系列] 开始生成研究报告", flush=True)
     research = generate_research_report(series, episode, sources)
-    print("[多智能体] 研究员：研究报告已完成")
+    print("\n========== 研究报告 ==========\n", flush=True)
+    print(research, flush=True)
     audit = audit_research(series, episode, research, sources)
-    print("[多智能体] 审核组：事实核查/反方审稿/结构审稿已完成")
-    print("\n========== 审稿详细意见 ==========\n")
-    print(audit)
+    print("\n========== 审校结果 ==========\n", flush=True)
+    print(audit, flush=True)
     script = generate_dialogue_script(series, episode, research, audit)
-    print("[多智能体] 编剧：脚本已完成")
+    print("\n========== 对话脚本 ==========\n", flush=True)
+    print(script, flush=True)
     script_notes = generate_script_notes(series, episode, research, audit, script)
-    print("\n========== 写稿详细意见 ==========\n")
-    print(script_notes)
+    print("\n========== 脚本备注 ==========\n", flush=True)
+    print(script_notes, flush=True)
     documentary_package = generate_documentary_package(series, episode, research, audit, script, result)
 
     with open(result["research_path"], "w", encoding="utf-8") as f:
         f.write("# 研究报告\n\n")
         f.write(research)
-        f.write("\n\n# 原始资料\n\n")
+        f.write("\n\n# 资料来源\n\n")
         f.write(sources_to_markdown(sources))
     with open(result["audit_path"], "w", encoding="utf-8") as f:
         f.write(audit)
@@ -689,13 +761,13 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
 
     log_path = os.path.join(output_dir, "agent_interaction.log")
     with open(log_path, "w", encoding="utf-8") as f:
-        f.write("多智能体交互日志\n")
+        f.write("深度系列调研日志\n")
         f.write("=" * 56 + "\n")
-        f.write("[研究员]\n" + research + "\n\n")
-        f.write("[审核组]\n" + audit + "\n\n")
-        f.write("[写稿说明]\n" + script_notes + "\n\n")
-        f.write("[纪录片制作包]\n" + documentary_package + "\n\n")
-        f.write("[编剧]\n" + script + "\n")
+        f.write("[研究报告]\n" + research + "\n\n")
+        f.write("[审校结果]\n" + audit + "\n\n")
+        f.write("[脚本备注]\n" + script_notes + "\n\n")
+        f.write("[纪录片包]\n" + documentary_package + "\n\n")
+        f.write("[脚本]\n" + script + "\n")
     result["agent_log_path"] = log_path
     return result
 
@@ -704,11 +776,14 @@ def generate_video_from_script(series: Dict, episode: Dict, result: Dict) -> Dic
     today = datetime.date.today().strftime("%Y-%m-%d")
     script_path = result.get("script_path") or episode.get("script_path", "")
     if not script_path or not os.path.exists(script_path):
-        raise ValueError("未找到脚本，请先完成调研和写稿")
+        raise ValueError("找不到脚本文件，无法生成视频")
     output_dir = os.path.dirname(script_path)
     audio_path = os.path.join(output_dir, "dialogue.mp3")
+    print("[深度视频] 开始生成口播音频", flush=True)
     audio_path = convert_dialogue_to_audio(script_path, audio_path)
+    print("[深度视频] 开始生成画面卡片", flush=True)
     image_paths = create_deep_slide_images(series, episode, script_path, audio_path)
+    print("[深度视频] 开始合成视频", flush=True)
     result["audio_path"] = audio_path
     result["video_path"] = step_video(audio_path, f"{episode.get('title', '')} {today}", image_paths)
     return result
@@ -721,7 +796,20 @@ def mark_episode_generated(config: Dict, series_title: str, episode_title: str, 
     episode["generated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     episode["published"] = False
     episode["published_at"] = ""
-    for key in ("research_path", "audit_path", "script_path", "script_notes_path", "documentary_package_path", "audio_path", "video_path", "publish_assets_path", "cover_path"):
+    for key in (
+        "research_path",
+        "audit_path",
+        "script_path",
+        "script_notes_path",
+        "documentary_package_path",
+        "audio_path",
+        "video_path",
+        "publish_assets_path",
+        "cover_path",
+        "publish_title",
+        "publish_desc",
+        "publish_tags",
+    ):
         if result.get(key):
             episode[key] = result[key]
     return episode
@@ -744,98 +832,126 @@ def parse_json_object(text: str) -> Dict:
         return {}
 
 
-def normalize_publish_title(title: str, episode_title: str) -> str:
-    clean = re.sub(r"\s+", "", title or "").strip(" -_｜|:：")
-    clean = re.sub(r"^AI未来三年系列[:：]?", "", clean)
+def normalize_publish_title(title: str, episode_title: str, series_title: str = "") -> str:
+    clean = re.sub(r"\s+", "", title or "").strip(" -_：:")
+    for prefix in (series_title, "AI未来三年系列"):
+        prefix_clean = re.sub(r"\s+", "", prefix or "")
+        if prefix_clean:
+            clean = re.sub(rf"^{re.escape(prefix_clean)}[:：\-—_]*", "", clean)
     if not clean:
-        clean = re.sub(r"\s+", "", episode_title or "AI深度分析")
-    if len(clean) <= 24:
+        clean = re.sub(r"\s+", "", episode_title or "深度视频")
+    if len(clean) <= DEEP_PUBLISH_TITLE_MAX_CHARS:
         return clean
-    for sep in ("？", "?", "！", "!", "：", ":", "，", ",", "。"):
+    for sep in ("。", "！", "?", "？", ":", "：", ",", "，", "、", "-", "—", "·", " "):
         first = clean.split(sep)[0].strip()
-        if 8 <= len(first) <= 24:
+        if 8 <= len(first) <= DEEP_PUBLISH_TITLE_MAX_CHARS:
             return first
-    return clean[:24]
+    return clean[:DEEP_PUBLISH_TITLE_MAX_CHARS]
 
 
 def normalize_cover_text(text: str, title: str) -> str:
-    clean = re.sub(r"\s+", "", text or "").strip(" -_｜|:：")
+    clean = re.sub(r"\s+", "", text or "").strip(" -_：:")
     if not clean:
-        clean = title
-    return clean[:8] or "趋势变了"
+        clean = re.sub(r"\s+", "", title or "")
+    if len(clean) < 6:
+        clean = (clean or "AI观察视角") + "视角"
+    return clean[:DEEP_COVER_TEXT_MAX_CHARS]
+
+
+def normalize_comment_question(text: str) -> str:
+    clean = re.sub(r"\s+", "", text or "")
+    if not clean:
+        clean = "你更赞同 A 还是 B？为什么"
+    return clean[:60]
+
+
+def append_comment_question(desc: str, question: str) -> str:
+    desc = (desc or "").strip()
+    question = normalize_comment_question(question)
+    if not question or question in desc:
+        return desc
+    prefix = "\n\n" if desc else ""
+    return f"{desc}{prefix}互动问题：{question}"
 
 
 def create_deep_cover_image(series: Dict, episode: Dict, assets: Dict, output_dir: str) -> str:
+    # 封面保持简洁：左侧主标题，右侧信息块，整体更接近 iOS 风格页面。
     from PIL import Image, ImageDraw
 
     output_path = os.path.join(output_dir, "cover.png")
-    image = Image.new("RGB", (1080, 1080), "#101014")
+    image = Image.new("RGB", (1080, 1080), "#F2F2F7")
     draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((64, 86, 492, 620), radius=34, fill="#F5F5F7")
-    draw.rounded_rectangle((102, 142, 450, 206), radius=24, fill="#FFFFFF")
-    draw.text((132, 160), "Search", font=_font(28, True), fill="#1D1D1F")
-    draw.line((118, 274, 438, 274), fill="#C7C7CC", width=5)
-    draw.line((118, 338, 390, 338), fill="#D1D1D6", width=5)
-    draw.line((118, 402, 424, 402), fill="#D1D1D6", width=5)
 
-    draw.rounded_rectangle((588, 86, 1016, 620), radius=34, fill="#1C1C1E")
-    draw.rounded_rectangle((632, 150, 958, 250), radius=28, fill="#2C2C2E")
-    draw.text((662, 180), "AI Answer", font=_font(28, True), fill="#F5F5F7")
-    draw.rounded_rectangle((632, 314, 958, 420), radius=28, fill="#007AFF")
-    draw.text((662, 344), "Direct", font=_font(34, True), fill="#FFFFFF")
+    draw.rounded_rectangle((64, 72, 1016, 1008), radius=48, fill="#FFFFFF")
+    draw.rounded_rectangle((96, 128, 168, 952), radius=24, fill="#007AFF")
+    draw.rounded_rectangle((618, 128, 968, 384), radius=32, fill="#F5F5F7")
+    draw.rounded_rectangle((618, 420, 968, 548), radius=32, fill="#1D1D1F")
 
-    draw.text((84, 704), normalize_cover_text(assets.get("cover_text", ""), assets.get("title", "")), font=_font(86, True), fill="#FFFFFF")
-    draw.text((84, 824), assets.get("title", episode.get("title", ""))[:24], font=_font(36, True), fill="#D1D1D6")
-    draw.rounded_rectangle((84, 930, 390, 980), radius=25, fill="#FF453A")
-    draw.text((112, 942), series.get("title", "AI未来三年系列")[:12], font=_font(24, True), fill="#FFFFFF")
+    draw.text((220, 150), "OpenNewsBrief", font=_font(28, True), fill="#007AFF")
+    draw.text((220, 230), normalize_cover_text(assets.get("cover_text", ""), assets.get("title", "")), font=_font(88, True), fill="#1D1D1F")
+    draw.text((220, 356), assets.get("title", episode.get("title", ""))[:24], font=_font(38, True), fill="#6E6E73")
+    draw.text((646, 166), "AI Answer", font=_font(28, True), fill="#1D1D1F")
+    draw.text((646, 456), "Deep Series", font=_font(34, True), fill="#FFFFFF")
+    draw.text((220, 940), series.get("title", "AI未来三年系列")[:18], font=_font(26, True), fill="#8E8E93")
     image.save(output_path)
     return output_path
 
 
 def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
+    # 发布信息只生成一次，后面发视频和发文案都直接复用。
     script_text = read_text_if_exists(result.get("script_path", ""))
     research_text = read_text_if_exists(result.get("research_path", ""), limit=3000)
-    prompt = f"""请为即将发布到 B 站的科技纪录片/AI产业深度分析视频生成发布素材。
-
-系列：{series.get('title')}
-主题：{episode.get('title')}
-
-要求：
-- title 必须 12到24个字，单核心、强冲突、一眼理解，不要把多个主题塞进一个标题。
-- cover_text 是封面文案，只能2到8个字，高对比、强情绪、有冲突。
-- cover_prompt 描述封面构图，例如左侧旧入口、右侧AI入口、中间冲突大字。
-- 标题和封面都要符合“AI未来三年系列”的统一风格。
-
-请只输出 JSON，不要 Markdown，不要解释。格式：
-{{
-  "title": "12到24个字的视频标题",
-  "desc": "适合B站的视频简介，说明本期看点",
-  "tags": "用英文逗号分隔的标签，最多8个",
-  "cover_text": "2到8个字的封面文案",
-  "cover_prompt": "封面构图和视觉冲突说明",
-  "title_options": ["标题1", "标题2"],
-  "cover_options": ["封面文案1", "封面文案2"]
-}}
-"""
-    raw = call_llm(prompt, f"脚本：\n{script_text}\n\n研究：\n{research_text}")
+    prompt = (
+        "你是短视频发布信息生成助手。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        "请只返回 JSON，对象字段如下：\n"
+        "{\n"
+        '  "title": "发布标题",\n'
+        '  "desc": "发布简介",\n'
+        '  "tags": "标签1,标签2",\n'
+        '  "cover_text": "封面短文案",\n'
+        '  "cover_prompt": "封面图提示词",\n'
+        '  "comment_question": "评论区互动问题",\n'
+        '  "title_options": ["标题备选1", "标题备选2", "标题备选3"],\n'
+        '  "cover_options": ["封面备选1", "封面备选2", "封面备选3"]\n'
+        "}\n"
+        "要求：标题短一些，封面文案控制在 6 到 10 个字，评论问题适合互动。\n"
+    )
+    raw = call_llm(prompt, f"脚本：\n{script_text}\n\n研究报告：\n{research_text}")
     assets = parse_json_object(raw)
     if not assets:
         assets = {
             "title": episode.get("title", "深度视频"),
-            "desc": f"《{series.get('title', '')}》深度系列，本期主题：{episode.get('title', '')}。",
-            "tags": "人工智能,AI,科技,深度视频",
-            "cover_text": "趋势变了",
-            "cover_prompt": "深色科技纪录片封面，中间冲突大字，左右对比旧入口和AI入口。",
+            "desc": f"{series.get('title', '')} / {episode.get('title', '')} 的深度内容发布文案。",
+            "tags": "AI,深度内容,纪录片,口播",
+            "cover_text": "AI 深度解析",
+            "cover_prompt": "iOS 风格深度系列封面，简洁，清晰，白底，高对比，科技感",
+            "comment_question": "你更赞同 A 还是 B？为什么",
+            "title_options": [episode.get("title", "深度视频")],
+            "cover_options": ["AI 深度解析"],
         }
-    assets["title"] = normalize_publish_title(str(assets.get("title") or ""), episode.get("title", "深度视频"))
-    assets["desc"] = str(assets.get("desc") or "").strip()
-    assets["tags"] = str(assets.get("tags") or "人工智能,AI,科技,深度视频").strip()
+
+    assets["title"] = normalize_publish_title(str(assets.get("title") or ""), episode.get("title", "深度视频"), series.get("title", ""))
+    assets["comment_question"] = normalize_comment_question(str(assets.get("comment_question") or ""))
+    assets["desc"] = append_comment_question(str(assets.get("desc") or ""), assets["comment_question"])
+    assets["tags"] = str(assets.get("tags") or "AI,深度内容,纪录片,口播").strip()
     assets["cover_text"] = normalize_cover_text(str(assets.get("cover_text") or ""), assets["title"])
-    assets["cover_prompt"] = str(assets.get("cover_prompt") or "深色科技纪录片封面，中间冲突大字，左右对比旧入口和AI入口。").strip()
+    assets["cover_prompt"] = str(assets.get("cover_prompt") or "iOS 风格深度系列封面，简洁，清晰，白底，高对比，科技感").strip()
+
     if not isinstance(assets.get("title_options"), list):
         assets["title_options"] = [assets["title"]]
+    assets["title_options"] = [
+        normalize_publish_title(str(item), episode.get("title", "深度视频"), series.get("title", ""))
+        for item in assets["title_options"][:3]
+    ] or [assets["title"]]
+
     if not isinstance(assets.get("cover_options"), list):
         assets["cover_options"] = [assets["cover_text"]]
+    assets["cover_options"] = [
+        normalize_cover_text(str(item), assets["title"])
+        for item in assets["cover_options"][:3]
+    ] or [assets["cover_text"]]
 
     output_dir = os.path.dirname(os.path.abspath(result.get("video_path") or result.get("script_path") or CONFIG_PATH))
     os.makedirs(output_dir, exist_ok=True)
@@ -852,6 +968,8 @@ def run_episode_by_titles(series_title: str, episode_title: str) -> Dict:
     series = find_series(config, series_title)
     episode = find_episode(series, episode_title)
     result = run_episode_pipeline(series, episode)
+
+    # 重新读取配置是为了保留外部同时做过的修改。
     config = load_config()
     series = find_series(config, series_title)
     episode = find_episode(series, episode_title)

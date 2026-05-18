@@ -77,6 +77,24 @@ def safe_dir_name(title: str) -> str:
     return title.replace("/", "_").replace("\\", "_").replace(" ", "_")
 
 
+def get_today_str() -> str:
+    # 统一收口当天日期字符串的生成规则，避免不同步骤各自拼接时出现格式不一致。
+    # 这里固定输出 YYYY-MM-DD，因为 crawler、textContent、audioContent 三条目录约定都依赖这个格式。
+    return datetime.date.today().strftime("%Y-%m-%d")
+
+
+def get_topic_title_dir(topic: dict) -> str:
+    # 统一把主题标题转换成目录名，后续如果目录命名规则调整，只需要改这一处。
+    # 这样可以避免爬虫、文本处理、音频生成三个步骤各自重复做同样的字符串清洗。
+    return safe_dir_name(topic["title"])
+
+
+def get_topic_language(topic: dict) -> str:
+    # 统一读取主题语言，所有流水线步骤都通过同一个默认值兜底。
+    # 这样可以避免某个步骤忘记处理 language 字段，导致中英文主题行为不一致。
+    return topic.get("language", "zh-CN")
+
+
 def extract_brief_titles(brief_path: str):
     titles = []
     if not os.path.exists(brief_path):
@@ -334,10 +352,10 @@ def run_topic_pipeline(topic: dict) -> dict:
 def step_crawl(topic: dict) -> str:
     """运行爬虫，返回当日爬取数据的目录路径（按 日期/title 子目录存放）"""
     from crawler.news_crawler import run_crawler
-    title_dir = safe_dir_name(topic["title"])
+    title_dir = get_topic_title_dir(topic)
     run_crawler(keywords=topic["keywords"], title_dir=title_dir)
     # 爬虫按日期+主题保存到 crawler/<今日日期>/<title>/ 目录
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    today_str = get_today_str()
     crawled_dir = os.path.join(ROOT_DIR, "crawler", today_str, title_dir)
     print(f"\n[主程序] 爬取目录: {crawled_dir}")
     return crawled_dir
@@ -349,11 +367,11 @@ def step_crawl(topic: dict) -> str:
 def step_process(crawled_dir: str, topic: dict) -> str:
     """调用内容处理器，生成简报 MD 文件，返回其路径"""
     from textContent.content_processor import process_news
-    title_dir = safe_dir_name(topic["title"])
-    language = topic.get("language", "zh-CN")
+    title_dir = get_topic_title_dir(topic)
+    language = get_topic_language(topic)
     process_news(crawled_dir, theme=topic["theme"], title_dir=title_dir, language=language)
     # content_processor 将简报保存到 textContent/<日期>/<title>/news_brief_<日期>.md
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    today_str = get_today_str()
     brief_path = os.path.join(ROOT_DIR, "textContent", today_str, title_dir, f"news_brief_{today_str}.md")
     print(f"[主程序] 简报文件: {brief_path}")
     return brief_path
@@ -437,8 +455,8 @@ def step_audio(brief_path: str, topic: dict) -> str:
     """根据简报 MD 生成音频文件，返回 MP3 路径"""
     from audioContent.news_to_audio import convert_md_to_audio
     audio_dir = os.path.join(ROOT_DIR, "audioContent")
-    title_dir = safe_dir_name(topic["title"])
-    language = topic.get("language", "zh-CN")
+    title_dir = get_topic_title_dir(topic)
+    language = get_topic_language(topic)
     audio_path = convert_md_to_audio(brief_path, audio_dir, title=topic["title"], title_dir=title_dir, language=language)
     print(f"[主程序] 音频文件: {audio_path}")
     return audio_path

@@ -17,6 +17,12 @@ sys.path.append(base_dir)
 from video.Audio2Video import build_slide_durations, create_keyboard_click_track, create_video, get_audio_duration, _waveform_layout
 import video.Audio2Video as audio2video
 
+
+def test_get_waveform_color_uses_env_override():
+    # 这里确认视频层不是写死颜色，而是读取 UI 通过环境变量下发的配置。
+    with patch.dict(os.environ, {"OPENNEWSBRIEF_WAVEFORM_COLOR": "#E0E0E3"}, clear=False):
+        assert audio2video.get_waveform_color() == "#E0E0E3"
+
 def test_waveform_effect():
     workdir = os.path.join(base_dir, f"tmp_video_test_{uuid.uuid4().hex}")
     os.makedirs(workdir, exist_ok=True)
@@ -168,7 +174,7 @@ def test_slideshow_video_uses_multiple_news_images():
             waveform_pixels = sum(
                 1
                 for r, g, b in bottom.getdata()
-                if r < 230 and g > 180 and b > 200
+                if abs(r - g) < 14 and abs(g - b) < 14 and r > 140 and r < 240
             )
         assert waveform_pixels > 500
     finally:

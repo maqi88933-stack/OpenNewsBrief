@@ -2,6 +2,8 @@ import json
 import os
 import tempfile
 import unittest
+import queue
+import threading
 from unittest.mock import patch
 import types
 
@@ -94,6 +96,8 @@ class TestUiEncoding(unittest.TestCase):
         self.assertEqual(kwargs["encoding"], "utf-8")
         self.assertEqual(kwargs["env"]["PYTHONIOENCODING"], "utf-8")
         self.assertEqual(kwargs["env"]["PYTHONUTF8"], "1")
+        self.assertEqual(kwargs["env"]["PYTHONUNBUFFERED"], "1")
+        self.assertEqual(kwargs["env"]["OPENNEWSBRIEF_WAVEFORM_COLOR"], ui.WAVEFORM_COLOR)
         self.assertEqual(result, payload)
 
     def test_deep_worker_subprocess_uses_deep_mode(self):
@@ -120,20 +124,128 @@ class TestUiEncoding(unittest.TestCase):
         ])
         self.assertEqual(result, payload)
 
-    def test_deep_generate_video_runs_in_ui_process(self):
+    def test_deep_generate_video_runs_in_worker_subprocess(self):
         app = object.__new__(ui.NewsBriefApp)
-        app.append_log = lambda _text: None
+        app.latest_result = {}
+        logs = []
+        # 这里直接验证深度视频改走子进程，避免把长任务留在 UI 进程里。
+        app.append_log = logs.append
         app.update_result_panel = lambda _result: None
-        app.reload_deep_config = lambda: None
+        app.reload_deep_config = lambda *_args, **_kwargs: None
         app.finish_run = lambda: None
-        app.run_worker_subprocess = lambda _args: self.fail("不应通过子进程生成深度视频")
 
         payload = {"video_path": "deep.mp4"}
-        with patch("ui.deep_series.generate_episode_video_by_titles", return_value=payload) as mock_generate:
+        with patch.object(app, "run_worker_subprocess", return_value=payload) as mock_run, \
+                patch("ui.deep_series.generate_episode_video_by_titles") as mock_generate:
             app.run_deep_generate_video("AI未来三年系列", "AI 为什么会替代搜索？")
 
-        mock_generate.assert_called_once_with("AI未来三年系列", "AI 为什么会替代搜索？")
+        mock_run.assert_called_once_with(["--deep-generate-video", "AI未来三年系列", "AI 为什么会替代搜索？"])
+        mock_generate.assert_not_called()
         self.assertEqual(app.latest_result, payload)
+        self.assertTrue(any("开始生成深度视频" in item for item in logs))
+
+    def test_post_ui_queues_background_thread_callbacks(self):
+        class FakeRoot:
+            # 这里只保留最小的 after 能力，模拟界面主循环继续调度队列处理。
+            def after(self, _delay, _func):
+                return None
+
+        app = object.__new__(ui.NewsBriefApp)
+        app.root = FakeRoot()
+        app.ui_queue = queue.Queue()
+        calls = []
+
+        def worker():
+            # 后台线程里调用时，_post_ui 不能直接碰 Tk，只能先进入队列。
+            app._post_ui(lambda: calls.append("done"))
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(calls, [])
+        self.assertEqual(app.ui_queue.qsize(), 1)
+
+        app.process_ui_queue()
+
+        self.assertEqual(calls, ["done"])
+
+    def test_reload_deep_config_keeps_selected_series_and_episode(self):
+        class FakeVar:
+            # 这里用最小可用的变量对象，模拟界面里的 StringVar。
+            def __init__(self):
+                self.value = ""
+
+            def set(self, value):
+                self.value = value
+
+        class FakeTreeview:
+            # 这里用最小可用的树表对象，模拟刷新时的选择和定位逻辑。
+            def __init__(self):
+                self.rows = []
+                self._selection = []
+
+            def delete(self, *args):
+                self.rows = []
+                self._selection = []
+
+            def get_children(self):
+                return [row["iid"] for row in self.rows]
+
+            def insert(self, _parent, _index, iid=None, values=()):
+                self.rows.append({"iid": iid, "values": values})
+
+            def selection_set(self, iid):
+                self._selection = [iid]
+
+            def focus(self, iid):
+                self.focused = iid
+
+            def selection(self):
+                return tuple(self._selection)
+
+        app = object.__new__(ui.NewsBriefApp)
+        app.root = types.SimpleNamespace(after=lambda _delay, func: func())
+        app.deep_series_table = FakeTreeview()
+        app.deep_episode_table = FakeTreeview()
+        app.deep_series_title_var = FakeVar()
+        app.deep_series_desc_var = FakeVar()
+        app.deep_episode_title_var = FakeVar()
+        app.deep_episode_question_var = FakeVar()
+        app.refresh_deep_publish_list = lambda: None
+        app.deep_config = {
+            "series": [
+                {"title": "Series A", "description": "A", "episodes": [{"title": "Topic A1"}]},
+                {
+                    "title": "Series B",
+                    "description": "B",
+                    "episodes": [{"title": "Topic B1"}, {"title": "Topic B2"}],
+                },
+            ]
+        }
+
+        # 重新加载后的配置可以变化，但只要标题还在，界面就要回到原来的选中项。
+        refreshed_config = {
+            "series": [
+                {"title": "Series A", "description": "A", "episodes": [{"title": "Topic A1"}]},
+                {
+                    "title": "Series B",
+                    "description": "B",
+                    "episodes": [
+                        {"title": "Topic B1", "generated": True},
+                        {"title": "Topic B2", "generated": True},
+                    ],
+                },
+            ]
+        }
+
+        with patch("ui.deep_series.load_config", return_value=refreshed_config):
+            app.reload_deep_config("Series B", "Topic B2")
+
+        self.assertEqual(app.deep_series_table.selection(), ("s1",))
+        self.assertEqual(app.deep_episode_table.selection(), ("e1_1",))
+        self.assertEqual(app.deep_series_title_var.value, "Series B")
+        self.assertEqual(app.deep_episode_title_var.value, "Topic B2")
 
     def test_biliup_command_uses_latest_video_metadata(self):
         app = object.__new__(ui.NewsBriefApp)
