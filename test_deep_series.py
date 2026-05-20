@@ -86,6 +86,45 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("背景", prompt)
         self.assertIn("争议", prompt)
 
+    def test_call_llm_accepts_responses_api_content_blocks(self):
+        fake_llm = types.SimpleNamespace(
+            invoke=MagicMock(
+                return_value=types.SimpleNamespace(
+                    content=[
+                        {"type": "text", "text": "第一段研究报告。"},
+                        {"type": "reasoning", "summary": "内部推理不应进入正文"},
+                        {"type": "text", "text": "第二段研究报告。"},
+                    ]
+                )
+            )
+        )
+        fake_factory = MagicMock()
+        fake_factory.return_value.getDeepseek.return_value = fake_llm
+
+        with patch("util.llm.LLmFactory", fake_factory):
+            result = deep_series.call_llm("提示词", "资料正文")
+
+        # Responses API 可能返回内容块列表，深度系列只需要其中可见的文本块。
+        self.assertEqual(result, "第一段研究报告。\n第二段研究报告。")
+
+    @patch("deep_series.call_llm", return_value="男：先给结论。\n女：为什么？")
+    def test_generate_dialogue_script_prompt_locks_first_30_seconds(self, mock_llm):
+        deep_series.generate_dialogue_script(
+            {"title": "AI 如何重构企业"},
+            {"title": "未来公司可能只需要 3 个人", "question": "未来公司可能只需要 3 个人"},
+            "研究报告",
+            "审校意见",
+        )
+
+        prompt = mock_llm.call_args.args[0]
+        # 留存优化必须写进脚本提示词，而不是只靠人工写稿时记住。
+        self.assertIn("90-120秒", prompt)
+        self.assertIn("前3秒", prompt)
+        self.assertIn("前30秒", prompt)
+        self.assertIn("反常识结论", prompt)
+        self.assertIn("不要使用“想象一下”", prompt)
+        self.assertIn("不要使用“今天我们探讨”", prompt)
+
     def test_clean_script_output_strips_headers_and_keeps_dialogue(self):
         raw = "---\n\n### 标题\n女：搜索正在变成答案入口。\n\n男：未来的软件入口会变成 AI 对话。\n"
         cleaned = deep_series.clean_script_output(raw)
@@ -273,6 +312,11 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("短视频发布信息生成助手", prompt)
         self.assertIn("cover_text", prompt)
         self.assertIn("comment_question", prompt)
+        # 发布标题、封面和开头承诺必须一致，减少点击后发现内容不符造成的秒退。
+        self.assertIn("视频前3秒", prompt)
+        self.assertIn("同一个承诺", prompt)
+        self.assertIn("标题", prompt)
+        self.assertIn("封面文案", prompt)
         self.assertLessEqual(len(assets["title"]), 18)
         self.assertGreaterEqual(len(assets["cover_text"]), 6)
         self.assertLessEqual(len(assets["cover_text"]), 10)
@@ -396,9 +440,10 @@ class TestDeepSeries(unittest.TestCase):
             audio_path,
         )
 
-        self.assertEqual(len(image_paths), 2)
+        # 6 秒段会被拆成两张短卡，避免单张画面停留过久。
+        self.assertEqual(len(image_paths), 3)
         durations = deep_series.load_deep_slide_durations(image_paths)
-        self.assertEqual(durations, [4.0, 6.0])
+        self.assertEqual(durations, [4.0, 3.0, 3.0])
         self.assertAlmostEqual(sum(durations), 10.0)
         self.assertTrue(os.path.exists(os.path.join(os.path.dirname(image_paths[0]), "slide_durations.json")))
 
@@ -434,6 +479,28 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("#8FA8C1", captured)
         self.assertNotIn("#FF2D55", captured)
         self.assertNotIn("#007AFF", captured)
+
+    def test_build_deep_visual_slide_plan_splits_long_timing_segments(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("男：一段长口播。")
+        long_text = "未来公司只需要三个人。第一个是定方向的人。第二个是搭系统的人。第三个是做增长的人。"
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            f.write(
+                '{"segments":[{"role":"male","slide_index":0,"duration":12.4,"text":"'
+                + long_text
+                + '"}]}'
+            )
+
+        slide_plan = deep_series.build_deep_visual_slide_plan(script_path, audio_path)
+
+        # 单段长音频要拆成多张短卡，避免前30秒一直停在同一张文字页。
+        self.assertGreaterEqual(len(slide_plan), 4)
+        self.assertTrue(all(item["duration"] <= deep_series.DEEP_VISUAL_MAX_SECONDS for item in slide_plan))
+        self.assertAlmostEqual(sum(item["duration"] for item in slide_plan), 12.4)
+        self.assertEqual({item["speaker"] for item in slide_plan}, {"male"})
+        self.assertLessEqual(max(len(item["text"]) for item in slide_plan[:3]), 24)
 
     def test_step_video_uses_deep_slide_duration_sidecar(self):
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")

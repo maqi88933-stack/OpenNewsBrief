@@ -2,6 +2,7 @@
 import asyncio
 import datetime
 import json
+import math
 import os
 import re
 import subprocess
@@ -75,6 +76,26 @@ def _episode_question(episode: Dict) -> str:
     return (episode.get("question") or episode.get("title") or "").strip()
 
 
+def _llm_content_to_text(content) -> str:
+    # LangChain 的 Responses API 会把可见文本放在 content 列表里，这里统一抽成普通字符串。
+    if isinstance(content, str):
+        return content.strip()
+
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        text = "\n".join(part.strip() for part in parts if part and part.strip()).strip()
+        if text:
+            return text
+
+    # 兜底保留原行为，避免非标准返回值直接中断流程。
+    return str(content).strip()
+
+
 def call_llm(prompt: str, text: str = "") -> str:
     from util.llm import LLmFactory
 
@@ -83,7 +104,7 @@ def call_llm(prompt: str, text: str = "") -> str:
         content += "\n\n资料：\n" + text
     llm = LLmFactory().getDeepseek()
     result = llm.invoke(content)
-    return result.content.strip() if hasattr(result, "content") else str(result).strip()
+    return _llm_content_to_text(result.content if hasattr(result, "content") else result)
 
 
 def build_search_keywords(series: Dict, episode: Dict) -> List[str]:
@@ -193,10 +214,13 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "请写一份适合深度视频的对话脚本。\n"
         "要求：\n"
         "1. 只有主持人对话和必要旁白，不要写成 PPT 纯文字。\n"
-        "2. 节奏要紧，每段控制在 3 到 6 句。\n"
-        "3. 每隔一段留一个悬念，方便观众继续看下去。\n"
-        "4. 结尾要落到一个站得住的问题。\n"
-        "5. 每一行使用“女：/男：/旁白：”这种格式。\n"
+        "2. 全片目标 90-120秒，每行控制在 1 到 2 个短句，避免拖成长段。\n"
+        "3. 前3秒第一句必须直接给出反常识结论，不要铺垫，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
+        "4. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
+        "5. 前三行分别承担：结论、追问、答案路线图，让观众在 30 秒前知道继续看的价值。\n"
+        "6. 每隔一段留一个悬念，方便观众继续看下去。\n"
+        "7. 结尾要落到一个站得住的问题。\n"
+        "8. 每一行使用“女：/男：/旁白：”这种格式。\n"
     )
     raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
@@ -491,6 +515,62 @@ def _load_timing_segments(audio_path: str) -> List[Dict]:
     return data.get("segments", [])
 
 
+def _split_text_units(text: str) -> List[str]:
+    # 按中文常见停顿切成短语，优先让前30秒的画面快速变化。
+    clean_text = re.sub(r"\s+", " ", text or "").strip()
+    if not clean_text:
+        return []
+    units = re.findall(r"[^。！？!?；;，,、]+[。！？!?；;，,、]?", clean_text)
+    return [unit.strip() for unit in units if unit.strip()] or [clean_text]
+
+
+def _split_text_evenly(text: str, count: int) -> List[str]:
+    # 标点不够时按字数兜底拆分，避免长句仍然停在一张卡片上。
+    clean_text = re.sub(r"\s+", " ", text or "").strip()
+    if not clean_text:
+        return []
+    count = max(1, min(count, len(clean_text)))
+    size = int(math.ceil(len(clean_text) / count))
+    return [clean_text[index:index + size] for index in range(0, len(clean_text), size)]
+
+
+def _split_text_for_visual_cards(text: str, target_count: int) -> List[str]:
+    # 先用自然语义短语拆卡，不够时再按字数切，保证视觉节奏跟得上音频。
+    target_count = max(1, target_count)
+    units = _split_text_units(text)
+    if len(units) < target_count:
+        return _split_text_evenly(text, target_count)
+
+    groups = [[] for _ in range(target_count)]
+    for index, unit in enumerate(units):
+        groups[min(index, target_count - 1)].append(unit)
+    return ["".join(group).strip() for group in groups if "".join(group).strip()]
+
+
+def _split_visual_segment(segment: Dict) -> List[Dict]:
+    # 音频段超过视觉上限时，拆成多张短卡，但总时长保持不变。
+    duration = max(float(segment.get("duration", 0.0)), 0.1)
+    speaker = segment.get("speaker", "narrator")
+    text = re.sub(r"\s+", " ", segment.get("text", "")).strip()
+    if duration <= DEEP_VISUAL_MAX_SECONDS:
+        return [{"speaker": speaker, "text": text, "duration": duration}]
+
+    target_count = int(math.ceil(duration / DEEP_VISUAL_MAX_SECONDS))
+    texts = _split_text_for_visual_cards(text, target_count)
+    if not texts:
+        texts = [text]
+    per_duration = duration / len(texts)
+    result = []
+    elapsed = 0.0
+    for index, item_text in enumerate(texts):
+        item_duration = per_duration
+        if index == len(texts) - 1:
+            item_duration = duration - elapsed
+        elapsed += item_duration
+        result.append({"speaker": speaker, "text": item_text, "duration": item_duration})
+    return result
+
+
 def build_deep_visual_slide_plan(script_path: str, audio_path: str) -> List[Dict]:
     timing_segments = _load_timing_segments(audio_path)
     source_segments = []
@@ -518,7 +598,10 @@ def build_deep_visual_slide_plan(script_path: str, audio_path: str) -> List[Dict
                             "duration": DEEP_VISUAL_MAX_SECONDS,
                         }
                     )
-    return source_segments
+    slide_plan: List[Dict] = []
+    for segment in source_segments:
+        slide_plan.extend(_split_visual_segment(segment))
+    return slide_plan
 
 
 def create_text_card(
@@ -917,6 +1000,7 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
         '  "cover_options": ["封面备选1", "封面备选2", "封面备选3"]\n'
         "}\n"
         "要求：标题短一些，封面文案控制在 6 到 10 个字，评论问题适合互动。\n"
+        "标题、封面文案、视频前3秒必须围绕同一个承诺，观众点进来后马上听到同一个答案方向。\n"
     )
     raw = call_llm(prompt, f"脚本：\n{script_text}\n\n研究报告：\n{research_text}")
     assets = parse_json_object(raw)
