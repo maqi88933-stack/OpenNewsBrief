@@ -124,6 +124,9 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("反常识结论", prompt)
         self.assertIn("不要使用“想象一下”", prompt)
         self.assertIn("不要使用“今天我们探讨”", prompt)
+        # 深度系列只保留两个主持人的聊天感，避免“主持人对话 + 旁白”的第三角色混入。
+        self.assertNotIn("旁白", prompt)
+        self.assertIn("女：/男：", prompt)
 
     def test_clean_script_output_strips_headers_and_keeps_dialogue(self):
         raw = "---\n\n### 标题\n女：搜索正在变成答案入口。\n\n男：未来的软件入口会变成 AI 对话。\n"
@@ -138,8 +141,9 @@ class TestDeepSeries(unittest.TestCase):
 
         segments = deep_series.parse_dialogue_script(script)
 
-        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "narrator"])
+        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "male"])
         self.assertIn("未来的软件入口会变成 AI 对话", segments[1]["text"])
+        self.assertNotIn("旁白", deep_series.clean_script_output(script))
 
     def test_parse_dialogue_script_handles_markdown_bold_roles_and_preamble(self):
         script = (
@@ -153,10 +157,11 @@ class TestDeepSeries(unittest.TestCase):
         segments = deep_series.parse_dialogue_script(script)
 
         self.assertNotIn("###", cleaned)
-        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "narrator"])
+        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "male"])
         self.assertIn("2026 年", segments[0]["text"])
         self.assertIn("对话框", segments[1]["text"])
         self.assertNotIn("女：", segments[0]["text"])
+        self.assertNotIn("旁白", cleaned)
 
     def test_save_tts_uses_chattts_for_gendered_dialogue_when_chattts_enabled(self):
         fake_chattts = types.SimpleNamespace(synthesize_text=MagicMock())
@@ -479,6 +484,19 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("#8FA8C1", captured)
         self.assertNotIn("#FF2D55", captured)
         self.assertNotIn("#007AFF", captured)
+
+    def test_build_deep_visual_slide_plan_maps_legacy_narrator_to_male(self):
+        script_path = os.path.join(self.tmpdir, "legacy_narrator_script.md")
+        audio_path = os.path.join(self.tmpdir, "legacy_narrator_audio.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("旁白：旧脚本里的第三角色。")
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            f.write('{"segments":[{"role":"narrator","duration":3.0,"text":"旧脚本里的第三角色。"}]}')
+
+        slide_plan = deep_series.build_deep_visual_slide_plan(script_path, audio_path)
+
+        # 旧 timing 里的 narrator 也要归并，避免重渲染时字幕重新出现“旁白”。
+        self.assertEqual([item["speaker"] for item in slide_plan], ["male"])
 
     def test_build_deep_visual_slide_plan_splits_long_timing_segments(self):
         script_path = os.path.join(self.tmpdir, "script.md")

@@ -213,14 +213,14 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         f"问题：{_episode_question(episode)}\n\n"
         "请写一份适合深度视频的对话脚本。\n"
         "要求：\n"
-        "1. 只有主持人对话和必要旁白，不要写成 PPT 纯文字。\n"
+        "1. 只有女主持和男主持两个人对话，不要加入第三个发声角色，也不要写成 PPT 纯文字。\n"
         "2. 全片目标 90-120秒，每行控制在 1 到 2 个短句，避免拖成长段。\n"
         "3. 前3秒第一句必须直接给出反常识结论，不要铺垫，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
         "4. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
         "5. 前三行分别承担：结论、追问、答案路线图，让观众在 30 秒前知道继续看的价值。\n"
         "6. 每隔一段留一个悬念，方便观众继续看下去。\n"
         "7. 结尾要落到一个站得住的问题。\n"
-        "8. 每一行使用“女：/男：/旁白：”这种格式。\n"
+        "8. 每一行只使用“女：/男：”这种格式。\n"
     )
     raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
@@ -284,14 +284,16 @@ def _normalize_speaker_label(label: str) -> str:
 def _speaker_kind(label: str) -> str:
     clean = _normalize_speaker_label(label)
     if any(token in clean for token in ("旁白", "解说", "叙述", "播报")):
-        return "narrator"
+        # 旧脚本可能还有旁白标签；深度系列现在只保留双主持，所以归并到男主持。
+        return "male"
     if any(token in clean for token in ("女", "女士")) and "男" not in clean:
         return "female"
     if any(token in clean for token in ("男", "先生")) and "女" not in clean:
         return "male"
     if any(token in clean for token in ("主持", "主持人")):
-        return "narrator"
-    return "narrator"
+        # 没有标明男女的主持人标签默认交给男主持，避免重新引入第三角色。
+        return "male"
+    return "male"
 
 
 def normalize_dialogue_line(line: str) -> str:
@@ -302,7 +304,9 @@ def normalize_dialogue_line(line: str) -> str:
         speaker = match.group("label").strip()
         body = match.group("body").strip()
         if speaker and body:
-            return f"{speaker}：{body}"
+            # 统一输出标准男女标签，顺手把历史“旁白：”清洗成双主持对话。
+            speaker_name = "女" if _speaker_kind(speaker) == "female" else "男"
+            return f"{speaker_name}：{body}"
     return line
 
 
@@ -550,7 +554,10 @@ def _split_text_for_visual_cards(text: str, target_count: int) -> List[str]:
 def _split_visual_segment(segment: Dict) -> List[Dict]:
     # 音频段超过视觉上限时，拆成多张短卡，但总时长保持不变。
     duration = max(float(segment.get("duration", 0.0)), 0.1)
-    speaker = segment.get("speaker", "narrator")
+    speaker = segment.get("speaker", "male")
+    if speaker not in ("female", "male"):
+        # 兼容旧 timing/script 里的 narrator，视觉层也只显示男女主持。
+        speaker = "male"
     text = re.sub(r"\s+", " ", segment.get("text", "")).strip()
     if duration <= DEEP_VISUAL_MAX_SECONDS:
         return [{"speaker": speaker, "text": text, "duration": duration}]
@@ -581,7 +588,7 @@ def build_deep_visual_slide_plan(script_path: str, audio_path: str) -> List[Dict
                 continue
             source_segments.append(
                 {
-                    "speaker": item.get("role") or item.get("speaker") or "narrator",
+                    "speaker": item.get("role") or item.get("speaker") or "male",
                     "text": text,
                     "duration": max(float(item.get("duration", 0.0)), 0.1),
                 }
@@ -593,7 +600,7 @@ def build_deep_visual_slide_plan(script_path: str, audio_path: str) -> List[Dict
                 if text:
                     source_segments.append(
                         {
-                            "speaker": item.get("speaker", "narrator"),
+                            "speaker": item.get("speaker", "male"),
                             "text": text,
                             "duration": DEEP_VISUAL_MAX_SECONDS,
                         }
@@ -734,14 +741,13 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
     accents = {
         "female": "#C79AA8",   # 柔和豆沙粉，保留区分度但不刺眼。
         "male": "#8FA8C1",     # 低饱和雾蓝，保持冷静但不硬。
-        "narrator": "#A6B2AA", # 中性灰绿，给旁白用更克制。
     }
-    labels = {"female": "女主持", "male": "男主持", "narrator": "旁白"}
+    labels = {"female": "女主持", "male": "男主持"}
     slide_plan = build_deep_visual_slide_plan(script_path, audio_path)
     if not slide_plan:
         slide_plan = [
             {
-                "speaker": "narrator",
+                "speaker": "male",
                 "text": episode.get("title", "") or series.get("title", ""),
                 "duration": DEEP_VISUAL_MAX_SECONDS,
             }
@@ -749,7 +755,7 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
     total = len(slide_plan)
     for index, segment in enumerate(slide_plan):
         image_path = os.path.join(slide_dir, f"slide_{index:03d}.png")
-        subtitle = f"{series.get('title', '')} · {labels.get(segment['speaker'], '旁白')}"
+        subtitle = f"{series.get('title', '')} · {labels.get(segment['speaker'], '男主持')}"
         create_text_card(
             episode.get("title", ""),
             subtitle,

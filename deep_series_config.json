@@ -124,6 +124,26 @@
           "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_Agent——从聊天到替你干活，还有多远？\\2026-05-11\\publish_assets.json",
           "published": true,
           "published_at": "2026-05-11 11:42:45"
+        },
+        {
+          "title": "多智能体会成为下一代公司吗？",
+          "question": "多智能体会成为下一代公司吗？",
+          "generated": false
+        },
+        {
+          "title": "个人 AI 操作系统会出现吗？",
+          "question": "个人 AI 操作系统会出现吗？",
+          "generated": false
+        },
+        {
+          "title": "AI 生成的内容还会被信任吗？",
+          "question": "AI 生成的内容还会被信任吗？",
+          "generated": false
+        },
+        {
+          "title": "具身智能会先在哪些行业爆发？",
+          "question": "具身智能会先在哪些行业爆发？",
+          "generated": false
         }
       ]
     },
@@ -234,6 +254,26 @@
           "publish_title": "未来公司只需3人？",
           "publish_desc": "当AI能完成90%的工作，一家公司最少需要几个人？本视频探讨未来5年内，企业组织形态的颠覆性变革：从30人团队到3个“AI指挥官”，效率革命还是泡沫风险？\n\n互动问题：你觉得你所在的行业，哪三个核心能力是AI永远无法替代的？",
           "publish_tags": "AI重构企业,未来公司,超级个体,AI指挥官,效率革命"
+        },
+        {
+          "title": "AI 员工上岗后，中层管理会消失吗",
+          "question": "AI 员工上岗后，中层管理会消失吗",
+          "generated": false
+        },
+        {
+          "title": "企业为什么要重做 AI 安全体系",
+          "question": "企业为什么要重做 AI 安全体系",
+          "generated": false
+        },
+        {
+          "title": "业务部门会自己开发系统吗",
+          "question": "业务部门会自己开发系统吗",
+          "generated": false
+        },
+        {
+          "title": "企业买软件会变成买结果吗",
+          "question": "企业买软件会变成买结果吗",
+          "generated": false
         }
       ]
     }
