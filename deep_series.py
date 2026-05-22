@@ -19,6 +19,7 @@ DEEP_TTS_ENGINE = os.environ.get("OPENNEWSBRIEF_TTS_ENGINE", "chattts").lower()
 DEEP_DIALOGUE_PAUSE_SECONDS = 0.18
 DEEP_FINAL_SILENCE_SECONDS = 1.0
 DEEP_VISUAL_MAX_SECONDS = 4.0
+DEEP_VISUAL_MIN_CHARS = 8
 DEEP_SLIDE_DURATIONS_FILE = "slide_durations.json"
 DEEP_PUBLISH_TITLE_MAX_CHARS = 18
 DEEP_COVER_TEXT_MAX_CHARS = 10
@@ -215,7 +216,7 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "请写一份适合深度视频的对话脚本。\n"
         "要求：\n"
         "1. 只有女主持和男主持两个人对话，不要加入第三个发声角色，也不要写成 PPT 纯文字。\n"
-        "2. 全片目标 90-120秒，每行控制在 1 到 2 个短句，避免拖成长段。\n"
+        "2. 全片目标 90-120秒；除前4句钩子外，每次发言尽量写完整，用 2 到 4 句承接一个观点，不要只写碎片短句。\n"
         "3. 前3秒第一句必须直接给出反常识结论，不要铺垫，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
         "4. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
         "5. 前4句要有短视频钩子的冲突感和损失感，每句不超过22个字：震撼结论、反问质疑、具体代价、答案路线图。\n"
@@ -223,7 +224,7 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "7. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
         "8. 每隔一段留一个悬念，方便观众继续看下去。\n"
         "9. 结尾要落到一个站得住的问题。\n"
-        "10. 每一行只使用“女：/男：”这种格式。\n"
+        "10. 每一行只使用“女：/男：”这种格式；不要连续输出同一个主持人的多行发言，同一主持人的连续表达必须合并到同一行。\n"
     )
     raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
@@ -337,7 +338,31 @@ def clean_script_output(text: str) -> str:
         cleaned.pop(0)
     while cleaned and cleaned[-1] == "":
         cleaned.pop()
-    return "\n".join(cleaned).strip()
+
+    # 模型偶尔会把同一主持人的一段话拆成多行；保存脚本前直接合并，避免 script.md 变成碎片列表。
+    merged: List[str] = []
+    for line in cleaned:
+        if not line:
+            if merged and merged[-1] != "":
+                merged.append("")
+            continue
+
+        match = SPEAKER_LINE_RE.match(line)
+        last_index = len(merged) - 1
+        while last_index >= 0 and merged[last_index] == "":
+            last_index -= 1
+        last_match = SPEAKER_LINE_RE.match(merged[last_index]) if last_index >= 0 else None
+        if match and last_match and _speaker_kind(match.group("label")) == _speaker_kind(last_match.group("label")):
+            while merged and merged[-1] == "":
+                merged.pop()
+            label = "女" if _speaker_kind(match.group("label")) == "female" else "男"
+            old_body = last_match.group("body").strip()
+            new_body = match.group("body").strip()
+            merged[-1] = f"{label}：{old_body}{new_body}"
+            continue
+        merged.append(line)
+
+    return "\n".join(merged).strip()
 
 
 def parse_dialogue_script(script: str) -> List[Dict]:
@@ -550,16 +575,79 @@ def _split_text_evenly(text: str, count: int) -> List[str]:
 
 
 def _split_text_for_visual_cards(text: str, target_count: int) -> List[str]:
-    # 先用自然语义短语拆卡，不够时再按字数切，保证视觉节奏跟得上音频。
+    # 拆卡时按自然短语均衡成组，避免“结论是，”这类短片段单独占一张卡。
+    clean_text = re.sub(r"\s+", " ", text or "").strip()
+    if not clean_text:
+        return []
     target_count = max(1, target_count)
-    units = _split_text_units(text)
-    if len(units) < target_count:
-        return _split_text_evenly(text, target_count)
+    if target_count == 1:
+        return [clean_text]
 
-    groups = [[] for _ in range(target_count)]
+    units = _split_text_units(clean_text)
+    if len(units) < target_count:
+        target_count = min(target_count, max(1, len(clean_text) // DEEP_VISUAL_MIN_CHARS))
+        if target_count == 1:
+            return [clean_text]
+        return _split_text_evenly(clean_text, target_count)
+
+    target_length = sum(len(unit) for unit in units) / target_count
+    min_group_chars = min(DEEP_VISUAL_MIN_CHARS, max(1, int(target_length * 0.6)))
+    groups: List[str] = []
+    current: List[str] = []
+    current_length = 0
     for index, unit in enumerate(units):
-        groups[min(index, target_count - 1)].append(unit)
-    return ["".join(group).strip() for group in groups if "".join(group).strip()]
+        unit_length = len(unit)
+        if current and len(groups) < target_count - 1 and current_length >= min_group_chars:
+            remaining_units = len(units) - index
+            remaining_groups = target_count - len(groups) - 1
+            current_gap = abs(current_length - target_length)
+            next_gap = abs(current_length + unit_length - target_length)
+            if remaining_units >= remaining_groups and next_gap > current_gap:
+                groups.append("".join(current).strip())
+                current = []
+                current_length = 0
+        current.append(unit)
+        current_length += unit_length
+    if current:
+        groups.append("".join(current).strip())
+
+    # 极短尾巴并回前一张卡，宁可少一张也不要出现一两个字的突兀卡片。
+    for index in range(len(groups) - 1, 0, -1):
+        if len(groups[index]) < min_group_chars:
+            groups[index - 1] = (groups[index - 1] + groups[index]).strip()
+            groups.pop(index)
+    if len(groups) > 1 and len(groups[0]) < min_group_chars:
+        groups[1] = (groups[0] + groups[1]).strip()
+        groups.pop(0)
+
+    # 合并短碎片后如果卡片变少，就拆最长的一张补回节奏，避免单张卡停留太久。
+    while len(groups) < target_count:
+        longest_index = max(range(len(groups)), key=lambda index: len(groups[index]))
+        longest_text = groups[longest_index]
+        longest_units = _split_text_units(longest_text)
+        if len(longest_units) >= 2:
+            total_length = sum(len(unit) for unit in longest_units)
+            best_split = 1
+            best_gap = total_length
+            running_length = 0
+            for split_index in range(1, len(longest_units)):
+                running_length += len(longest_units[split_index - 1])
+                gap = abs(running_length - total_length / 2)
+                if gap < best_gap:
+                    best_gap = gap
+                    best_split = split_index
+            pieces = [
+                "".join(longest_units[:best_split]).strip(),
+                "".join(longest_units[best_split:]).strip(),
+            ]
+            piece_min_chars = max(6, min_group_chars - 2)
+        else:
+            pieces = _split_text_evenly(longest_text, 2)
+            piece_min_chars = min_group_chars
+        if len(pieces) < 2 or any(len(piece) < piece_min_chars for piece in pieces):
+            break
+        groups[longest_index:longest_index + 1] = pieces
+    return groups
 
 
 def _split_visual_segment(segment: Dict) -> List[Dict]:
@@ -577,11 +665,17 @@ def _split_visual_segment(segment: Dict) -> List[Dict]:
     texts = _split_text_for_visual_cards(text, target_count)
     if not texts:
         texts = [text]
-    per_duration = duration / len(texts)
+    # 同一段音频内没有逐字时间戳，文本长短差异明显时再按长度分配时长。
+    weights = [max(len(re.sub(r"\s+", "", item_text)), 1) for item_text in texts]
+    use_even_duration = max(weights) - min(weights) <= 2
+    total_weight = sum(weights)
     result = []
     elapsed = 0.0
     for index, item_text in enumerate(texts):
-        item_duration = per_duration
+        if use_even_duration:
+            item_duration = duration / len(texts)
+        else:
+            item_duration = duration * weights[index] / total_weight
         if index == len(texts) - 1:
             item_duration = duration - elapsed
         elapsed += item_duration

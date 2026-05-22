@@ -150,7 +150,24 @@
         {
           "title": "个人 AI 操作系统会出现吗？",
           "question": "个人 AI 操作系统会出现吗？",
-          "generated": false
+          "generated": true,
+          "generated_at": "2026-05-22 17:57:34",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\documentary_package.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\个人_AI_操作系统会出现吗？_2026-05-22.mp4",
+          "published": true,
+          "published_at": "2026-05-22 18:01:27",
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\个人_AI_操作系统会出现吗？\\2026-05-22\\cover.png",
+          "publish_title": "AI会抢走入口权",
+          "publish_desc": "未来三年，个人AI操作系统未必会取代手机，但可能先变成覆盖在App之上的智能操作层：帮你理解意图、调度工具、处理邮件日程和文件。真正的关键不是它会不会出现，而是你愿不愿意把行动权限交给它。\n\n互动问题：如果AI能帮你处理邮件、日程和订票，你愿意给它多大权限？",
+          "publish_tags": "AI未来三年,AI操作系统,AI Agent,人工智能,科技趋势,个人助理"
         },
         {
           "title": "AI 生成的内容还会被信任吗？",

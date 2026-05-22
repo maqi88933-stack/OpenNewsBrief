@@ -127,6 +127,9 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("损失感", prompt)
         self.assertIn("反问", prompt)
         self.assertIn("每句不超过22个字", prompt)
+        self.assertIn("每次发言", prompt)
+        self.assertIn("2 到 4 句", prompt)
+        self.assertIn("不要连续输出同一个主持人的多行发言", prompt)
         self.assertIn("不要使用“想象一下”", prompt)
         self.assertIn("不要使用“今天我们探讨”", prompt)
         # 深度系列只保留两个主持人的聊天感，避免“主持人对话 + 旁白”的第三角色混入。
@@ -141,13 +144,37 @@ class TestDeepSeries(unittest.TestCase):
         self.assertNotIn("###", cleaned)
         self.assertEqual(cleaned, "女：搜索正在变成答案入口。\n\n男：未来的软件入口会变成 AI 对话。")
 
+    def test_clean_script_output_merges_adjacent_same_speaker_lines(self):
+        raw = (
+            "女：没错，所以只能说是信号。\n"
+            "女：安卓、国产手机、Google和微软，也都在抢这层入口。\n\n"
+            "女：PC可能先成熟。\n"
+            "女：手机决定规模。\n"
+            "女：家庭设备会成为分支。\n\n"
+            "男：家庭设备也算操作系统？\n"
+            "女：不算传统OS。\n"
+            "女：但可能成为家庭AI中枢。\n"
+        )
+
+        cleaned = deep_series.clean_script_output(raw)
+
+        # 清洗脚本时就合并同主持人的连续发言，避免保存到 script.md 后看起来像碎片列表。
+        self.assertEqual(
+            cleaned,
+            "女：没错，所以只能说是信号。安卓、国产手机、Google和微软，也都在抢这层入口。PC可能先成熟。手机决定规模。家庭设备会成为分支。\n\n"
+            "男：家庭设备也算操作系统？\n"
+            "女：不算传统OS。但可能成为家庭AI中枢。",
+        )
+        self.assertNotIn("女：PC可能先成熟。\n女：手机决定规模。", cleaned)
+
     def test_parse_dialogue_script_extracts_speakers(self):
         script = "女：搜索正在变成答案入口。\n男：未来的软件入口会变成 AI 对话。\n旁白：这就是变化。"
 
         segments = deep_series.parse_dialogue_script(script)
 
-        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "male"])
+        self.assertEqual([item["speaker"] for item in segments], ["female", "male"])
         self.assertIn("未来的软件入口会变成 AI 对话", segments[1]["text"])
+        self.assertIn("这就是变化", segments[1]["text"])
         self.assertNotIn("旁白", deep_series.clean_script_output(script))
 
     def test_parse_dialogue_script_handles_markdown_bold_roles_and_preamble(self):
@@ -162,9 +189,10 @@ class TestDeepSeries(unittest.TestCase):
         segments = deep_series.parse_dialogue_script(script)
 
         self.assertNotIn("###", cleaned)
-        self.assertEqual([item["speaker"] for item in segments], ["female", "male", "male"])
+        self.assertEqual([item["speaker"] for item in segments], ["female", "male"])
         self.assertIn("2026 年", segments[0]["text"])
         self.assertIn("对话框", segments[1]["text"])
+        self.assertIn("这不是简单替代", segments[1]["text"])
         self.assertNotIn("女：", segments[0]["text"])
         self.assertNotIn("旁白", cleaned)
 
@@ -591,6 +619,30 @@ class TestDeepSeries(unittest.TestCase):
         self.assertAlmostEqual(sum(item["duration"] for item in slide_plan), 12.4)
         self.assertEqual({item["speaker"] for item in slide_plan}, {"male"})
         self.assertLessEqual(max(len(item["text"]) for item in slide_plan[:3]), 24)
+
+    def test_split_visual_segment_avoids_tiny_phrase_cards_and_balances_duration(self):
+        long_text = (
+            "结论是，未来三年更可能出现“个人 AI 操作层”，不是新的 Windows、iOS 或 Android。"
+            "它重要，是因为它可能把搜索框、App 图标、邮箱、日历和浏览器上面的入口权重新洗牌。"
+            "后面只看三件事：它长什么样，谁最可能做出来，以及为什么它现在还不能完全放手执行。"
+        )
+
+        slide_plan = deep_series._split_visual_segment(
+            {"speaker": "female", "duration": 19.16, "text": long_text}
+        )
+        texts = [item["text"] for item in slide_plan]
+
+        # 真实生成样本里曾出现“结论是，”独占一张卡片的问题，这里固定住拆卡下限。
+        self.assertNotIn("结论是，", texts)
+        self.assertTrue(all(len(text) >= 12 for text in texts), texts)
+        self.assertAlmostEqual(sum(item["duration"] for item in slide_plan), 19.16)
+
+        # 拆成多张卡时，长文本卡要拿到更长展示时间，避免画面和口播节奏明显错位。
+        lengths = [len(text) for text in texts]
+        durations = [item["duration"] for item in slide_plan]
+        shortest_index = min(range(len(texts)), key=lambda index: lengths[index])
+        longest_index = max(range(len(texts)), key=lambda index: lengths[index])
+        self.assertGreater(durations[longest_index], durations[shortest_index])
 
     def test_step_video_uses_deep_slide_duration_sidecar(self):
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
