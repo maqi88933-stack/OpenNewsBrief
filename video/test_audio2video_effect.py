@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import wave
 import math
@@ -16,6 +17,31 @@ sys.path.append(base_dir)
 
 from video.Audio2Video import build_slide_durations, create_keyboard_click_track, create_video, get_audio_duration, _waveform_layout
 import video.Audio2Video as audio2video
+
+
+def decoded_audio_duration(path: str) -> float:
+    # MP3 拼接后头部元数据可能偏短，这里用真实解码进度来检查音频有没有被截断。
+    process = subprocess.run(
+        [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            path,
+            "-map",
+            "0:a:0",
+            "-f",
+            "null",
+            "-",
+            "-progress",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    matches = re.findall(r"out_time_(?:ms|us)=(\d+)", process.stdout.decode("utf-8", errors="ignore"))
+    return int(matches[-1]) / 1000000.0 if matches else 0.0
 
 
 def test_get_waveform_color_uses_env_override():
@@ -222,6 +248,45 @@ def test_slideshow_concat_video_keeps_full_audio_duration():
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+def test_slideshow_uses_decoded_audio_duration_when_metadata_is_shorter():
+    workdir = os.path.join(base_dir, f"tmp_video_test_{uuid.uuid4().hex}")
+    os.makedirs(workdir, exist_ok=True)
+    audio_path = os.path.join(workdir, "metadata_short.wav")
+    output_path = os.path.join(workdir, "metadata_short.mp4")
+    image_paths = []
+
+    with wave.open(audio_path, "w") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(16000)
+        frames = []
+        for i in range(96000):
+            value = int(7000 * math.sin(2 * math.pi * 440 * (i / 16000)))
+            frames.append(struct.pack("<h", value))
+        wav_file.writeframes(b"".join(frames))
+
+    for index in range(10):
+        image_path = os.path.join(workdir, f"slide_{index:03d}.png")
+        Image.new("RGB", (320, 320), "#F2F2F7").save(image_path)
+        image_paths.append(image_path)
+
+    try:
+        with patch.object(audio2video, "get_audio_duration", return_value=4.0):
+            final_video = create_video(
+                audio_path,
+                image_paths[0],
+                output_path,
+                image_paths=image_paths,
+                slide_durations=[0.4] * len(image_paths),
+                transition_clicks=False,
+            )
+
+        # 即使元数据偏短，轮播轨也要按真实解码音频长度兜底，不能用 -shortest 截掉尾音。
+        assert decoded_audio_duration(final_video) >= 5.8
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
 def test_slideshow_waveform_changes_over_time():
     workdir = os.path.join(base_dir, f"tmp_video_test_{uuid.uuid4().hex}")
     os.makedirs(workdir, exist_ok=True)
@@ -339,5 +404,6 @@ if __name__ == "__main__":
     test_keyboard_click_track_created_for_news_switches()
     test_slideshow_video_uses_multiple_news_images()
     test_slideshow_concat_video_keeps_full_audio_duration()
+    test_slideshow_uses_decoded_audio_duration_when_metadata_is_shorter()
     test_slideshow_waveform_changes_over_time()
     test_slideshow_uses_concat_file_to_keep_ffmpeg_command_short()

@@ -122,6 +122,11 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("前3秒", prompt)
         self.assertIn("前30秒", prompt)
         self.assertIn("反常识结论", prompt)
+        self.assertIn("前4句", prompt)
+        self.assertIn("冲突感", prompt)
+        self.assertIn("损失感", prompt)
+        self.assertIn("反问", prompt)
+        self.assertIn("每句不超过22个字", prompt)
         self.assertIn("不要使用“想象一下”", prompt)
         self.assertIn("不要使用“今天我们探讨”", prompt)
         # 深度系列只保留两个主持人的聊天感，避免“主持人对话 + 旁白”的第三角色混入。
@@ -254,6 +259,66 @@ class TestDeepSeries(unittest.TestCase):
         timing_segments = mock_timing.call_args.args[1]
         self.assertEqual([item["role"] for item in timing_segments], ["female", "male"])
 
+    def test_convert_dialogue_to_audio_keeps_one_dialogue_line_as_one_tts_clip(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        output_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        long_text = "当分工、协调、复盘都能被智能体接管时，人类在公司里，剩下的核心价值到底是什么？"
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(f"男：{long_text}")
+
+        saved_texts = []
+
+        async def fake_save_tts(text, output_path, _voice, role="narrator"):
+            saved_texts.append(text)
+            with open(output_path, "wb") as f:
+                f.write(role.encode("utf-8"))
+
+        with patch.object(deep_series, "_save_tts", side_effect=fake_save_tts), \
+                patch.object(deep_series, "create_silence_audio", side_effect=lambda path, _duration: path), \
+                patch("audioContent.news_to_audio.get_audio_duration", return_value=1.0), \
+                patch("audioContent.news_to_audio.concat_audio_files", return_value=output_path) as mock_concat, \
+                patch("audioContent.news_to_audio.write_timing_file", return_value=output_path + ".timing.json") as mock_timing:
+            deep_series.convert_dialogue_to_audio(script_path, output_path)
+
+        # 同一行台词保持一次 TTS，避免多段音频边界造成语气重置和卡顿感。
+        self.assertEqual(saved_texts, [long_text])
+        segment_paths = mock_concat.call_args.args[0]
+        pause_paths = [path for path in segment_paths if path.endswith("_pause.mp3")]
+        self.assertEqual(pause_paths, [])
+        self.assertEqual(len(segment_paths), 2)
+        timing_segments = mock_timing.call_args.args[1]
+        self.assertEqual([item["text"] for item in timing_segments], [long_text])
+        self.assertAlmostEqual(timing_segments[0]["duration"], 1.0 + deep_series.DEEP_FINAL_SILENCE_SECONDS)
+
+    def test_convert_dialogue_to_audio_merges_adjacent_same_speaker_lines(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        output_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("男：第一句。\n男：第二句。\n女：回应。")
+
+        saved_texts = []
+
+        async def fake_save_tts(text, output_path, _voice, role="narrator"):
+            saved_texts.append((role, text))
+            with open(output_path, "wb") as f:
+                f.write(role.encode("utf-8"))
+
+        with patch.object(deep_series, "_save_tts", side_effect=fake_save_tts), \
+                patch.object(deep_series, "create_silence_audio", side_effect=lambda path, _duration: path), \
+                patch("audioContent.news_to_audio.get_audio_duration", return_value=1.0), \
+                patch("audioContent.news_to_audio.concat_audio_files", return_value=output_path) as mock_concat, \
+                patch("audioContent.news_to_audio.write_timing_file", return_value=output_path + ".timing.json") as mock_timing:
+            deep_series.convert_dialogue_to_audio(script_path, output_path)
+
+        # 同一主持连续台词合成一次，减少短音频边界造成的停顿感。
+        self.assertEqual(saved_texts, [("male", "第一句。第二句。"), ("female", "回应。")])
+        segment_paths = [os.path.basename(path) for path in mock_concat.call_args.args[0]]
+        self.assertEqual(segment_paths, ["000_male.mp3", "000_pause.mp3", "001_female.mp3", "002_ending_silence.mp3"])
+        timing_segments = mock_timing.call_args.args[1]
+        self.assertEqual([item["role"] for item in timing_segments], ["male", "female"])
+        self.assertAlmostEqual(timing_segments[0]["duration"], 1.0 + deep_series.DEEP_DIALOGUE_PAUSE_SECONDS)
+        self.assertAlmostEqual(timing_segments[1]["duration"], 1.0 + deep_series.DEEP_FINAL_SILENCE_SECONDS)
+
     def test_create_text_card_uses_widescreen_ios_canvas(self):
         image_path = os.path.join(self.tmpdir, "slide.png")
         deep_series.create_text_card("标题", "系列 · 女主持", "这是一段用于检查版式的正文。", image_path)
@@ -301,7 +366,7 @@ class TestDeepSeries(unittest.TestCase):
 
     @patch(
         "deep_series.call_llm",
-        return_value='{"title":"AI 深度解析","desc":"简介","tags":"AI,深度,口播","cover_text":"深度解析","cover_prompt":"封面提示","comment_question":"你更赞同 A 还是 B？为什么","title_options":["备选一","备选二","备选三"],"cover_options":["封面一","封面二","封面三"]}',
+        return_value='{"title":"搜索入口正在消失","desc":"简介","tags":"AI,深度,口播","cover_text":"深度解析","cover_prompt":"封面提示","comment_question":"你更赞同 A 还是 B？为什么","title_options":["搜索不再是入口","AI正在改写搜索","答案入口变了"],"cover_options":["封面一","封面二","封面三"]}',
     )
     def test_generate_publish_assets_writes_ai_metadata(self, mock_llm):
         script_path = os.path.join(self.tmpdir, "script.md")
@@ -320,8 +385,15 @@ class TestDeepSeries(unittest.TestCase):
         # 发布标题、封面和开头承诺必须一致，减少点击后发现内容不符造成的秒退。
         self.assertIn("视频前3秒", prompt)
         self.assertIn("同一个承诺", prompt)
+        # B站标题的主题部分可以改写，但必须基于原始主题且由上传侧统一补系列前缀。
+        self.assertIn("原始主题标题", prompt)
+        self.assertIn("不需要完全照抄", prompt)
+        self.assertIn("更吸引眼球", prompt)
+        self.assertIn("系列名称：主题名称", prompt)
+        self.assertIn("不要把系列名称写进 title", prompt)
         self.assertIn("标题", prompt)
         self.assertIn("封面文案", prompt)
+        self.assertEqual(assets["title"], "搜索入口正在消失")
         self.assertLessEqual(len(assets["title"]), 18)
         self.assertGreaterEqual(len(assets["cover_text"]), 6)
         self.assertLessEqual(len(assets["cover_text"]), 10)

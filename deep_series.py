@@ -16,7 +16,7 @@ FEMALE_VOICE = "zh-CN-XiaoxiaoNeural"
 MALE_VOICE = "zh-CN-YunxiNeural"
 DEEP_TTS_RATE = os.environ.get("OPENNEWSBRIEF_DEEP_TTS_RATE", "+16%")
 DEEP_TTS_ENGINE = os.environ.get("OPENNEWSBRIEF_TTS_ENGINE", "chattts").lower()
-DEEP_DIALOGUE_PAUSE_SECONDS = 0.45
+DEEP_DIALOGUE_PAUSE_SECONDS = 0.18
 DEEP_FINAL_SILENCE_SECONDS = 1.0
 DEEP_VISUAL_MAX_SECONDS = 4.0
 DEEP_SLIDE_DURATIONS_FILE = "slide_durations.json"
@@ -206,6 +206,7 @@ def audit_research(series: Dict, episode: Dict, research_report: str, sources: L
 
 def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, audit_report: str) -> str:
     # 深度系列的视频脚本不走 PPT 纯文字，而是按对话来写。
+    # 开头几句直接决定短视频留存，所以这里把冲突、损失和追问明确写进提示词。
     prompt = (
         "你是纪录片口播脚本作者。\n"
         f"系列：{series.get('title', '')}\n"
@@ -217,10 +218,12 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "2. 全片目标 90-120秒，每行控制在 1 到 2 个短句，避免拖成长段。\n"
         "3. 前3秒第一句必须直接给出反常识结论，不要铺垫，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
         "4. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
-        "5. 前三行分别承担：结论、追问、答案路线图，让观众在 30 秒前知道继续看的价值。\n"
-        "6. 每隔一段留一个悬念，方便观众继续看下去。\n"
-        "7. 结尾要落到一个站得住的问题。\n"
-        "8. 每一行只使用“女：/男：”这种格式。\n"
+        "5. 前4句要有短视频钩子的冲突感和损失感，每句不超过22个字：震撼结论、反问质疑、具体代价、答案路线图。\n"
+        "6. 男主持的前两次发问必须像观众刷到视频时的反问，不要温和捧哏。\n"
+        "7. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
+        "8. 每隔一段留一个悬念，方便观众继续看下去。\n"
+        "9. 结尾要落到一个站得住的问题。\n"
+        "10. 每一行只使用“女：/男：”这种格式。\n"
     )
     raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
@@ -390,6 +393,14 @@ def convert_dialogue_to_audio(script_path: str, output_path: str) -> str:
         segments = parse_dialogue_script(f.read())
     if not segments:
         raise ValueError("脚本里没有可用于生成音频的对话内容")
+    # 同一主持人连续说话时合成到同一个 TTS 片段，避免短音频边界和硬停顿造成卡顿感。
+    merged_segments = []
+    for segment in segments:
+        if merged_segments and merged_segments[-1]["speaker"] == segment["speaker"]:
+            merged_segments[-1]["text"] = merged_segments[-1]["text"].rstrip() + segment["text"].lstrip()
+        else:
+            merged_segments.append(dict(segment))
+    segments = merged_segments
 
     segment_dir = os.path.join(os.path.dirname(output_path), "dialogue_segments")
     os.makedirs(segment_dir, exist_ok=True)
@@ -988,6 +999,7 @@ def create_deep_cover_image(series: Dict, episode: Dict, assets: Dict, output_di
 
 def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
     # 发布信息只生成一次，后面发视频和发文案都直接复用。
+    # title 只保存“主题名称”部分，上传到 B 站时再统一拼成“系列名称：主题名称”。
     script_text = read_text_if_exists(result.get("script_path", ""))
     research_text = read_text_if_exists(result.get("research_path", ""), limit=3000)
     prompt = (
@@ -1006,6 +1018,9 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
         '  "cover_options": ["封面备选1", "封面备选2", "封面备选3"]\n'
         "}\n"
         "要求：标题短一些，封面文案控制在 6 到 10 个字，评论问题适合互动。\n"
+        "原始主题标题只是参考，title 不需要完全照抄原始标题，可以根据脚本和研究报告改写成更吸引眼球的主题名称。\n"
+        "B站最终标题基本格式固定为“系列名称：主题名称”，所以不要把系列名称写进 title，title 只返回主题名称部分。\n"
+        "title_options 也按同样规则给 3 个主题名称备选，不要带系列名称前缀。\n"
         "标题、封面文案、视频前3秒必须围绕同一个承诺，观众点进来后马上听到同一个答案方向。\n"
     )
     raw = call_llm(prompt, f"脚本：\n{script_text}\n\n研究报告：\n{research_text}")

@@ -31,6 +31,35 @@ def get_audio_duration(audio_path: str) -> float:
     return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
 
 
+def get_decoded_audio_duration(audio_path: str) -> float:
+    # MP3 拼接后头部 Duration 可能偏短；真实解码进度更接近最终能听到的音频长度。
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    process = subprocess.run(
+        [
+            ffmpeg_exe,
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            audio_path,
+            "-map",
+            "0:a:0",
+            "-f",
+            "null",
+            "-",
+            "-progress",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    progress = process.stdout.decode("utf-8", errors="ignore")
+    matches = re.findall(r"out_time_(?:ms|us)=(\d+)", progress)
+    if not matches:
+        return 0.0
+    return int(matches[-1]) / 1000000.0
+
+
 def build_slide_durations(total_duration: float, slide_count: int) -> list[float]:
     if slide_count <= 0:
         return []
@@ -196,11 +225,13 @@ def _create_slideshow_video(
     slide_durations: list[float] | None = None,
     transition_clicks: bool = True,
 ) -> str:
-    total_duration = get_audio_duration(audio_path)
+    # 轮播视频会使用 -shortest，如果图片轨按偏短的 MP3 元数据结束，就会截掉最后几个字。
+    total_duration = max(get_audio_duration(audio_path), get_decoded_audio_duration(audio_path))
     if total_duration <= 0:
         total_duration = float(len(image_paths) * 4)
     durations = slide_durations if slide_durations and len(slide_durations) == len(image_paths) else build_slide_durations(total_duration, len(image_paths))
-    durations[-1] += total_duration - sum(durations)
+    if total_duration > sum(durations):
+        durations[-1] += total_duration - sum(durations)
 
     switch_times = []
     elapsed = 0.0
