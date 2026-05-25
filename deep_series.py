@@ -17,6 +17,8 @@ MALE_VOICE = "zh-CN-YunxiNeural"
 DEEP_TTS_RATE = os.environ.get("OPENNEWSBRIEF_DEEP_TTS_RATE", "+16%")
 DEEP_TTS_ENGINE = os.environ.get("OPENNEWSBRIEF_TTS_ENGINE", "chattts").lower()
 DEEP_DIALOGUE_PAUSE_SECONDS = 0.18
+# 首句前留一点空白，避免视频切入后马上开口显得突兀。
+DEEP_OPENING_SILENCE_SECONDS = 0.8
 DEEP_FINAL_SILENCE_SECONDS = 1.0
 DEEP_VISUAL_MAX_SECONDS = 4.0
 DEEP_VISUAL_MIN_CHARS = 8
@@ -217,9 +219,9 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "要求：\n"
         "1. 只有女主持和男主持两个人对话，不要加入第三个发声角色，也不要写成 PPT 纯文字。\n"
         "2. 全片目标 90-120秒；除前4句钩子外，每次发言尽量写完整，用 2 到 4 句承接一个观点，不要只写碎片短句。\n"
-        "3. 前3秒第一句必须直接给出反常识结论，不要铺垫，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
+        "3. 前3秒第一句优先使用尖锐疑问句或反常识结论；疑问句必须包含冲突、代价或反直觉信息，不要铺垫，不要使用“你有没有想过”，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
         "4. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
-        "5. 前4句要有短视频钩子的冲突感和损失感，每句不超过22个字：震撼结论、反问质疑、具体代价、答案路线图。\n"
+        "5. 前4句要有短视频钩子的冲突感和损失感，但不要写成 4 个口号式短句；前两轮发言要像自然对话，每次 35 到 60 个汉字，用 2 句完整口语表达。\n"
         "6. 男主持的前两次发问必须像观众刷到视频时的反问，不要温和捧哏。\n"
         "7. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
         "8. 每隔一段留一个悬念，方便观众继续看下去。\n"
@@ -433,6 +435,10 @@ def convert_dialogue_to_audio(script_path: str, output_path: str) -> str:
 
     audio_segments = []
     segment_paths = []
+    # 开场先拼一段短静音，让画面出现后再开始读第一句脚本。
+    opening_silence_path = os.path.join(segment_dir, "000_opening_silence.mp3")
+    create_silence_audio(opening_silence_path, DEEP_OPENING_SILENCE_SECONDS)
+    segment_paths.append(opening_silence_path)
     for index, segment in enumerate(segments):
         print(f"[深度音频] 生成第 {index + 1}/{len(segments)} 段：{segment['speaker']}", flush=True)
         voice = FEMALE_VOICE if segment["speaker"] == "female" else MALE_VOICE
@@ -448,6 +454,9 @@ def convert_dialogue_to_audio(script_path: str, output_path: str) -> str:
                 "audio_path": segment_path,
             }
         )
+        if index == 0:
+            # timing 没有单独的空白段，所以把开场静音并入第一段，保持画面和音频总时长一致。
+            audio_segments[-1]["duration"] += DEEP_OPENING_SILENCE_SECONDS
         segment_paths.append(segment_path)
         if index < len(segments) - 1:
             silence_path = os.path.join(segment_dir, f"{index:03d}_pause.mp3")

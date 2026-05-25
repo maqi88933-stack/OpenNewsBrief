@@ -121,15 +121,20 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("90-120秒", prompt)
         self.assertIn("前3秒", prompt)
         self.assertIn("前30秒", prompt)
+        self.assertIn("优先使用尖锐疑问句或反常识结论", prompt)
+        self.assertIn("冲突、代价或反直觉", prompt)
         self.assertIn("反常识结论", prompt)
         self.assertIn("前4句", prompt)
         self.assertIn("冲突感", prompt)
         self.assertIn("损失感", prompt)
         self.assertIn("反问", prompt)
-        self.assertIn("每句不超过22个字", prompt)
+        self.assertIn("不要写成 4 个口号式短句", prompt)
+        self.assertIn("35 到 60 个汉字", prompt)
+        self.assertNotIn("每句不超过22个字", prompt)
         self.assertIn("每次发言", prompt)
         self.assertIn("2 到 4 句", prompt)
         self.assertIn("不要连续输出同一个主持人的多行发言", prompt)
+        self.assertIn("不要使用“你有没有想过”", prompt)
         self.assertIn("不要使用“想象一下”", prompt)
         self.assertIn("不要使用“今天我们探讨”", prompt)
         # 深度系列只保留两个主持人的聊天感，避免“主持人对话 + 旁白”的第三角色混入。
@@ -251,12 +256,45 @@ class TestDeepSeries(unittest.TestCase):
             deep_series.convert_dialogue_to_audio(script_path, output_path)
 
         segment_paths = mock_concat.call_args.args[0]
-        self.assertEqual(len(segment_paths), 4)
-        self.assertTrue(segment_paths[1].endswith("_pause.mp3"))
+        self.assertEqual(len(segment_paths), 5)
+        self.assertTrue(segment_paths[0].endswith("_opening_silence.mp3"))
+        self.assertTrue(segment_paths[2].endswith("_pause.mp3"))
         self.assertTrue(segment_paths[-1].endswith("_ending_silence.mp3"))
         timing_segments = mock_timing.call_args.args[1]
-        self.assertAlmostEqual(timing_segments[0]["duration"], 1.0 + deep_series.DEEP_DIALOGUE_PAUSE_SECONDS)
+        self.assertAlmostEqual(
+            timing_segments[0]["duration"],
+            1.0 + deep_series.DEEP_OPENING_SILENCE_SECONDS + deep_series.DEEP_DIALOGUE_PAUSE_SECONDS,
+        )
         self.assertAlmostEqual(timing_segments[1]["duration"], 1.0 + deep_series.DEEP_FINAL_SILENCE_SECONDS)
+
+    def test_convert_dialogue_to_audio_adds_opening_silence_before_first_line(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        output_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：第一句。")
+
+        async def fake_save_tts(_text, output_path, _voice, role="narrator"):
+            with open(output_path, "wb") as f:
+                f.write(role.encode("utf-8"))
+
+        silence_calls = []
+
+        def fake_create_silence(path, duration):
+            silence_calls.append((os.path.basename(path), duration))
+            return path
+
+        with patch.object(deep_series, "_save_tts", side_effect=fake_save_tts), \
+                patch.object(deep_series, "create_silence_audio", side_effect=fake_create_silence), \
+                patch("audioContent.news_to_audio.get_audio_duration", return_value=1.0), \
+                patch("audioContent.news_to_audio.concat_audio_files", return_value=output_path) as mock_concat, \
+                patch("audioContent.news_to_audio.write_timing_file", return_value=output_path + ".timing.json") as mock_timing:
+            deep_series.convert_dialogue_to_audio(script_path, output_path)
+
+        # 首句前的静音要真实进入拼接列表和 timing，视频才会在开口前留出自然空白。
+        self.assertEqual(silence_calls[0], ("000_opening_silence.mp3", 0.8))
+        self.assertTrue(mock_concat.call_args.args[0][0].endswith("_opening_silence.mp3"))
+        timing_segments = mock_timing.call_args.args[1]
+        self.assertAlmostEqual(timing_segments[0]["duration"], 1.0 + 0.8 + deep_series.DEEP_FINAL_SILENCE_SECONDS)
 
     def test_convert_dialogue_to_audio_cleans_stale_segments_and_uses_roles(self):
         script_path = os.path.join(self.tmpdir, "script.md")
@@ -313,10 +351,14 @@ class TestDeepSeries(unittest.TestCase):
         segment_paths = mock_concat.call_args.args[0]
         pause_paths = [path for path in segment_paths if path.endswith("_pause.mp3")]
         self.assertEqual(pause_paths, [])
-        self.assertEqual(len(segment_paths), 2)
+        self.assertTrue(segment_paths[0].endswith("_opening_silence.mp3"))
+        self.assertEqual(len(segment_paths), 3)
         timing_segments = mock_timing.call_args.args[1]
         self.assertEqual([item["text"] for item in timing_segments], [long_text])
-        self.assertAlmostEqual(timing_segments[0]["duration"], 1.0 + deep_series.DEEP_FINAL_SILENCE_SECONDS)
+        self.assertAlmostEqual(
+            timing_segments[0]["duration"],
+            1.0 + deep_series.DEEP_OPENING_SILENCE_SECONDS + deep_series.DEEP_FINAL_SILENCE_SECONDS,
+        )
 
     def test_convert_dialogue_to_audio_merges_adjacent_same_speaker_lines(self):
         script_path = os.path.join(self.tmpdir, "script.md")
@@ -341,10 +383,16 @@ class TestDeepSeries(unittest.TestCase):
         # 同一主持连续台词合成一次，减少短音频边界造成的停顿感。
         self.assertEqual(saved_texts, [("male", "第一句。第二句。"), ("female", "回应。")])
         segment_paths = [os.path.basename(path) for path in mock_concat.call_args.args[0]]
-        self.assertEqual(segment_paths, ["000_male.mp3", "000_pause.mp3", "001_female.mp3", "002_ending_silence.mp3"])
+        self.assertEqual(
+            segment_paths,
+            ["000_opening_silence.mp3", "000_male.mp3", "000_pause.mp3", "001_female.mp3", "002_ending_silence.mp3"],
+        )
         timing_segments = mock_timing.call_args.args[1]
         self.assertEqual([item["role"] for item in timing_segments], ["male", "female"])
-        self.assertAlmostEqual(timing_segments[0]["duration"], 1.0 + deep_series.DEEP_DIALOGUE_PAUSE_SECONDS)
+        self.assertAlmostEqual(
+            timing_segments[0]["duration"],
+            1.0 + deep_series.DEEP_OPENING_SILENCE_SECONDS + deep_series.DEEP_DIALOGUE_PAUSE_SECONDS,
+        )
         self.assertAlmostEqual(timing_segments[1]["duration"], 1.0 + deep_series.DEEP_FINAL_SILENCE_SECONDS)
 
     def test_create_text_card_uses_widescreen_ios_canvas(self):

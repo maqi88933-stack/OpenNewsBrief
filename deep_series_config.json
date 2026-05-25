@@ -172,7 +172,24 @@
         {
           "title": "AI 生成的内容还会被信任吗？",
           "question": "AI 生成的内容还会被信任吗？",
-          "generated": false
+          "generated": true,
+          "generated_at": "2026-05-23 16:02:06",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\documentary_package.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\AI_生成的内容还会被信任吗？_2026-05-23.mp4",
+          "published": true,
+          "published_at": "2026-05-24 20:06:13",
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI未来三年系列\\AI_生成的内容还会被信任吗？\\2026-05-23\\cover.png",
+          "publish_title": "信任会变贵",
+          "publish_desc": "AI 内容不会失去信任，但会失去“默认信任”。未来三年，真正重要的不是它是不是 AI 生成，而是来源能否追溯、过程是否审核、出错谁来负责。\n\n互动问题：如果一段视频看起来非常真实，但没有来源，你会先相信还是先怀疑？",
+          "publish_tags": "AI未来三年,生成式AI,AI内容,深度伪造,内容可信度,信息辨别"
         },
         {
           "title": "具身智能会先在哪些行业爆发？",
@@ -309,7 +326,24 @@
         {
           "title": "AI 员工上岗后，中层管理会消失吗",
           "question": "AI 员工上岗后，中层管理会消失吗",
-          "generated": false
+          "generated": true,
+          "generated_at": "2026-05-25 17:29:28",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\documentary_package.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\AI_员工上岗后，中层管理会消失吗_2026-05-25.mp4",
+          "published": true,
+          "published_at": "2026-05-25 17:31:08",
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\AI_员工上岗后，中层管理会消失吗\\2026-05-25\\cover.png",
+          "publish_title": "中层不会消失，只会重新定价",
+          "publish_desc": "AI 员工上岗后，先被替代的不是中层岗位，而是汇报、催办、审批这些低价值管理动作。未来真正值钱的中层，是能做判断、扛责任、带团队、编排 AI 的人。\n\n互动问题：你觉得未来最容易被AI替代的中层，是哪一种？",
+          "publish_tags": "AI员工,中层管理,企业转型,组织变革,AI Agent,职场趋势"
         },
         {
           "title": "企业为什么要重做 AI 安全体系",
