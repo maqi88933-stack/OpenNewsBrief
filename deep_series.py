@@ -6,6 +6,7 @@ import math
 import os
 import re
 import subprocess
+import time
 from typing import Dict, List, Optional
 
 import main
@@ -25,6 +26,14 @@ DEEP_VISUAL_MIN_CHARS = 8
 DEEP_SLIDE_DURATIONS_FILE = "slide_durations.json"
 DEEP_PUBLISH_TITLE_MAX_CHARS = 18
 DEEP_COVER_TEXT_MAX_CHARS = 10
+DEEP_MIN_VALID_SOURCES = 3
+DEEP_RESEARCH_MAX_ATTEMPTS = 3
+DEEP_LLM_MAX_RETRIES = 3
+DEEP_TARGET_MIN_SECONDS = 120
+DEEP_TARGET_MAX_SECONDS = 180
+DEEP_SCRIPT_SECONDS_PER_CHAR = 0.18
+DEEP_OPENING_HOOK_LINES = 4
+DEEP_OPENING_HOOK_MAX_ATTEMPTS = 3
 
 
 # 这里保留一个最小可用的默认配置，方便首次启动时自动生成文件。
@@ -99,6 +108,33 @@ def _llm_content_to_text(content) -> str:
     return str(content).strip()
 
 
+def _is_retryable_llm_error(exc: Exception) -> bool:
+    # 深度系列链路较长，524 和连接抖动这类瞬时故障允许自动重试。
+    status_code = getattr(exc, "status_code", None)
+    if status_code in (408, 409, 429, 500, 502, 503, 504, 524):
+        return True
+
+    message = str(exc).lower()
+    retry_markers = [
+        "timeout",
+        "timed out",
+        "connection error",
+        "apiconnectionerror",
+        "internalservererror",
+        "error code: 524",
+        "retryable",
+    ]
+    return any(marker in message for marker in retry_markers)
+
+
+def _llm_retry_delay(exc: Exception, attempt: int) -> float:
+    # 优先尊重服务端返回的等待时间，没有时再用短退避。
+    retry_after = getattr(exc, "retry_after", None)
+    if isinstance(retry_after, (int, float)) and retry_after > 0:
+        return float(min(retry_after, 120))
+    return float(min(10 * attempt, 30))
+
+
 def call_llm(prompt: str, text: str = "") -> str:
     from util.llm import LLmFactory
 
@@ -106,13 +142,118 @@ def call_llm(prompt: str, text: str = "") -> str:
     if text:
         content += "\n\n资料：\n" + text
     llm = LLmFactory().getDeepseek()
-    result = llm.invoke(content)
-    return _llm_content_to_text(result.content if hasattr(result, "content") else result)
+    last_error = None
+    for attempt in range(1, DEEP_LLM_MAX_RETRIES + 1):
+        try:
+            result = llm.invoke(content)
+            return _llm_content_to_text(result.content if hasattr(result, "content") else result)
+        except Exception as exc:
+            last_error = exc
+            if attempt >= DEEP_LLM_MAX_RETRIES or not _is_retryable_llm_error(exc):
+                raise
+            delay_seconds = _llm_retry_delay(exc, attempt)
+            print(
+                f"[深度系列] LLM 调用失败，{delay_seconds:.0f} 秒后重试（{attempt}/{DEEP_LLM_MAX_RETRIES}）：{exc}",
+                flush=True,
+            )
+            time.sleep(delay_seconds)
+    raise last_error
 
 
-def build_search_keywords(series: Dict, episode: Dict) -> List[str]:
+def build_focused_search_terms(series: Dict, episode: Dict) -> List[str]:
+    # 深度选题的 question 往往是一整段自然语言，新闻搜索先用短词更容易命中。
+    title = str(episode.get("title") or "")
     question = _episode_question(episode)
-    base_terms = [
+    company = re.split(r"[:：]", title, maxsplit=1)[0].strip()
+    if not company:
+        match = re.match(r"([\u4e00-\u9fffA-Za-z0-9&.\-]{2,24})", question)
+        company = match.group(1).strip() if match else ""
+
+    terms: List[str] = []
+    if company:
+        terms.extend([
+            f"{company} ABF",
+            f"{company} 半导体 材料",
+            f"{company} 封装基板",
+        ])
+    if "味之素" in title or "味之素" in question or "ABF" in question.upper():
+        terms.extend([
+            "味之素 ABF 绝缘膜",
+            "Ajinomoto ABF",
+            "Ajinomoto Build-up Film",
+            "Ajinomoto semiconductor materials",
+        ])
+    return [term for term in terms if term.strip()]
+
+
+def build_retry_gap_search_terms(series: Dict, episode: Dict, audit_report: str = "", quality: Dict | None = None) -> List[str]:
+    # 审核失败后只补“缺的资料类型”，避免第二轮继续用长问题原样搜索。
+    title = str(episode.get("title") or "")
+    question = _episode_question(episode)
+    text = f"{audit_report or ''}\n{'；'.join((quality or {}).get('reasons', []))}"
+    company = re.split(r"[:：]", title, maxsplit=1)[0].strip()
+    terms: List[str] = []
+
+    if "有效来源不足" in text or re.search(r"官方|一手|官网|产品资料", text):
+        if company:
+            terms.extend([
+                f"{company} 官方 半导体 材料",
+                f"{company} 投资者关系 年报 半导体",
+            ])
+        terms.extend([
+            "Ajinomoto Build-up Film official",
+            "Ajinomoto Fine-Techno ABF official",
+            "Ajinomoto semiconductor materials annual report",
+        ])
+
+    if re.search(r"FC-?BGA|封装基板|IC载板|IC 载板|高端有机封装", text, re.I):
+        terms.extend([
+            "ABF substrate FC-BGA Ajinomoto",
+            "FC-BGA ABF substrate industry report",
+            "ABF 载板 FC-BGA 封装基板",
+        ])
+
+    if re.search(r"行业报告|市场份额|份额|供应链|载板厂", text):
+        terms.extend([
+            "ABF substrate market share report",
+            "Ajinomoto ABF market share substrate",
+            "ABF 载板 行业报告 市场份额",
+        ])
+
+    if re.search(r"认证|替代|国产|量产|客户", text):
+        terms.extend([
+            "ABF build-up film customer qualification",
+            "封装基板 积层绝缘膜 客户认证 量产",
+            "ABF 类 介质膜 国产替代 认证",
+        ])
+
+    if not terms and question:
+        # 没有识别出具体缺口时，仍然用短词补官方来源，不再拼接整段问题。
+        terms.extend(build_focused_search_terms(series, episode))
+        terms.append(f"{company or question[:20]} 官方 资料")
+
+    deduped: List[str] = []
+    for term in terms:
+        clean = term.strip()
+        if clean and clean not in deduped:
+            deduped.append(clean)
+    return deduped
+
+
+def build_search_keywords(
+    series: Dict,
+    episode: Dict,
+    attempt: int = 1,
+    audit_report: str = "",
+    quality: Dict | None = None,
+) -> List[str]:
+    question = _episode_question(episode)
+    if attempt >= 2:
+        retry_terms = build_retry_gap_search_terms(series, episode, audit_report, quality)
+        if retry_terms:
+            return retry_terms
+
+    base_terms = build_focused_search_terms(series, episode) + [
         question,
         f"{question} 核心机制 原因",
         f"{question} 用户需求 变化",
@@ -125,10 +266,35 @@ def build_search_keywords(series: Dict, episode: Dict) -> List[str]:
         f"{question} controversy criticism debate",
         f"{question} timeline future prediction",
     ]
-    return [term for term in base_terms if term.strip()]
+    if attempt >= 2:
+        # 第二轮开始优先补官方和财务来源，避免只靠二手文章继续写稿。
+        base_terms.extend([
+            f"{question} official investor relations annual report",
+            f"{question} 官方 财报 投资者关系",
+            f"{question} product page semiconductor official",
+        ])
+    if attempt >= 3:
+        # 最后一轮补行业报告和客户认证角度，尽量把事实支撑补齐。
+        base_terms.extend([
+            f"{question} industry report market share supplier",
+            f"{question} 供应链 客户认证 行业报告",
+        ])
+    deduped: List[str] = []
+    for term in base_terms:
+        clean = term.strip()
+        if clean and clean not in deduped:
+            deduped.append(clean)
+    return deduped
 
 
-def collect_research_sources(series: Dict, episode: Dict, limit_per_keyword: int = 4) -> List[Dict]:
+def collect_research_sources(
+    series: Dict,
+    episode: Dict,
+    limit_per_keyword: int = 4,
+    attempt: int = 1,
+    audit_report: str = "",
+    quality: Dict | None = None,
+) -> List[Dict]:
     from crawler import news_crawler
 
     sources: List[Dict] = []
@@ -136,7 +302,7 @@ def collect_research_sources(series: Dict, episode: Dict, limit_per_keyword: int
     old_max_hours = news_crawler.MAX_HOURS
     news_crawler.MAX_HOURS = 24 * 365 * 5
     try:
-        for keyword in build_search_keywords(series, episode):
+        for keyword in build_search_keywords(series, episode, attempt=attempt, audit_report=audit_report, quality=quality):
             print(f"[深度系列] 检索关键词：{keyword}", flush=True)
             items, _expired_count, _used_query = news_crawler.collect_news_for_keyword(keyword)
             for item in (items or [])[:limit_per_keyword]:
@@ -155,6 +321,19 @@ def collect_research_sources(series: Dict, episode: Dict, limit_per_keyword: int
     finally:
         news_crawler.MAX_HOURS = old_max_hours
     return sources
+
+
+def merge_research_sources(existing: List[Dict], new_sources: List[Dict]) -> List[Dict]:
+    # 重试是补资料，不是推倒重来；按链接去重后保留前几轮已找到的可用来源。
+    merged: List[Dict] = []
+    seen_links = set()
+    for source in (existing or []) + (new_sources or []):
+        link = str(source.get("link") or "").strip()
+        if not link or link in seen_links:
+            continue
+        seen_links.add(link)
+        merged.append(source)
+    return merged
 
 
 def sources_to_markdown(sources: List[Dict]) -> str:
@@ -207,6 +386,114 @@ def audit_research(series: Dict, episode: Dict, research_report: str, sources: L
     return "\n\n".join(results)
 
 
+def count_valid_sources(sources: List[Dict]) -> int:
+    # 只有带链接且有标题或正文的资料才算有效来源，空壳结果不能支撑深度稿。
+    seen_links = set()
+    count = 0
+    for source in sources or []:
+        link = str(source.get("link") or "").strip()
+        title = str(source.get("title") or "").strip()
+        content = str(source.get("content") or "").strip()
+        if not link or link in seen_links or not (title or content):
+            continue
+        seen_links.add(link)
+        count += 1
+    return count
+
+
+def assess_research_quality(sources: List[Dict], audit_report: str) -> Dict:
+    # 来源数量是硬门槛；审稿里的事实风险只做软提醒，避免有资料时被反复卡住。
+    source_count = count_valid_sources(sources)
+    audit_text = re.sub(r"\s+", "", audit_report or "")
+    reasons: List[str] = []
+    warnings: List[str] = []
+    if source_count < DEEP_MIN_VALID_SOURCES:
+        reasons.append(f"有效来源不足：{source_count}/{DEEP_MIN_VALID_SOURCES}")
+
+    warning_patterns = [
+        r"事实支撑不够",
+        r"事实.*不足",
+        r"缺少.*(官方|来源|依据|资料|数据)",
+        r"(来源|依据).*(缺失|不足|不够|缺少)",
+        r"明显(遗漏|夸大)",
+        r"概念推导",
+        r"需要补充.*(官方|来源|依据|数据)",
+    ]
+    if any(re.search(pattern, audit_text) for pattern in warning_patterns):
+        warnings.append("事实支撑不足")
+
+    return {
+        "blocked": bool(reasons),
+        "source_count": source_count,
+        "reasons": reasons,
+        "warnings": warnings,
+    }
+
+
+def run_research_review_loop(series: Dict, episode: Dict) -> Dict:
+    # 调研不过关时最多重搜三次，每轮都重新生成研究稿并重新审核。
+    attempts = []
+    latest_sources: List[Dict] = []
+    latest_research = ""
+    latest_audit = ""
+    latest_quality = {}
+    previous_audit = ""
+    previous_quality: Dict = {}
+    for attempt in range(1, DEEP_RESEARCH_MAX_ATTEMPTS + 1):
+        print(f"[深度系列] 第 {attempt}/{DEEP_RESEARCH_MAX_ATTEMPTS} 轮检索资料", flush=True)
+        new_sources = collect_research_sources(
+            series,
+            episode,
+            attempt=attempt,
+            audit_report=previous_audit,
+            quality=previous_quality,
+        )
+        latest_sources = merge_research_sources(latest_sources, new_sources)
+        print("[深度系列] 开始生成研究报告", flush=True)
+        latest_research = generate_research_report(series, episode, latest_sources)
+        print("\n========== 研究报告 ==========\n", flush=True)
+        print(latest_research, flush=True)
+        latest_audit = audit_research(series, episode, latest_research, latest_sources)
+        print("\n========== 审校结果 ==========\n", flush=True)
+        print(latest_audit, flush=True)
+        latest_quality = assess_research_quality(latest_sources, latest_audit)
+        latest_quality["attempt"] = attempt
+        attempts.append(latest_quality)
+        if not latest_quality["blocked"]:
+            break
+        print("[深度系列] 审核未通过：" + "；".join(latest_quality["reasons"]), flush=True)
+        previous_audit = latest_audit
+        previous_quality = latest_quality
+
+    return {
+        "sources": latest_sources,
+        "research": latest_research,
+        "audit": latest_audit,
+        "quality": latest_quality,
+        "attempts": attempts,
+        "blocked": bool(latest_quality.get("blocked")),
+    }
+
+
+def build_safe_research_fallback(review: Dict) -> Dict:
+    # 三轮后仍有问题时不再卡死整期，改成保守写稿：删掉缺来源的小段，换成可稳妥表达的内容。
+    quality = review.get("quality", {})
+    notes = quality.get("reasons", []) + quality.get("warnings", [])
+    reasons = "；".join(notes) or "资料支撑不足"
+    safe_note = (
+        "\n\n## 保守写稿要求\n"
+        f"三轮检索后仍存在问题：{reasons}。\n"
+        "不要写入缺少来源支撑的具体数据、市场份额、唯一不可替代、确定短缺、客户名单等小段。\n"
+        "如果某段事实没有资料支撑，就不要加入稿子中，改成更稳妥的产业链常识或解释性内容。\n"
+        "允许保留主题主线，但必须使用“之一”“可能”“常见”“需要区分”等保守表达。\n"
+    )
+    return {
+        "reason": "三轮检索后仍资料不足，已启用保守写稿",
+        "audit": (review.get("audit") or "") + safe_note,
+        "note": safe_note.strip(),
+    }
+
+
 def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, audit_report: str) -> str:
     # 深度系列的视频脚本不走 PPT 纯文字，而是按对话来写。
     # 开头几句直接决定短视频留存，所以这里把冲突、损失和追问明确写进提示词。
@@ -218,18 +505,333 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "请写一份适合深度视频的对话脚本。\n"
         "要求：\n"
         "1. 只有女主持和男主持两个人对话，不要加入第三个发声角色，也不要写成 PPT 纯文字。\n"
-        "2. 全片目标 90-120秒；除前4句钩子外，每次发言尽量写完整，用 2 到 4 句承接一个观点，不要只写碎片短句。\n"
+        f"2. 全片目标 {DEEP_TARGET_MIN_SECONDS}-{DEEP_TARGET_MAX_SECONDS}秒；除前4句钩子外，每次发言尽量写完整，用 2 到 4 句承接一个观点，不要只写碎片短句。\n"
         "3. 前3秒第一句优先使用尖锐疑问句或反常识结论；疑问句必须包含冲突、代价或反直觉信息，不要铺垫，不要使用“你有没有想过”，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
-        "4. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
-        "5. 前4句要有短视频钩子的冲突感和损失感，但不要写成 4 个口号式短句；前两轮发言要像自然对话，每次 35 到 60 个汉字，用 2 句完整口语表达。\n"
-        "6. 男主持的前两次发问必须像观众刷到视频时的反问，不要温和捧哏。\n"
-        "7. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
-        "8. 每隔一段留一个悬念，方便观众继续看下去。\n"
-        "9. 结尾要落到一个站得住的问题。\n"
-        "10. 每一行只使用“女：/男：”这种格式；不要连续输出同一个主持人的多行发言，同一主持人的连续表达必须合并到同一行。\n"
+        "4. 前15秒必须完成三件事：前3秒给反常识结论，3-8秒给观众反问，8-15秒给核心答案。\n"
+        "5. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
+        "6. 前4句要有短视频钩子的冲突感和损失感，但不要写成 4 个口号式短句；前两轮发言要像自然对话，每次 35 到 60 个汉字，用 2 句完整口语表达。\n"
+        "7. 男主持的前两次发问必须像观众刷到视频时的反问，不要温和捧哏。\n"
+        "8. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
+        "9. 每隔一段留一个悬念，方便观众继续看下去。\n"
+        "10. 结尾要落到一个站得住的问题。\n"
+        "11. 每一行只使用“女：/男：”这种格式；不要连续输出同一个主持人的多行发言，同一主持人的连续表达必须合并到同一行。\n"
     )
     raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
+
+
+def estimate_dialogue_duration_seconds(script: str) -> float:
+    # 没有真实音频前先用字符数估算时长，用来挡住明显超长的脚本。
+    text = clean_script_output(script)
+    text = re.sub(r"^[男女]：", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\s+", "", text)
+    return round(len(text) * DEEP_SCRIPT_SECONDS_PER_CHAR, 1)
+
+
+def assess_dialogue_duration(script: str) -> Dict:
+    estimated = estimate_dialogue_duration_seconds(script)
+    reasons = []
+    if estimated > DEEP_TARGET_MAX_SECONDS:
+        reasons.append(f"脚本预计 {estimated:.0f} 秒，超过 {DEEP_TARGET_MAX_SECONDS} 秒")
+    return {
+        "blocked": bool(reasons),
+        "estimated_seconds": estimated,
+        "reasons": reasons,
+    }
+
+
+def rewrite_dialogue_script_for_duration(series: Dict, episode: Dict, script: str, report: Dict) -> str:
+    # 超长脚本只做压缩重写，不重新发散，避免越改越长。
+    prompt = (
+        "你是短视频脚本压缩编辑。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        f"请把下面脚本压缩到 {DEEP_TARGET_MIN_SECONDS}-{DEEP_TARGET_MAX_SECONDS} 秒。\n"
+        "必须保留“女：/男：”双主持格式，前15秒仍然要有反常识结论、观众反问和核心答案。\n"
+        "删掉重复解释、课程式铺垫和不影响结论的细节，只输出可朗读脚本。\n"
+        "压缩原因：" + "；".join(report.get("reasons", [])) + "\n"
+    )
+    return clean_script_output(call_llm(prompt, script))
+
+
+def extract_opening_hook(script: str, line_count: int = DEEP_OPENING_HOOK_LINES) -> str:
+    # 只抽取真正的男女主持台词，避免标题、空行或模型说明干扰开头审校。
+    lines = []
+    for line in clean_script_output(script).splitlines():
+        if SPEAKER_LINE_RE.match(line):
+            lines.append(line)
+        if len(lines) >= line_count:
+            break
+    return "\n".join(lines)
+
+
+def assess_opening_hook(script: str) -> Dict:
+    # 前几秒用规则先做基础体检，LLM 审校失败时也能给出稳定反馈。
+    opening = extract_opening_hook(script)
+    lines = [line for line in opening.splitlines() if SPEAKER_LINE_RE.match(line)]
+    reasons: List[str] = []
+    if len(lines) < 3:
+        reasons.append("前几秒对话不足，无法形成钩子")
+
+    first_match = SPEAKER_LINE_RE.match(lines[0]) if lines else None
+    if first_match:
+        first_body = first_match.group("body").strip()
+        first_length = len(re.sub(r"\s+", "", first_body))
+        stiff_phrases = [
+            "凭什么",
+            "反常识结论是",
+            "你有没有想过",
+            "想象一下",
+            "今天我们探讨",
+            "本文",
+            "本期",
+        ]
+        if any(phrase in first_body for phrase in stiff_phrases):
+            reasons.append("前3秒第一句不自然，像标题口号而不是口播")
+        if first_length < 18:
+            reasons.append("前3秒第一句太短，冲突和信息量不够")
+        if first_length > 58:
+            reasons.append("前3秒第一句太长，观众还没抓住重点就会流失")
+        has_tension = re.search(r"[？?]", first_body) or any(
+            token in first_body
+            for token in ("没想到", "不是", "不只", "真正", "藏在", "卡住", "漏掉", "底座", "代价")
+        )
+        if not has_tension:
+            reasons.append("前3秒缺少反差、悬念或损失感")
+
+    opening_text = "\n".join(lines[:DEEP_OPENING_HOOK_LINES])
+    if lines and not any(token in opening_text for token in ("答案", "关键", "核心", "因为", "ABF", "封装", "基板")):
+        reasons.append("前4句没有交代核心答案或后续展开方向")
+
+    return {
+        "blocked": bool(reasons),
+        "scope": "前3秒/前4句",
+        "reasons": reasons,
+        "opening": opening,
+    }
+
+
+def _replace_opening_hook(script: str, revised_hook: str) -> str:
+    # 只替换开头几句，后面的解释段落原样保留，避免审校智能体误改整篇稿子。
+    revised_lines = [
+        line for line in clean_script_output(revised_hook).splitlines()
+        if SPEAKER_LINE_RE.match(line)
+    ][:DEEP_OPENING_HOOK_LINES]
+    if len(revised_lines) < 2:
+        return clean_script_output(script)
+
+    original_lines = clean_script_output(script).splitlines()
+    output_lines: List[str] = []
+    replaced = False
+    skipped_dialogue = 0
+    for line in original_lines:
+        if SPEAKER_LINE_RE.match(line) and skipped_dialogue < DEEP_OPENING_HOOK_LINES:
+            if not replaced:
+                output_lines.extend(revised_lines)
+                replaced = True
+            skipped_dialogue += 1
+            continue
+        output_lines.append(line)
+    return clean_script_output("\n".join(output_lines))
+
+
+def polish_opening_hook_with_review(
+    series: Dict,
+    episode: Dict,
+    script: str,
+    research_report: str,
+    audit_report: str,
+    max_attempts: int = DEEP_OPENING_HOOK_MAX_ATTEMPTS,
+) -> tuple[str, Dict]:
+    # 独立的前几秒审校智能体：最多三轮，只改前4句；失败时保留原稿，不阻断后续流程。
+    current_script = clean_script_output(script)
+    report = {
+        "attempts": 0,
+        "initial": assess_opening_hook(current_script),
+        "final": {},
+        "error": "",
+    }
+    if max_attempts <= 0:
+        report["final"] = report["initial"]
+        return current_script, report
+
+    for attempt in range(1, max_attempts + 1):
+        opening = extract_opening_hook(current_script)
+        prompt = (
+            "你是深度视频“前几秒留存审校智能体”。\n"
+            f"系列：{series.get('title', '')}\n"
+            f"主题：{episode.get('title', '')}\n\n"
+            "任务：只审核并改写脚本前3秒和前4句，让开头更自然、更抓人。\n"
+            "要求：\n"
+            "1. 只输出改写后的前4句脚本，不要解释，不要输出标题。\n"
+            "2. 第一句要像真人口播，25到45个汉字优先，必须同时有反差和具体悬念。\n"
+            "3. 不要使用“凭什么”“反常识结论是”“你有没有想过”“想象一下”“今天我们探讨”。\n"
+            "4. 男主持第一句要像观众的真实反问，不能温和捧哏。\n"
+            "5. 第三或第四句必须交代核心答案，让观众知道继续看会得到什么。\n"
+            "6. 不新增缺来源支撑的具体数据、市场份额、客户名单或绝对化判断。\n"
+            "7. 必须保持“女：/男：”双主持格式，最多4句。\n"
+        )
+        context = (
+            f"当前前4句：\n{opening}\n\n"
+            f"研究报告：\n{research_report[:4000]}\n\n"
+            f"审校意见：\n{audit_report[:3000]}"
+        )
+        try:
+            raw = call_llm(prompt, context)
+        except Exception as exc:
+            report["attempts"] = attempt - 1
+            report["error"] = str(exc)
+            report["final"] = assess_opening_hook(current_script)
+            return current_script, report
+
+        revised_script = _replace_opening_hook(current_script, raw)
+        report["attempts"] = attempt
+        if revised_script == current_script:
+            report["final"] = assess_opening_hook(current_script)
+            report["error"] = "前几秒审校没有返回可用改写"
+            return current_script, report
+
+        current_script = revised_script
+        report["final"] = assess_opening_hook(current_script)
+        if not report["final"].get("blocked"):
+            return current_script, report
+    return current_script, report
+
+
+def review_script_retention(series: Dict, episode: Dict, script: str, research_report: str, audit_report: str) -> Dict:
+    # 整体留存审校只判断“能不能听完”，返回结构化结果给后续重写和质量报告使用。
+    prompt = (
+        "你是深度视频“整体留存审校智能体”。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        "任务：审核整条口播脚本的整体留存，判断用户是否愿意听完。\n"
+        "请只返回 JSON：{\"passed\":true/false,\"score\":0-10,\"reasons\":[\"问题\"],\"suggestions\":[\"修改建议\"]}。\n"
+        "审核标准：\n"
+        "1. 前30秒是否持续有悬念、冲突或明确收益。\n"
+        "2. 中段是否每隔一段都有新信息、反转、案例或追问，不能像资料罗列。\n"
+        "3. 结尾是否有回扣和余味，让用户觉得听完有收获。\n"
+        "4. 信息必须可信，不能为了吸引人编造事实或夸大结论。\n"
+    )
+    raw = call_llm(
+        prompt,
+        f"脚本：\n{script}\n\n研究报告：\n{research_report[:3000]}\n\n审校意见：\n{audit_report[:2000]}",
+    )
+    data = parse_json_object(raw)
+    if not data:
+        return {"blocked": False, "passed": True, "score": 0, "reasons": [], "suggestions": [], "raw": raw}
+
+    score = data.get("score", 0)
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        score = 0
+    passed = bool(data.get("passed"))
+    reasons = data.get("reasons") if isinstance(data.get("reasons"), list) else []
+    suggestions = data.get("suggestions") if isinstance(data.get("suggestions"), list) else []
+    return {
+        "blocked": (not passed) or score < 7,
+        "passed": passed,
+        "score": score,
+        "reasons": [str(item) for item in reasons],
+        "suggestions": [str(item) for item in suggestions],
+    }
+
+
+def rewrite_script_for_retention(series: Dict, episode: Dict, script: str, review: Dict) -> str:
+    # 整体留存不够时只补节奏、悬念和听完理由，避免改掉已审校过的事实边界。
+    prompt = (
+        "你是深度视频留存改稿智能体。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        "请根据审校意见重写整条脚本，让用户更愿意听完。\n"
+        "要求：\n"
+        "1. 保持“女：/男：”双主持格式，不要增加旁白。\n"
+        "2. 前几秒继续保留强钩子，中段每 2 到 3 轮对话给出新信息或追问。\n"
+        "3. 标出真实代价、反差、产业链位置或风险，不要写成资料清单。\n"
+        "4. 不新增缺少来源支撑的具体数据、市场份额、客户名单或绝对化判断。\n"
+        f"审校问题：{'；'.join(review.get('reasons', []))}\n"
+        f"修改建议：{'；'.join(review.get('suggestions', []))}\n"
+        "只输出重写后的脚本。\n"
+    )
+    return clean_script_output(call_llm(prompt, script))
+
+
+def polish_script_with_retention_review(
+    series: Dict,
+    episode: Dict,
+    script: str,
+    research_report: str,
+    audit_report: str,
+    max_attempts: int = 2,
+) -> tuple[str, Dict]:
+    # 先审整体留存；不合格时最多整体重写一次，再重跑前几秒钩子审校。
+    current_script = clean_script_output(script)
+    reviews: List[Dict] = []
+    hook_after_rewrite = {}
+    for attempt in range(1, max_attempts + 1):
+        review = review_script_retention(series, episode, current_script, research_report, audit_report)
+        review["attempt"] = attempt
+        reviews.append(review)
+        if not review.get("blocked"):
+            return current_script, {
+                "blocked": False,
+                "attempts": attempt,
+                "reviews": reviews,
+                "final": review,
+                "hook_after_rewrite": hook_after_rewrite,
+            }
+        if attempt >= max_attempts:
+            break
+        current_script = rewrite_script_for_retention(series, episode, current_script, review)
+        current_script, hook_after_rewrite = polish_opening_hook_with_review(
+            series,
+            episode,
+            current_script,
+            research_report,
+            audit_report,
+        )
+
+    final_review = reviews[-1] if reviews else {}
+    return current_script, {
+        "blocked": True,
+        "attempts": len(reviews),
+        "reviews": reviews,
+        "final": final_review,
+        "hook_after_rewrite": hook_after_rewrite,
+        "reasons": final_review.get("reasons", []),
+    }
+
+
+def _finish_dialogue_script_review(series: Dict, episode: Dict, research_report: str, audit_report: str, script: str, report: Dict) -> tuple[str, Dict]:
+    # 时长检查后再打磨开头，避免压缩重写把前几秒钩子覆盖掉。
+    attempts = report.get("attempts", 1)
+    script, hook_report = polish_opening_hook_with_review(series, episode, script, research_report, audit_report)
+    script, retention_report = polish_script_with_retention_review(series, episode, script, research_report, audit_report)
+    final_report = assess_dialogue_duration(script)
+    final_report["attempts"] = attempts
+    final_report["hook_review"] = hook_report
+    final_report["retention_review"] = retention_report
+    if retention_report.get("blocked"):
+        # 整体留存不足不直接卡死生成，但会进入质量报告，方便人工复查。
+        final_report["blocked"] = True
+        final_report.setdefault("reasons", []).extend(retention_report.get("reasons", []))
+    return script, final_report
+
+
+def generate_dialogue_script_with_duration_guard(series: Dict, episode: Dict, research_report: str, audit_report: str) -> tuple[str, Dict]:
+    # 脚本生成后马上估算时长，最多重写三次，避免长稿继续进入 TTS 和视频渲染。
+    script = ""
+    report = {}
+    for attempt in range(1, DEEP_RESEARCH_MAX_ATTEMPTS + 1):
+        if attempt == 1:
+            script = generate_dialogue_script(series, episode, research_report, audit_report)
+        else:
+            script = rewrite_dialogue_script_for_duration(series, episode, script, report)
+        report = assess_dialogue_duration(script)
+        report["attempts"] = attempt
+        if not report["blocked"]:
+            return _finish_dialogue_script_review(series, episode, research_report, audit_report, script, report)
+    return _finish_dialogue_script_review(series, episode, research_report, audit_report, script, report)
 
 
 def generate_script_notes(series: Dict, episode: Dict, research_report: str, audit_report: str, script: str) -> str:
@@ -692,6 +1294,22 @@ def _split_visual_segment(segment: Dict) -> List[Dict]:
     return result
 
 
+def classify_deep_visual_card(text: str) -> str:
+    # 少量信息型标签能打破纯文字轮播的疲劳，但不改变整体 iOS 视觉风格。
+    clean = re.sub(r"\s+", "", text or "")
+    if re.search(r"\d", clean):
+        return "关键数字"
+    if any(token in clean for token in ("供应链", "产业链", "设备", "材料", "基建", "后台")):
+        return "产业链位置"
+    if any(token in clean for token in ("风险", "问题", "限制", "瓶颈", "代价", "不确定")):
+        return "风险判断"
+    if any(token in clean for token in ("但", "反方", "争议", "不是", "不能", "未必")):
+        return "正反观点"
+    if any(token in clean for token in ("结论", "核心", "关键", "答案")):
+        return "核心判断"
+    return "深度观点"
+
+
 def build_deep_visual_slide_plan(script_path: str, audio_path: str) -> List[Dict]:
     timing_segments = _load_timing_segments(audio_path)
     source_segments = []
@@ -869,7 +1487,8 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
     total = len(slide_plan)
     for index, segment in enumerate(slide_plan):
         image_path = os.path.join(slide_dir, f"slide_{index:03d}.png")
-        subtitle = f"{series.get('title', '')} · {labels.get(segment['speaker'], '男主持')}"
+        visual_label = classify_deep_visual_card(segment["text"])
+        subtitle = f"{visual_label} · {series.get('title', '')} · {labels.get(segment['speaker'], '男主持')}"
         create_text_card(
             episode.get("title", ""),
             subtitle,
@@ -887,6 +1506,24 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
 def safe_filename(text: str) -> str:
     clean = re.sub(r'[\\/:*?"<>|]', "", text or "").strip()
     return clean.replace(" ", "_") or "deep_episode"
+
+
+def validate_deep_audio_duration(audio_path: str) -> Dict:
+    # 真实音频生成后再兜底检查一次；超时只提示，不再阻断视频合成流程。
+    timing_path = audio_path + ".timing.json"
+    if not os.path.exists(timing_path):
+        return {"blocked": False, "actual_seconds": 0.0, "reasons": []}
+    with open(timing_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    actual_seconds = float(data.get("total_duration") or 0.0)
+    if not actual_seconds:
+        actual_seconds = sum(float(item.get("duration", 0.0)) for item in data.get("segments", []))
+    reasons = []
+    if actual_seconds > DEEP_TARGET_MAX_SECONDS:
+        reasons.append(f"音频实际 {actual_seconds:.0f} 秒，超过 {DEEP_TARGET_MAX_SECONDS} 秒")
+    if reasons:
+        return {"blocked": True, "actual_seconds": round(actual_seconds, 1), "reasons": reasons}
+    return {"blocked": False, "actual_seconds": round(actual_seconds, 1), "reasons": []}
 
 
 def step_video(audio_path: str, video_title: str, image_paths: List[str]) -> str:
@@ -909,6 +1546,13 @@ def step_video(audio_path: str, video_title: str, image_paths: List[str]) -> str
     return output_path
 
 
+def write_quality_report(path: str, payload: Dict) -> str:
+    # 质量报告给 UI 展示和人工复查使用，保持 JSON 结构方便后续扩展。
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return path
+
+
 def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> Dict:
     today = datetime.date.today().strftime("%Y-%m-%d")
     root = base_dir or main.ROOT_DIR
@@ -929,26 +1573,71 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
         "script_path": os.path.join(output_dir, "script.md"),
         "script_notes_path": os.path.join(output_dir, "script_notes.md"),
         "documentary_package_path": os.path.join(output_dir, "documentary_package.md"),
+        "quality_report_path": os.path.join(output_dir, "quality_report.json"),
         "audio_path": "",
         "video_path": "",
+        "review_ready": False,
+        "review_blocked": False,
     }
 
-    print("[深度系列] 开始检索资料", flush=True)
-    sources = collect_research_sources(series, episode)
-    print("[深度系列] 开始生成研究报告", flush=True)
-    research = generate_research_report(series, episode, sources)
-    print("\n========== 研究报告 ==========\n", flush=True)
-    print(research, flush=True)
-    audit = audit_research(series, episode, research, sources)
-    print("\n========== 审校结果 ==========\n", flush=True)
-    print(audit, flush=True)
-    script = generate_dialogue_script(series, episode, research, audit)
+    review = run_research_review_loop(series, episode)
+    sources = review["sources"]
+    research = review["research"]
+    audit = review["audit"]
+    quality_payload = {
+        "research_attempts": review["attempts"],
+        "research_quality": review["quality"],
+        "script_quality": {},
+    }
+    result["source_count"] = review["quality"].get("source_count", 0)
+
+    if review["blocked"]:
+        fallback = build_safe_research_fallback(review)
+        audit = fallback["audit"]
+        result["fallback_used"] = True
+        result["quality_block_reason"] = fallback["reason"]
+        quality_payload["fallback_used"] = True
+        quality_payload["fallback_note"] = fallback["note"]
+
+    if review["blocked"] and not result.get("fallback_used"):
+        reason = "；".join(review["quality"].get("reasons", []))
+        result["review_blocked"] = True
+        result["quality_block_reason"] = reason
+        write_quality_report(result["quality_report_path"], quality_payload)
+        with open(result["research_path"], "w", encoding="utf-8") as f:
+            f.write("# 研究报告\n\n")
+            f.write(research)
+            f.write("\n\n# 资料来源\n\n")
+            f.write(sources_to_markdown(sources))
+        with open(result["audit_path"], "w", encoding="utf-8") as f:
+            f.write(audit)
+        log_path = os.path.join(output_dir, "agent_interaction.log")
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write("深度系列调研日志\n")
+            f.write("=" * 56 + "\n")
+            f.write("[审核阻断]\n" + reason + "\n\n")
+            f.write("[研究报告]\n" + research + "\n\n")
+            f.write("[审校结果]\n" + audit + "\n")
+        result["agent_log_path"] = log_path
+        return result
+
+    script, script_quality = generate_dialogue_script_with_duration_guard(series, episode, research, audit)
+    result["estimated_seconds"] = script_quality.get("estimated_seconds", 0.0)
+    quality_payload["script_quality"] = script_quality
     print("\n========== 对话脚本 ==========\n", flush=True)
     print(script, flush=True)
+
+    if script_quality.get("blocked"):
+        reason = "；".join(script_quality.get("reasons", []))
+        result["quality_block_reason"] = reason
+        # 审核智能的建议保留下来，但脚本时长不再卡死后续视频生成。
+        quality_payload["script_warning"] = reason
+
     script_notes = generate_script_notes(series, episode, research, audit, script)
     print("\n========== 脚本备注 ==========\n", flush=True)
     print(script_notes, flush=True)
     documentary_package = generate_documentary_package(series, episode, research, audit, script, result)
+    write_quality_report(result["quality_report_path"], quality_payload)
 
     with open(result["research_path"], "w", encoding="utf-8") as f:
         f.write("# 研究报告\n\n")
@@ -972,6 +1661,7 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
         f.write("[纪录片包]\n" + documentary_package + "\n\n")
         f.write("[脚本]\n" + script + "\n")
     result["agent_log_path"] = log_path
+    result["review_ready"] = True
     return result
 
 
@@ -984,10 +1674,14 @@ def generate_video_from_script(series: Dict, episode: Dict, result: Dict) -> Dic
     audio_path = os.path.join(output_dir, "dialogue.mp3")
     print("[深度视频] 开始生成口播音频", flush=True)
     audio_path = convert_dialogue_to_audio(script_path, audio_path)
+    duration_report = validate_deep_audio_duration(audio_path)
+    if duration_report.get("blocked"):
+        print("[深度视频] 音频时长提醒：" + "；".join(duration_report.get("reasons", [])), flush=True)
     print("[深度视频] 开始生成画面卡片", flush=True)
     image_paths = create_deep_slide_images(series, episode, script_path, audio_path)
     print("[深度视频] 开始合成视频", flush=True)
     result["audio_path"] = audio_path
+    result["actual_seconds"] = duration_report.get("actual_seconds", 0.0)
     result["video_path"] = step_video(audio_path, f"{episode.get('title', '')} {today}", image_paths)
     return result
 
@@ -1005,16 +1699,25 @@ def mark_episode_generated(config: Dict, series_title: str, episode_title: str, 
         "script_path",
         "script_notes_path",
         "documentary_package_path",
+        "quality_report_path",
         "audio_path",
         "video_path",
         "publish_assets_path",
         "cover_path",
+        "cover_option_paths",
         "publish_title",
         "publish_desc",
         "publish_tags",
+        "source_count",
+        "estimated_seconds",
+        "actual_seconds",
+        "quality_block_reason",
+        "fallback_used",
     ):
         if result.get(key):
             episode[key] = result[key]
+    episode["review_blocked"] = bool(result.get("review_blocked"))
+    episode["review_ready"] = bool(result.get("review_ready") or (result.get("script_path") and not result.get("review_blocked")))
     return episode
 
 
@@ -1077,27 +1780,217 @@ def append_comment_question(desc: str, question: str) -> str:
     return f"{desc}{prefix}互动问题：{question}"
 
 
-def create_deep_cover_image(series: Dict, episode: Dict, assets: Dict, output_dir: str) -> str:
+def build_publish_keywords(series: Dict, episode: Dict, assets: Dict) -> List[str]:
+    # 简介关键词用确定性规则兜底，保证搜索能命中主题、核心公司和技术名词。
+    text = " ".join([
+        str(series.get("title", "")),
+        str(episode.get("title", "")),
+        str(episode.get("question", "")),
+        str(assets.get("title", "")),
+        str(assets.get("tags", "")),
+    ])
+    candidates = re.findall(r"[A-Za-z0-9]{2,20}|[\u4e00-\u9fff]{2,12}", text)
+    stop_words = {"为什么", "成为", "公司", "系列", "深度", "内容", "视频", "这个", "一个", "什么"}
+    keywords: List[str] = []
+    for item in candidates:
+        clean = item.strip(" ，,。；;：:")
+        if not clean or clean in stop_words or clean in keywords:
+            continue
+        keywords.append(clean)
+        if len(keywords) >= 8:
+            break
+    return keywords or ["AI", "深度内容", "产业链"]
+
+
+def ensure_publish_desc_keywords(desc: str, keywords: List[str]) -> str:
+    # B 站简介里显式追加关键词行，方便站内搜索和后续人工复查。
+    clean = (desc or "").strip()
+    if "关键词" in clean:
+        return clean
+    keyword_text = "、".join([item for item in keywords if item][:8])
+    if not keyword_text:
+        return clean
+    prefix = "\n\n" if clean else ""
+    return f"{clean}{prefix}关键词：{keyword_text}"
+
+
+def normalize_publish_assets_payload(series: Dict, episode: Dict, assets: Dict) -> Dict:
+    # LLM 生成和改写后的发布字段都走同一套规整，避免标题、简介、封面规则前后不一致。
+    normalized = dict(assets or {})
+    normalized["title"] = normalize_publish_title(str(normalized.get("title") or ""), episode.get("title", "深度视频"), series.get("title", ""))
+    normalized["comment_question"] = normalize_comment_question(str(normalized.get("comment_question") or ""))
+    normalized["desc"] = append_comment_question(str(normalized.get("desc") or ""), normalized["comment_question"])
+    normalized["tags"] = str(normalized.get("tags") or "AI,深度内容,纪录片,口播").strip()
+    normalized["cover_text"] = normalize_cover_text(str(normalized.get("cover_text") or ""), normalized["title"])
+    normalized["cover_prompt"] = str(normalized.get("cover_prompt") or "iOS 风格深度系列封面，简洁，清晰，白底，高对比，科技感").strip()
+
+    if not isinstance(normalized.get("title_options"), list):
+        normalized["title_options"] = [normalized["title"]]
+    normalized["title_options"] = [
+        normalize_publish_title(str(item), episode.get("title", "深度视频"), series.get("title", ""))
+        for item in normalized["title_options"][:3]
+    ] or [normalized["title"]]
+
+    if not isinstance(normalized.get("cover_options"), list):
+        normalized["cover_options"] = [normalized["cover_text"]]
+    normalized["cover_options"] = [
+        normalize_cover_text(str(item), normalized["title"])
+        for item in normalized["cover_options"][:3]
+    ] or [normalized["cover_text"]]
+
+    normalized["desc"] = ensure_publish_desc_keywords(normalized["desc"], build_publish_keywords(series, episode, normalized))
+    return normalized
+
+
+def review_publish_assets(series: Dict, episode: Dict, assets: Dict, script_text: str, research_text: str) -> Dict:
+    # 发布审校重点看点击欲和搜索命中，不负责重写正文事实。
+    prompt = (
+        "你是 B 站深度视频发布审校智能体。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        "任务：审核发布标题和简介是否有标题党式点击欲、是否包含搜索关键词。\n"
+        "请只返回 JSON：{\"passed\":true/false,\"score\":0-10,\"reasons\":[\"问题\"],\"suggestions\":[\"建议\"]}。\n"
+        "审核标准：\n"
+        "1. 标题要有悬念、反差或冲突，让人想点开，但不能虚假夸大。\n"
+        "2. 简介必须包含主题公司、技术名词、产业链关键词，方便搜索到。\n"
+        "3. 标题、简介和视频前几秒承诺必须一致，不能标题党骗点。\n"
+        "4. tags 要覆盖核心关键词。\n"
+    )
+    raw = call_llm(
+        prompt,
+        f"发布信息：\n{json.dumps(assets, ensure_ascii=False)}\n\n脚本：\n{script_text[:2500]}\n\n研究报告：\n{research_text[:1500]}",
+    )
+    data = parse_json_object(raw)
+    if not data:
+        return {"blocked": False, "passed": True, "score": 0, "reasons": [], "suggestions": [], "raw": raw}
+    score = data.get("score", 0)
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        score = 0
+    passed = bool(data.get("passed"))
+    reasons = data.get("reasons") if isinstance(data.get("reasons"), list) else []
+    suggestions = data.get("suggestions") if isinstance(data.get("suggestions"), list) else []
+    return {
+        "blocked": (not passed) or score < 7,
+        "passed": passed,
+        "score": score,
+        "reasons": [str(item) for item in reasons],
+        "suggestions": [str(item) for item in suggestions],
+    }
+
+
+def rewrite_publish_assets_with_review(series: Dict, episode: Dict, assets: Dict, review: Dict, script_text: str, research_text: str) -> Dict:
+    # 发布信息不合格时只改标题、简介、标签和封面短文案，保持产物结构不变。
+    prompt = (
+        "你是 B 站深度视频发布包装改稿智能体。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n\n"
+        "请根据审校意见重写发布信息，只返回 JSON，字段保持 title、desc、tags、cover_text、cover_prompt、comment_question、title_options、cover_options。\n"
+        "要求：标题要有标题党式点击欲，优先使用悬念、反差、冲突或疑问；简介必须自然包含搜索关键词；不能虚假夸大。\n"
+        f"审校问题：{'；'.join(review.get('reasons', []))}\n"
+        f"修改建议：{'；'.join(review.get('suggestions', []))}\n"
+    )
+    raw = call_llm(
+        prompt,
+        f"当前发布信息：\n{json.dumps(assets, ensure_ascii=False)}\n\n脚本：\n{script_text[:2500]}\n\n研究报告：\n{research_text[:1500]}",
+    )
+    rewritten = parse_json_object(raw)
+    merged = dict(assets)
+    if rewritten:
+        merged.update(rewritten)
+    return merged
+
+
+def polish_publish_assets_with_review(
+    series: Dict,
+    episode: Dict,
+    assets: Dict,
+    script_text: str,
+    research_text: str,
+    max_attempts: int = 2,
+) -> tuple[Dict, Dict]:
+    # 发布信息生成后再审校；不合格时最多补改一次，避免无限消耗 LLM 调用。
+    current_assets = normalize_publish_assets_payload(series, episode, assets)
+    reviews: List[Dict] = []
+    for attempt in range(1, max_attempts + 1):
+        review = review_publish_assets(series, episode, current_assets, script_text, research_text)
+        review["attempt"] = attempt
+        reviews.append(review)
+        if not review.get("blocked"):
+            return current_assets, {
+                "blocked": False,
+                "attempts": attempt,
+                "reviews": reviews,
+                "final": review,
+            }
+        if attempt >= max_attempts:
+            break
+        current_assets = rewrite_publish_assets_with_review(series, episode, current_assets, review, script_text, research_text)
+        current_assets = normalize_publish_assets_payload(series, episode, current_assets)
+
+    final_review = reviews[-1] if reviews else {}
+    return current_assets, {
+        "blocked": True,
+        "attempts": len(reviews),
+        "reviews": reviews,
+        "final": final_review,
+        "reasons": final_review.get("reasons", []),
+    }
+
+
+def create_deep_cover_image(
+    series: Dict,
+    episode: Dict,
+    assets: Dict,
+    output_dir: str,
+    output_name: str = "cover.png",
+    cover_text: str = None,
+    accent: str = "#007AFF",
+) -> str:
     # 封面保持简洁：左侧主标题，右侧信息块，整体更接近 iOS 风格页面。
     from PIL import Image, ImageDraw
 
-    output_path = os.path.join(output_dir, "cover.png")
+    output_path = os.path.join(output_dir, output_name)
     image = Image.new("RGB", (1080, 1080), "#F2F2F7")
     draw = ImageDraw.Draw(image)
 
     draw.rounded_rectangle((64, 72, 1016, 1008), radius=48, fill="#FFFFFF")
-    draw.rounded_rectangle((96, 128, 168, 952), radius=24, fill="#007AFF")
+    draw.rounded_rectangle((96, 128, 168, 952), radius=24, fill=accent)
     draw.rounded_rectangle((618, 128, 968, 384), radius=32, fill="#F5F5F7")
     draw.rounded_rectangle((618, 420, 968, 548), radius=32, fill="#1D1D1F")
 
-    draw.text((220, 150), "OpenNewsBrief", font=_font(28, True), fill="#007AFF")
-    draw.text((220, 230), normalize_cover_text(assets.get("cover_text", ""), assets.get("title", "")), font=_font(88, True), fill="#1D1D1F")
+    draw.text((220, 150), "OpenNewsBrief", font=_font(28, True), fill=accent)
+    main_text = normalize_cover_text(cover_text if cover_text is not None else assets.get("cover_text", ""), assets.get("title", ""))
+    draw.text((220, 230), main_text, font=_font(88, True), fill="#1D1D1F")
     draw.text((220, 356), assets.get("title", episode.get("title", ""))[:24], font=_font(38, True), fill="#6E6E73")
     draw.text((646, 166), "AI Answer", font=_font(28, True), fill="#1D1D1F")
     draw.text((646, 456), "Deep Series", font=_font(34, True), fill="#FFFFFF")
     draw.text((220, 940), series.get("title", "AI未来三年系列")[:18], font=_font(26, True), fill="#8E8E93")
     image.save(output_path)
     return output_path
+
+
+def create_deep_cover_options(series: Dict, episode: Dict, assets: Dict, output_dir: str) -> List[str]:
+    # 把 LLM 给出的封面备选真正落成本地图片，避免只有文案没有可用封面。
+    palette = ["#007AFF", "#5E5CE6", "#34C759"]
+    options = list(assets.get("cover_options") or [assets.get("cover_text", "")])
+    while len(options) < 3:
+        options.append(assets.get("cover_text", "") or assets.get("title", "AI深度解析"))
+    paths = []
+    for index, text in enumerate(options[:3]):
+        paths.append(
+            create_deep_cover_image(
+                series,
+                episode,
+                assets,
+                output_dir,
+                output_name=f"cover_option_{index + 1}.png",
+                cover_text=text,
+                accent=palette[index % len(palette)],
+            )
+        )
+    return paths
 
 
 def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
@@ -1140,30 +2033,13 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
             "cover_options": ["AI 深度解析"],
         }
 
-    assets["title"] = normalize_publish_title(str(assets.get("title") or ""), episode.get("title", "深度视频"), series.get("title", ""))
-    assets["comment_question"] = normalize_comment_question(str(assets.get("comment_question") or ""))
-    assets["desc"] = append_comment_question(str(assets.get("desc") or ""), assets["comment_question"])
-    assets["tags"] = str(assets.get("tags") or "AI,深度内容,纪录片,口播").strip()
-    assets["cover_text"] = normalize_cover_text(str(assets.get("cover_text") or ""), assets["title"])
-    assets["cover_prompt"] = str(assets.get("cover_prompt") or "iOS 风格深度系列封面，简洁，清晰，白底，高对比，科技感").strip()
-
-    if not isinstance(assets.get("title_options"), list):
-        assets["title_options"] = [assets["title"]]
-    assets["title_options"] = [
-        normalize_publish_title(str(item), episode.get("title", "深度视频"), series.get("title", ""))
-        for item in assets["title_options"][:3]
-    ] or [assets["title"]]
-
-    if not isinstance(assets.get("cover_options"), list):
-        assets["cover_options"] = [assets["cover_text"]]
-    assets["cover_options"] = [
-        normalize_cover_text(str(item), assets["title"])
-        for item in assets["cover_options"][:3]
-    ] or [assets["cover_text"]]
+    assets, publish_review = polish_publish_assets_with_review(series, episode, assets, script_text, research_text)
+    assets["publish_review"] = publish_review
 
     output_dir = os.path.dirname(os.path.abspath(result.get("video_path") or result.get("script_path") or CONFIG_PATH))
     os.makedirs(output_dir, exist_ok=True)
     assets["cover_path"] = create_deep_cover_image(series, episode, assets, output_dir)
+    assets["cover_option_paths"] = create_deep_cover_options(series, episode, assets, output_dir)
     assets_path = os.path.join(output_dir, "publish_assets.json")
     with open(assets_path, "w", encoding="utf-8") as f:
         json.dump(assets, f, ensure_ascii=False, indent=2)
@@ -1183,14 +2059,30 @@ def run_episode_by_titles(series_title: str, episode_title: str) -> Dict:
     episode = find_episode(series, episode_title)
     episode["generated"] = False
     episode["generated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    for key in ("research_path", "audit_path", "script_path", "script_notes_path", "documentary_package_path", "agent_log_path"):
+    for key in (
+        "research_path",
+        "audit_path",
+        "script_path",
+        "script_notes_path",
+        "documentary_package_path",
+        "quality_report_path",
+        "agent_log_path",
+        "source_count",
+        "estimated_seconds",
+        "quality_block_reason",
+        "fallback_used",
+    ):
         if result.get(key):
             episode[key] = result[key]
+    # 新一轮成功后要清掉上一轮遗留的阻断原因，避免 UI 继续显示旧失败状态。
+    episode["quality_block_reason"] = str(result.get("quality_block_reason") or "")
+    episode["fallback_used"] = bool(result.get("fallback_used"))
     episode["audio_path"] = ""
     episode["video_path"] = ""
     episode["published"] = False
     episode["published_at"] = ""
-    episode["review_ready"] = True
+    episode["review_blocked"] = bool(result.get("review_blocked"))
+    episode["review_ready"] = bool(result.get("review_ready") or (result.get("script_path") and not result.get("review_blocked")))
     save_config(config)
     return result
 
@@ -1199,6 +2091,14 @@ def generate_episode_video_by_titles(series_title: str, episode_title: str) -> D
     config = load_config()
     series = find_series(config, series_title)
     episode = find_episode(series, episode_title)
+    if episode.get("review_blocked"):
+        script_path = episode.get("script_path", "")
+        if not script_path or not os.path.exists(script_path):
+            raise ValueError("当前主题被审核阻断，请先补充资料或修改脚本后再生成视频")
+        # 有脚本产物时，审核建议只作为修改提醒，不再阻断视频生成。
+        print("[深度视频] 检测到审核提醒，已有脚本，继续生成视频", flush=True)
+        episode["review_blocked"] = False
+        episode["review_ready"] = True
     result = {
         "series": series.get("title", ""),
         "episode": episode.get("title", ""),
@@ -1210,6 +2110,9 @@ def generate_episode_video_by_titles(series_title: str, episode_title: str) -> D
         "audio_path": episode.get("audio_path", ""),
         "video_path": episode.get("video_path", ""),
         "agent_log_path": episode.get("agent_log_path", ""),
+        "quality_report_path": episode.get("quality_report_path", ""),
+        "source_count": episode.get("source_count", 0),
+        "estimated_seconds": episode.get("estimated_seconds", 0.0),
     }
     result = generate_video_from_script(series, episode, result)
     assets = generate_publish_assets(series, episode, result)

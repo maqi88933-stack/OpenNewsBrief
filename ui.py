@@ -1469,7 +1469,7 @@ class NewsBriefApp:
             fg=TEXT_COLOR,
         ).pack(anchor="w")
 
-        episode_columns = ("title", "status", "question", "updated")
+        episode_columns = ("title", "status", "quality", "question", "updated")
         table_wrap = tk.Frame(episode_section, bg=CARD_COLOR)
         table_wrap.pack(fill="both", expand=True, pady=(8, 0))
         self.deep_episode_table = ttk.Treeview(
@@ -1481,11 +1481,13 @@ class NewsBriefApp:
         )
         self.deep_episode_table.heading("title", text="主题")
         self.deep_episode_table.heading("status", text="状态")
+        self.deep_episode_table.heading("quality", text="质量")
         self.deep_episode_table.heading("question", text="调研问题")
         self.deep_episode_table.heading("updated", text="更新时间")
         self.deep_episode_table.column("title", width=180, anchor="w")
         self.deep_episode_table.column("status", width=80, anchor="center")
-        self.deep_episode_table.column("question", width=360, anchor="w")
+        self.deep_episode_table.column("quality", width=130, anchor="center")
+        self.deep_episode_table.column("question", width=300, anchor="w")
         self.deep_episode_table.column("updated", width=150, anchor="center")
         episode_scroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.deep_episode_table.yview)
         self.deep_episode_table.configure(yscrollcommand=episode_scroll.set)
@@ -1503,6 +1505,7 @@ class NewsBriefApp:
         self.create_action_button(episode_actions, "看写稿意见", self.show_deep_script_notes, CARD_COLOR, PRIMARY_COLOR)
         self.create_action_button(episode_actions, "看脚本", self.show_deep_script, CARD_COLOR, PRIMARY_COLOR)
         self.create_action_button(episode_actions, "看日志", self.show_deep_agent_log, CARD_COLOR, PRIMARY_COLOR)
+        self.create_action_button(episode_actions, "看发布", self.show_deep_publish, CARD_COLOR, PRIMARY_COLOR)
 
         run_actions = tk.Frame(inner, bg=CARD_COLOR)
         run_actions.pack(fill="x", pady=(14, 0))
@@ -1552,6 +1555,8 @@ class NewsBriefApp:
         return self.get_deep_episode_status(episode)
 
     def get_deep_episode_status(self, episode):
+        if episode.get("review_blocked"):
+            return "审核阻断"
         if episode.get("generated") and episode.get("video_path") and episode.get("published"):
             return "已发布"
         if episode.get("generated") and episode.get("video_path"):
@@ -1559,6 +1564,14 @@ class NewsBriefApp:
         if episode.get("review_ready") and episode.get("script_path"):
             return "待生成视频"
         return "未生成"
+
+    def format_deep_quality(self, episode):
+        # 深度系列质量指标保持短文本，方便在表格里快速扫过。
+        source_count = int(episode.get("source_count") or 0)
+        seconds = episode.get("actual_seconds") or episode.get("estimated_seconds") or 0
+        seconds_text = f"{float(seconds):.0f}秒" if seconds else "未知"
+        risk_text = "阻断" if episode.get("review_blocked") else "通过"
+        return f"源{source_count} / {seconds_text} / {risk_text}"
 
     def refresh_deep_lists(self, selected_series_title=None, selected_episode_title=None):
         if not hasattr(self, "deep_series_table"):
@@ -1622,6 +1635,7 @@ class NewsBriefApp:
                 values=(
                     episode.get("title", "未命名主题"),
                     self.get_episode_status(episode),
+                    self.format_deep_quality(episode),
                     episode.get("question", ""),
                     episode.get("generated_at", ""),
                 ),
@@ -1876,6 +1890,47 @@ class NewsBriefApp:
 
     def show_deep_agent_log(self):
         self.show_deep_file("多智能体交互日志", "agent_log_path")
+
+    def build_deep_publish_preview_text(self, series, episode):
+        # 发布预览只读取已生成的数据，不在查看时触发新的 AI 调用。
+        assets_path = episode.get("publish_assets_path", "")
+        assets = {}
+        if assets_path and os.path.exists(assets_path):
+            try:
+                with open(assets_path, "r", encoding="utf-8") as f:
+                    assets = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                assets = {}
+
+        title = episode.get("publish_title") or assets.get("title") or ""
+        desc = episode.get("publish_desc") or assets.get("desc") or ""
+        tags = episode.get("publish_tags") or assets.get("tags") or ""
+        cover_path = episode.get("cover_path") or assets.get("cover_path") or ""
+        final_title = self.format_deep_publish_title(series.get("title", ""), title) if title else "未生成"
+
+        lines = [
+            "发布标题和介绍",
+            "=" * 32,
+            f"标题：{final_title}",
+            "",
+            "简介：",
+            desc or "未生成",
+            "",
+            f"标签：{tags or '未生成'}",
+        ]
+        if cover_path:
+            lines.extend(["", f"封面：{cover_path}"])
+        if assets_path:
+            lines.extend(["", f"发布信息文件：{assets_path}"])
+        return "\n".join(lines)
+
+    def show_deep_publish(self):
+        series, episode = self.get_selected_deep_target()
+        if not episode:
+            self.append_log("请先选择一个主题。\n")
+            return
+        content = self.build_deep_publish_preview_text(series, episode)
+        self.show_text_dialog("发布标题和介绍", content, episode.get("publish_assets_path", ""))
 
     def show_deep_file(self, title, key):
         _series, episode = self.get_selected_deep_target()

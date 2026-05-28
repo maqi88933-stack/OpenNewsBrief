@@ -22,10 +22,25 @@ class TestUiEncoding(unittest.TestCase):
     def test_get_deep_episode_status_returns_published_pending_and_ungenerated(self):
         app = object.__new__(ui.NewsBriefApp)
 
+        self.assertEqual(app.get_deep_episode_status({"review_blocked": True}), "审核阻断")
         self.assertEqual(app.get_deep_episode_status({"generated": True, "video_path": "demo.mp4", "published": True}), "已发布")
         self.assertEqual(app.get_deep_episode_status({"generated": True, "video_path": "demo.mp4"}), "待发布")
         self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md"}), "待生成视频")
         self.assertEqual(app.get_deep_episode_status({}), "未生成")
+
+    def test_format_deep_quality_shows_source_duration_and_risk(self):
+        app = object.__new__(ui.NewsBriefApp)
+        episode = {
+            "source_count": 4,
+            "estimated_seconds": 118.4,
+            "quality_block_reason": "",
+        }
+
+        self.assertEqual(app.format_deep_quality(episode), "源4 / 118秒 / 通过")
+
+        episode["review_blocked"] = True
+        episode["quality_block_reason"] = "有效来源不足"
+        self.assertEqual(app.format_deep_quality(episode), "源4 / 118秒 / 阻断")
 
     def test_get_deep_publish_episodes_filters_by_tab(self):
         app = object.__new__(ui.NewsBriefApp)
@@ -321,6 +336,52 @@ class TestUiEncoding(unittest.TestCase):
                 command = app.build_biliup_upload_command(video_path)
 
         self.assertEqual(command[command.index("--title") + 1], "AI未来三年系列：AI搜索替代深度解析")
+
+    def test_build_deep_publish_preview_text_reads_assets_file(self):
+        app = object.__new__(ui.NewsBriefApp)
+        assets_path = os.path.join(tempfile.gettempdir(), "opennewsbrief_publish_assets_test.json")
+        with open(assets_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "title": "味精公司卡住AI芯片？",
+                    "desc": "从味之素、ABF绝缘膜、封装基板讲清AI芯片供应链。",
+                    "tags": "AI芯片,味之素,ABF,封装基板",
+                },
+                f,
+                ensure_ascii=False,
+            )
+
+        try:
+            text = app.build_deep_publish_preview_text(
+                {"title": "AI时代的隐形地基"},
+                {"title": "味之素", "publish_assets_path": assets_path},
+            )
+        finally:
+            os.remove(assets_path)
+
+        self.assertIn("标题：AI时代的隐形地基：味精公司卡住AI芯片？", text)
+        self.assertIn("简介：", text)
+        self.assertIn("ABF绝缘膜", text)
+        self.assertIn("标签：AI芯片,味之素,ABF,封装基板", text)
+
+    def test_show_deep_publish_opens_preview_dialog(self):
+        app = object.__new__(ui.NewsBriefApp)
+        series = {"title": "AI时代的隐形地基"}
+        episode = {
+            "title": "味之素",
+            "publish_title": "味精公司卡住AI芯片？",
+            "publish_desc": "发布简介",
+            "publish_tags": "AI芯片,ABF",
+        }
+        app.get_selected_deep_target = lambda: (series, episode)
+        opened = {}
+        app.show_text_dialog = lambda title, content, path: opened.update({"title": title, "content": content, "path": path})
+
+        app.show_deep_publish()
+
+        self.assertEqual(opened["title"], "发布标题和介绍")
+        self.assertIn("味精公司卡住AI芯片", opened["content"])
+        self.assertEqual(opened["path"], "")
 
     def test_resolve_biliup_command_finds_bbup_app_binary(self):
         app = object.__new__(ui.NewsBriefApp)
