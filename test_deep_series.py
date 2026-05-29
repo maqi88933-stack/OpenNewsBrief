@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import shutil
 import sys
@@ -674,8 +675,56 @@ class TestDeepSeries(unittest.TestCase):
         with Image.open(image_path) as image:
             self.assertEqual(image.size, (1920, 1080))
             self.assertEqual(image.getpixel((20, 20)), (245, 245, 247))
-            self.assertEqual(image.getpixel((140, 150)), (0, 122, 255))
-            self.assertEqual(image.getpixel((300, 300)), (255, 255, 255))
+            self.assertNotEqual(image.getpixel((960, 540)), (0, 0, 0))
+
+    def test_create_text_card_redesign_removes_old_bars_and_progress(self):
+        image_path = os.path.join(self.tmpdir, "redesigned_slide.png")
+        deep_series.create_text_card(
+            "味之素：味精公司为什么成了高端芯片底座",
+            "深度观点 · AI时代的隐形地基 · 女主持",
+            "一家卖味精的公司，怎么成了AI芯片封装里那层绝缘膜的关键？",
+            image_path,
+            accent="#C79AA8",
+            slide_index=1,
+            slide_total=58,
+        )
+
+        from PIL import Image
+
+        image = Image.open(image_path).convert("RGB")
+        # 旧版左侧有竖向色带、右侧竖面板和底部进度条；新版页面不允许这些结构继续出现。
+        self.assertNotEqual(image.getpixel((142, 500)), (199, 154, 168))
+        self.assertNotEqual(image.getpixel((190, 876)), (199, 154, 168))
+        self.assertNotEqual(image.getpixel((1700, 390)), (199, 154, 168))
+
+    def test_create_text_card_composes_multiple_svg_assets(self):
+        image_path = os.path.join(self.tmpdir, "multi_svg_slide.png")
+        asset_paths = {
+            "hero": os.path.join(self.tmpdir, "hero.svg"),
+            "bridge": os.path.join(self.tmpdir, "bridge.svg"),
+            "background": os.path.join(self.tmpdir, "background.svg"),
+        }
+        visual_design = {
+            "main_elements": ["味精颗粒", "GPU封装基板", "ABF薄膜"],
+            "asset_paths": asset_paths,
+        }
+        scene = {"asset": "bridge", "label": "ABF薄膜"}
+
+        with patch("deep_series.paste_svg_asset", return_value=True) as mock_paste:
+            deep_series.create_text_card(
+                "味之素：味精公司为什么成了高端芯片底座",
+                "深度观点 · AI时代的隐形地基 · 女主持",
+                "ABF薄膜藏在GPU封装基板里。",
+                image_path,
+                visual_design=visual_design,
+                scene=scene,
+            )
+
+        used_paths = [call.args[1] for call in mock_paste.call_args_list]
+        # 视频页要组合多个 SVG 元素，避免每张卡只展示一个孤立主图。
+        self.assertIn(asset_paths["hero"], used_paths)
+        self.assertIn(asset_paths["bridge"], used_paths)
+        self.assertIn(asset_paths["background"], used_paths)
 
     def test_step_video_disables_transition_clicks_for_deep_series(self):
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
@@ -785,6 +834,220 @@ class TestDeepSeries(unittest.TestCase):
         review_prompt = mock_llm.call_args_list[1].args[0]
         self.assertIn("标题党式点击欲", review_prompt)
         self.assertIn("搜索关键词", review_prompt)
+
+    def test_sanitize_svg_removes_scripts_external_links_and_keeps_shapes(self):
+        raw_svg = (
+            '<svg width="100" height="100" onload="bad()">'
+            '<script>alert(1)</script>'
+            '<foreignObject><p>bad</p></foreignObject>'
+            '<image href="https://example.com/a.png" />'
+            '<rect x="10" y="10" width="80" height="30" fill="#007AFF" onclick="bad()" />'
+            '<text x="12" y="70" fill="#1D1D1F">ABF</text>'
+            '</svg>'
+        )
+
+        cleaned = deep_series.sanitize_svg(raw_svg)
+
+        self.assertIn("<svg", cleaned)
+        self.assertIn("<rect", cleaned)
+        self.assertIn(">ABF<", cleaned)
+        self.assertNotIn("script", cleaned.lower())
+        self.assertNotIn("foreignObject", cleaned)
+        self.assertNotIn("https://", cleaned)
+        self.assertNotIn("onclick", cleaned)
+        self.assertNotIn("onload", cleaned)
+
+    def test_build_visual_design_generates_design_json_and_svg_assets(self):
+        series = {"title": "AI时代的隐形地基"}
+        episode = {
+            "title": "味之素：味精公司为什么成了高端芯片底座",
+            "question": "味之素为什么能成为 AI 芯片供应链里的隐形公司？重点探讨 ABF 绝缘材料如何支撑 GPU 封装基板。",
+        }
+        result = {
+            "script_path": os.path.join(self.tmpdir, "script.md"),
+            "research_path": os.path.join(self.tmpdir, "research.md"),
+        }
+        with open(result["script_path"], "w", encoding="utf-8") as f:
+            f.write("女：一家卖味精的公司，怎么成了AI芯片封装里那层绝缘膜的关键？")
+        with open(result["research_path"], "w", encoding="utf-8") as f:
+            f.write("ABF 绝缘薄膜用于高端 FC-BGA 封装基板。")
+
+        design_json = json.dumps(
+            {
+                "cover_title": "味精厂卡进GPU底座",
+                "style": "科技财经、强反差、iOS干净排版",
+                "composition": "center_bridge",
+                "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+                "main_elements": ["味精颗粒", "GPU封装基板", "ABF薄膜"],
+                "svg_prompts": {
+                    "hero": "生成味精颗粒和GPU封装基板对照的简洁SVG",
+                    "bridge": "生成一层发光ABF薄膜SVG",
+                    "background": "生成浅色科技网格SVG",
+                },
+                "scene_cards": [
+                    {"keyword": "ABF", "asset": "bridge", "label": "ABF薄膜"},
+                    {"keyword": "GPU", "asset": "hero", "label": "GPU底座"},
+                ],
+            },
+            ensure_ascii=False,
+        )
+        svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">ABF</text></svg>'
+
+        with patch("deep_series.call_llm", side_effect=[design_json, svg, svg, svg]):
+            design = deep_series.build_visual_design(series, episode, result)
+
+        self.assertEqual(design["cover_title"], "味精厂卡进GPU底座")
+        self.assertEqual(design["composition"], "center_bridge")
+        self.assertIn("ABF薄膜", design["main_elements"])
+        self.assertTrue(os.path.exists(result["visual_design_path"]))
+        self.assertGreaterEqual(len(result["visual_asset_paths"]), 3)
+        for path in result["visual_asset_paths"].values():
+            self.assertTrue(os.path.exists(path))
+
+    def test_create_deep_cover_image_uses_visual_design_assets(self):
+        output_dir = self.tmpdir
+        asset_dir = os.path.join(output_dir, "visual_assets")
+        os.makedirs(asset_dir, exist_ok=True)
+        hero_path = os.path.join(asset_dir, "hero.svg")
+        with open(hero_path, "w", encoding="utf-8") as f:
+            f.write('<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">GPU</text></svg>')
+        assets = {
+            "title": "味精厂卡位AI芯片",
+            "cover_text": "味精厂造芯底",
+            "visual_design": {
+                "cover_title": "味精厂卡进GPU底座",
+                "subtitle": "味之素 · ABF薄膜 · AI芯片封装",
+                "style": "科技财经、强反差、iOS干净排版",
+                "composition": "center_bridge",
+                "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+                "main_elements": ["味精颗粒", "GPU封装基板", "ABF薄膜"],
+                "asset_paths": {"hero": hero_path},
+            },
+        }
+
+        cover_path = deep_series.create_deep_cover_image(
+            {"title": "AI时代的隐形地基"},
+            {"title": "味之素：味精公司为什么成了高端芯片底座"},
+            assets,
+            output_dir,
+        )
+
+        self.assertTrue(os.path.exists(cover_path))
+        self.assertGreater(os.path.getsize(cover_path), 1000)
+
+    def test_create_deep_cover_image_does_not_paste_background_outside_card(self):
+        from PIL import Image
+
+        output_dir = self.tmpdir
+        asset_dir = os.path.join(output_dir, "visual_assets")
+        os.makedirs(asset_dir, exist_ok=True)
+        background_path = os.path.join(asset_dir, "background.svg")
+        with open(background_path, "w", encoding="utf-8") as f:
+            f.write('<svg width="1080" height="1080"><rect x="0" y="0" width="1080" height="1080" fill="#FF9500"/></svg>')
+        assets = {
+            "title": "味精厂卡位AI芯片",
+            "cover_text": "味精厂造芯底",
+            "visual_design": {
+                "cover_title": "味精厂卡进GPU底座",
+                "subtitle": "味之素 · ABF薄膜 · AI芯片封装",
+                "style": "科技财经、强反差、iOS干净排版",
+                "composition": "center_bridge",
+                "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+                "main_elements": ["味精颗粒", "GPU封装基板", "ABF薄膜"],
+                "asset_paths": {"background": background_path},
+            },
+        }
+
+        cover_path = deep_series.create_deep_cover_image(
+            {"title": "AI时代的隐形地基"},
+            {"title": "味之素：味精公司为什么成了高端芯片底座"},
+            assets,
+            output_dir,
+        )
+
+        image = Image.open(cover_path).convert("RGB")
+        self.assertEqual(image.getpixel((8, 8)), (245, 245, 247))
+
+    def test_cover_style_label_removes_template_words(self):
+        # 封面上的风格胶囊不能暴露 iOS/View 这类模板词，只保留能描述内容的频道标签。
+        self.assertEqual(deep_series.cover_style_label("iOS View、科技财经"), "科技财经")
+        self.assertEqual(deep_series.cover_style_label("iOS干净排版、强反差"), "强反差")
+        self.assertEqual(
+            deep_series.cover_style_label("{'visual_tone': '工业科技、冷色理性', 'design_language': '半透明剖面'}"),
+            "工业科技",
+        )
+
+    def test_visual_element_label_cleans_dict_and_truncated_name_placeholders(self):
+        self.assertEqual(deep_series.visual_element_label({"name": "AI 数据中心机柜"}), "AI 数据中心机柜")
+        self.assertEqual(deep_series.visual_element_label("{'name': 'AI 数据中心机柜'"), "AI 数据中心机柜")
+        self.assertEqual(deep_series.visual_element_label("{'label': '冷却桥梁', 'role': 'bridge'}"), "冷却桥梁")
+
+    def test_normalize_visual_design_cleans_structured_element_names(self):
+        design = deep_series.normalize_visual_design(
+            {"title": "AI时代的隐形地基"},
+            {"title": "大金：空调公司为什么站在 AI 基建背后"},
+            {
+                "main_elements": [
+                    {"name": "AI 数据中心机柜"},
+                    "{'name': '冷却桥梁', 'role': 'bridge'}",
+                ],
+                "scene_cards": [
+                    {"keyword": {"name": "机柜"}, "asset": "hero", "label": {"name": "AI 数据中心机柜"}},
+                ],
+            },
+            "",
+        )
+
+        self.assertIn("AI 数据中心机柜", design["main_elements"])
+        self.assertIn("冷却桥梁", design["main_elements"])
+        self.assertEqual(design["scene_cards"][0]["keyword"], "机柜")
+        self.assertEqual(design["scene_cards"][0]["label"], "AI 数据中心机柜")
+
+    def test_render_svg_to_image_can_hide_model_text_labels(self):
+        svg_path = os.path.join(self.tmpdir, "labelled.svg")
+        with open(svg_path, "w", encoding="utf-8") as f:
+            f.write('<svg width="100" height="100"><rect x="0" y="0" width="100" height="100" fill="#FFFFFF"/><text x="0" y="50" fill="#FF0000" font-size="60">TXT</text></svg>')
+
+        image = deep_series.render_svg_to_image(svg_path, (100, 100), include_text=False)
+
+        self.assertIsNotNone(image)
+        colors = image.convert("RGB").getcolors(maxcolors=100000)
+        red_pixels = sum(count for count, color in colors if color[0] > 180 and color[1] < 80 and color[2] < 80)
+        self.assertEqual(red_pixels, 0)
+
+    def test_create_deep_slide_images_reuses_visual_design_for_scene_cards(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：ABF薄膜藏在GPU封装基板里。")
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            f.write('{"segments":[{"role":"female","duration":4.0,"text":"ABF薄膜藏在GPU封装基板里。"}]}')
+        visual_design = {
+            "composition": "center_bridge",
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+            "scene_cards": [{"keyword": "ABF", "asset": "bridge", "label": "ABF薄膜"}],
+            "asset_paths": {"bridge": os.path.join(self.tmpdir, "bridge.svg")},
+        }
+        captured_designs = []
+
+        def fake_create_card(title, subtitle, body, output_path, accent="#007AFF", slide_index=None, slide_total=None, visual_design=None, scene=None):
+            captured_designs.append((visual_design, scene))
+            with open(output_path, "wb") as f:
+                f.write(b"png")
+            return output_path
+
+        with patch("deep_series.create_text_card", side_effect=fake_create_card):
+            image_paths = deep_series.create_deep_slide_images(
+                {"title": "AI时代的隐形地基"},
+                {"title": "味之素：味精公司为什么成了高端芯片底座"},
+                script_path,
+                audio_path,
+                visual_design=visual_design,
+            )
+
+        self.assertEqual(len(image_paths), 1)
+        self.assertIs(captured_designs[0][0], visual_design)
+        self.assertEqual(captured_designs[0][1]["label"], "ABF薄膜")
 
     @patch("deep_series.step_video", return_value="demo.mp4")
     @patch("deep_series.create_deep_slide_images", return_value=["cover.png", "section.png"])
@@ -1013,7 +1276,7 @@ class TestDeepSeries(unittest.TestCase):
 
         captured = []
 
-        def fake_create_text_card(title, subtitle, body, output_path, accent="#007AFF", slide_index=None, slide_total=None):
+        def fake_create_text_card(title, subtitle, body, output_path, accent="#007AFF", slide_index=None, slide_total=None, **_kwargs):
             # 这里只检查传入的主题色，不改画面逻辑。
             captured.append(accent)
             with open(output_path, "wb") as f:
