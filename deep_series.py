@@ -135,6 +135,37 @@ def _llm_retry_delay(exc: Exception, attempt: int) -> float:
     return float(min(10 * attempt, 30))
 
 
+def _llm_stream_chunk_to_text(chunk) -> str:
+    # 流式分块通常是增量 token，不能对每块单独 strip，否则会丢掉空格和换行。
+    content = chunk.content if hasattr(chunk, "content") else chunk
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return "".join(parts)
+    return _llm_content_to_text(content)
+
+
+def _stream_llm_to_text(llm, content: str) -> str:
+    # 底层用流式持续接收，函数出口仍保持完整字符串，避免影响深度系列上层流程。
+    stream = getattr(llm, "stream", None)
+    if not callable(stream):
+        return ""
+    parts = []
+    for chunk in stream(content):
+        text = _llm_stream_chunk_to_text(chunk)
+        if text:
+            parts.append(text)
+    return "".join(parts).strip()
+
+
 def call_llm(prompt: str, text: str = "") -> str:
     from util.llm import LLmFactory
 
@@ -145,6 +176,9 @@ def call_llm(prompt: str, text: str = "") -> str:
     last_error = None
     for attempt in range(1, DEEP_LLM_MAX_RETRIES + 1):
         try:
+            streamed_text = _stream_llm_to_text(llm, content)
+            if streamed_text:
+                return streamed_text
             result = llm.invoke(content)
             return _llm_content_to_text(result.content if hasattr(result, "content") else result)
         except Exception as exc:

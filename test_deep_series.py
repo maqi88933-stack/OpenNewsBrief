@@ -168,22 +168,45 @@ class TestDeepSeries(unittest.TestCase):
         fake_factory = MagicMock()
         fake_factory.return_value.getDeepseek.return_value = fake_llm
 
-        with patch("util.llm.LLmFactory", fake_factory):
+        # call_llm 在函数内部延迟导入 util.llm，这里直接注入模块，避免包属性未挂载导致 mock 失败。
+        with patch.dict(sys.modules, {"util.llm": types.SimpleNamespace(LLmFactory=fake_factory)}):
             result = deep_series.call_llm("提示词", "资料正文")
 
         # Responses API 可能返回内容块列表，深度系列只需要其中可见的文本块。
         self.assertEqual(result, "第一段研究报告。\n第二段研究报告。")
 
-    def test_call_llm_retries_retryable_timeout_error(self):
-        fake_llm = MagicMock()
-        fake_llm.invoke.side_effect = [
-            RuntimeError("Error code: 524 - retryable timeout"),
-            MagicMock(content="重试后成功"),
-        ]
+    def test_call_llm_streams_chunks_then_returns_full_text(self):
+        fake_llm = types.SimpleNamespace(
+            stream=MagicMock(
+                return_value=[
+                    types.SimpleNamespace(content="第一段\n"),
+                    types.SimpleNamespace(content="第二段"),
+                ]
+            ),
+            invoke=MagicMock(),
+        )
         fake_factory = MagicMock()
         fake_factory.return_value.getDeepseek.return_value = fake_llm
 
-        with patch("util.llm.LLmFactory", fake_factory), \
+        # call_llm 在函数内部延迟导入 util.llm，这里直接注入模块，避免包属性未挂载导致 mock 失败。
+        with patch.dict(sys.modules, {"util.llm": types.SimpleNamespace(LLmFactory=fake_factory)}):
+            result = deep_series.call_llm("提示词", "资料正文")
+
+        # 深度系列内部流式接收，但对调用方仍一次性返回完整文本，避免改动上层调用契约。
+        self.assertEqual(result, "第一段\n第二段")
+        fake_llm.stream.assert_called_once()
+        fake_llm.invoke.assert_not_called()
+
+    def test_call_llm_retries_retryable_timeout_error(self):
+        fake_llm = types.SimpleNamespace(invoke=MagicMock(side_effect=[
+            RuntimeError("Error code: 524 - retryable timeout"),
+            MagicMock(content="重试后成功"),
+        ]))
+        fake_factory = MagicMock()
+        fake_factory.return_value.getDeepseek.return_value = fake_llm
+
+        # call_llm 在函数内部延迟导入 util.llm，这里直接注入模块，避免包属性未挂载导致 mock 失败。
+        with patch.dict(sys.modules, {"util.llm": types.SimpleNamespace(LLmFactory=fake_factory)}), \
                 patch("deep_series.time.sleep") as mock_sleep:
             result = deep_series.call_llm("提示词", "资料正文")
 
