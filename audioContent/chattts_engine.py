@@ -14,8 +14,10 @@ CHAT_TTS_SAMPLE_RATE = int(os.environ.get("OPENNEWSBRIEF_CHATTTS_SAMPLE_RATE", "
 CHAT_TTS_COMPILE = os.environ.get("OPENNEWSBRIEF_CHATTTS_COMPILE", "0") == "1"
 CHAT_TTS_SOURCE = os.environ.get("OPENNEWSBRIEF_CHATTTS_SOURCE", "huggingface")
 CHAT_TTS_MODEL_DIR = os.environ.get("OPENNEWSBRIEF_CHATTTS_MODEL_DIR", "")
-CHAT_TTS_SPEED = float(os.environ.get("OPENNEWSBRIEF_CHATTTS_SPEED", "1.15"))
-CHAT_TTS_PROMPT = os.environ.get("OPENNEWSBRIEF_CHATTTS_PROMPT", "[speed_5]")
+# 默认保持 1.0 倍语速，避免 ChatTTS 生成阶段和 mp3 后处理阶段叠加加速。
+CHAT_TTS_SPEED = float(os.environ.get("OPENNEWSBRIEF_CHATTTS_SPEED", "1.0"))
+# ChatTTS 的速度令牌也降到最低档，和上面的 1.0 倍后处理速度保持一致。
+CHAT_TTS_PROMPT = os.environ.get("OPENNEWSBRIEF_CHATTTS_PROMPT", "[speed_1]")
 CHAT_TTS_SPEAKER_CACHE_PATH = os.environ.get(
     "OPENNEWSBRIEF_CHATTTS_SPEAKER_CACHE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "chattts_speakers.json"),

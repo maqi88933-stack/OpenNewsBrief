@@ -16,7 +16,8 @@ import main
 CONFIG_PATH = os.path.join(main.ROOT_DIR, "deep_series_config.json")
 FEMALE_VOICE = "zh-CN-XiaoxiaoNeural"
 MALE_VOICE = "zh-CN-YunxiNeural"
-DEEP_TTS_RATE = os.environ.get("OPENNEWSBRIEF_DEEP_TTS_RATE", "+16%")
+# Edge TTS 备用路径默认不加速，和 ChatTTS 的 1.0 倍默认语速保持一致。
+DEEP_TTS_RATE = os.environ.get("OPENNEWSBRIEF_DEEP_TTS_RATE", "+0%")
 DEEP_TTS_ENGINE = os.environ.get("OPENNEWSBRIEF_TTS_ENGINE", "chattts").lower()
 DEEP_DIALOGUE_PAUSE_SECONDS = 0.18
 # 首句前留一点空白，避免视频切入后马上开口显得突兀。

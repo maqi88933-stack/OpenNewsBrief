@@ -25,7 +25,8 @@ class FakeChat:
         return f"speaker-{self.sample_count}"
 
     def infer(self, texts, params_infer_code=None):
-        self.calls.append((texts, params_infer_code.spk_emb))
+        # 同时记录 prompt，确保默认语速令牌不会和后处理速度脱节。
+        self.calls.append((texts, params_infer_code.spk_emb, params_infer_code.prompt))
         return [[0.0, 0.1, -0.1]]
 
 
@@ -113,6 +114,19 @@ class TestChatTtsEngine(unittest.TestCase):
             chattts_engine.synthesize_text("今天是2025年1月1日", "date.mp3", role="narrator")
 
         self.assertEqual(fake_chat.calls[0][0], ["今天是二零二五年一月一日"])
+
+    def test_default_chattts_speed_controls_are_neutral(self):
+        # 默认语速保持 1.0，避免模型 prompt 和 wav 后处理重复加速。
+        self.assertEqual(chattts_engine.CHAT_TTS_SPEED, 1.0)
+        self.assertEqual(chattts_engine.CHAT_TTS_PROMPT, "[speed_1]")
+
+        fake_chat = FakeChat()
+        chattts_engine._CHAT_MODEL = fake_chat
+
+        with patch.object(chattts_engine, "_write_wav"), patch.object(chattts_engine, "_wav_to_mp3", side_effect=lambda _wav, out: out):
+            chattts_engine.synthesize_text("默认语速测试", "speed.mp3", role="narrator")
+
+        self.assertEqual(fake_chat.calls[0][2], "[speed_1]")
 
 
 if __name__ == "__main__":

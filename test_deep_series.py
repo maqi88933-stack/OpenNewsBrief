@@ -509,6 +509,17 @@ class TestDeepSeries(unittest.TestCase):
         fake_chattts.synthesize_text.assert_called_once_with("旁白：开场。", "narrator.mp3", role="narrator")
         self.assertEqual(FakeCommunicate.calls, [])
 
+    def test_edge_tts_default_rate_is_neutral(self):
+        # Edge 备用路径也保持 1.0 倍语速，避免切换引擎后又恢复加速。
+        fake_edge_tts = types.SimpleNamespace(Communicate=FakeCommunicate)
+        deep_series.DEEP_TTS_ENGINE = "edge"
+
+        with patch.dict(sys.modules, {"edge_tts": fake_edge_tts}):
+            asyncio.run(deep_series._save_tts("默认语速测试", "edge.mp3", deep_series.MALE_VOICE, role="male"))
+
+        self.assertEqual(deep_series.DEEP_TTS_RATE, "+0%")
+        self.assertEqual(FakeCommunicate.calls[0].rate, "+0%")
+
     def test_convert_dialogue_to_audio_adds_pause_between_speakers(self):
         script_path = os.path.join(self.tmpdir, "script.md")
         output_path = os.path.join(self.tmpdir, "dialogue.mp3")
