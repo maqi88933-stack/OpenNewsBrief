@@ -1198,22 +1198,123 @@ def _strip_svg_namespace(tag: str) -> str:
     return tag.rsplit("}", 1)[-1] if "}" in tag else tag
 
 
-def _fallback_svg(label: str, palette: List[str] = None) -> str:
-    # 大模型生成失败时，用几何图形兜底，保证封面和视频卡片仍有可合成元素。
+def _clean_svg_text_label(text: str, fallback: str = "", max_len: int = 14) -> str:
+    # SVG 文本只能放短标签，先去掉 XML 敏感字符，避免兜底图再次被解析失败。
+    clean = re.sub(r"[<>&]", "", str(text or "").strip())
+    clean = re.sub(r"\s+", " ", clean).strip(" ：:，,。；;、")
+    return clean[:max_len] or fallback
+
+
+def _extract_prompt_labels(prompt: str, limit: int = 3) -> List[str]:
+    # 从资产 prompt 里提取中文短语，给未知资产名兜底，避免直接展示英文 key。
+    labels = []
+    for part in re.split(r"[：:，,。；;、\n]+", str(prompt or "")):
+        clean = _clean_svg_text_label(part, "", 10)
+        if clean and re.search(r"[\u4e00-\u9fff]", clean) and clean not in labels:
+            labels.append(clean)
+        if len(labels) >= limit:
+            break
+    return labels
+
+
+def _fallback_svg_labels(name: str, prompt: str = "", design: Dict = None) -> tuple[str, List[str]]:
+    # 常见深度系列资产名先映射成观众能看懂的中文主题，未知资产再从 prompt/main_elements 里补足。
+    key = re.sub(r"[^a-z0-9_]+", "_", str(name or "").lower())
+    presets = {
+        "data_center_cooling": ("数据中心冷却", ["服务器机柜", "冷却回路", "PUE"]),
+        "fluorochemical_materials": ("氟化工材料", ["氟树脂", "制冷剂", "耐腐蚀"]),
+        "semiconductor_process": ("半导体制程", ["高纯管路", "密封件", "良率"]),
+        "risk_competition": ("竞争风险图谱", ["客户议价", "竞品压力", "依赖风险"]),
+        "cost_stack": ("价值分布", ["GPU成本", "整机集成", "运维服务"]),
+        "ai_infrastructure_stack": ("AI基础设施", ["算力", "存储网络", "散热供电"]),
+        "private_ai_datacenter": ("私有AI机房", ["数据安全", "本地部署", "合规"]),
+        "hybrid_cloud_bridge": ("混合AI架构", ["本地机房", "云服务", "数据流"]),
+        "cio_procurement_dashboard": ("企业采购面板", ["预算", "交付", "运维"]),
+        "gpu_vs_system": ("GPU不是系统", ["GPU", "服务器", "存储网络"]),
+        "old_pc_tree": ("PC企业入口", ["客户基础", "渠道", "工程能力"]),
+        "server_rack_glow": ("AI服务器整机", ["机柜", "GPU节点", "交付"]),
+        "storage_data_pipeline": ("数据供给瓶颈", ["数据供给", "GPU等待", "存储瓶颈"]),
+    }
+    if key in presets:
+        return presets[key]
+    prompt_labels = _extract_prompt_labels(prompt, 4)
+    main_elements = []
+    if isinstance(design, dict) and isinstance(design.get("main_elements"), list):
+        main_elements = [_clean_svg_text_label(item, "", 10) for item in design.get("main_elements", [])]
+        main_elements = [item for item in main_elements if item]
+    label = (prompt_labels + main_elements + [_clean_svg_text_label(name, "主题资产", 10)])[0]
+    details = (prompt_labels[1:] + main_elements)[:3]
+    return label, details or ["主题对象", "关键环节", "产业影响"]
+
+
+def _fallback_svg(label: str, palette: List[str] = None, detail_labels: List[str] = None) -> str:
+    # 大模型生成失败时，也生成带主题标签的信息图兜底，不能退化成“视觉元素”通用图。
     colors = _normalize_palette(palette)
-    safe_label = re.sub(r"[<>&]", "", label or "视觉元素")[:12]
+    safe_label = _clean_svg_text_label(label, "主题资产", 14)
+    details = [_clean_svg_text_label(item, "", 10) for item in (detail_labels or [])]
+    details = [item for item in details if item][:3]
+    while len(details) < 3:
+        details.append(["主题对象", "关键环节", "产业影响"][len(details)])
+    variant_source = f"{safe_label}{''.join(details)}"
+    if any(token in variant_source for token in ("服务器", "机柜", "基础设施", "冷却", "散热", "供电")):
+        # 服务器/基础设施场景用分层机柜，表达算力、存储、网络和散热的堆栈感。
+        body = (
+            f'<rect x="88" y="104" width="244" height="110" rx="22" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<rect x="112" y="124" width="196" height="20" rx="8" fill="{colors[2]}"/>'
+            f'<rect x="112" y="154" width="196" height="20" rx="8" fill="{colors[3]}"/>'
+            f'<rect x="112" y="184" width="196" height="20" rx="8" fill="{colors[1]}"/>'
+            f'<circle cx="336" cy="136" r="10" fill="{colors[3]}"/>'
+            f'<circle cx="336" cy="180" r="10" fill="{colors[2]}"/>'
+        )
+    elif any(token in variant_source for token in ("采购", "预算", "运维", "交付", "CIO")):
+        # 采购/运维场景用仪表盘结构，隐藏文字后仍能区别于普通系统图。
+        body = (
+            f'<rect x="44" y="112" width="332" height="94" rx="22" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<circle cx="84" cy="144" r="14" fill="{colors[3]}"/>'
+            f'<rect x="114" y="132" width="112" height="18" rx="9" fill="{colors[2]}"/>'
+            f'<rect x="114" y="164" width="206" height="14" rx="7" fill="#D1D1D6"/>'
+            f'<polyline points="260,170 292,146 326,158 354,130" fill="transparent" stroke="{colors[3]}" stroke-width="6"/>'
+        )
+    elif any(token in variant_source for token in ("数据", "管道", "混合", "云", "安全", "合规")):
+        # 数据/云/合规场景用节点网络，避免和机柜、采购面板同构。
+        body = (
+            f'<circle cx="92" cy="144" r="34" fill="{colors[2]}"/>'
+            f'<circle cx="210" cy="122" r="42" fill="#FFFFFF" stroke="{colors[3]}" stroke-width="6"/>'
+            f'<circle cx="322" cy="166" r="34" fill="{colors[3]}"/>'
+            f'<line x1="126" y1="138" x2="168" y2="128" stroke="{colors[1]}" stroke-width="6"/>'
+            f'<line x1="252" y1="136" x2="288" y2="154" stroke="{colors[1]}" stroke-width="6"/>'
+            f'<polyline points="64,214 150,202 232,216 326,198 364,208" fill="transparent" stroke="{colors[2]}" stroke-width="5"/>'
+        )
+    else:
+        # 其他场景保留桥接结构，表达多个环节被集成为一个可交付系统。
+        body = (
+            f'<rect x="46" y="116" width="96" height="72" rx="18" fill="{colors[2]}"/>'
+            f'<rect x="162" y="116" width="96" height="72" rx="18" fill="{colors[3]}"/>'
+            f'<rect x="278" y="116" width="96" height="72" rx="18" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<line x1="142" y1="152" x2="162" y2="152" stroke="{colors[1]}" stroke-width="6"/>'
+            f'<line x1="258" y1="152" x2="278" y2="152" stroke="{colors[1]}" stroke-width="6"/>'
+            f'<polyline points="64,214 142,202 210,214 286,196 356,210" fill="transparent" stroke="{colors[2]}" stroke-width="5"/>'
+        )
+    detail_labels = [_clean_svg_text_label(item, "", 7) for item in details]
+    detail_chips = "".join(
+        [
+            f'<rect x="{46 + index * 116}" y="214" width="98" height="26" rx="13" fill="#FFFFFF" stroke="#D1D1D6" stroke-width="1"/>'
+            f'<text x="{58 + index * 116}" y="232" fill="{colors[1]}" font-size="13" font-weight="700">{label}</text>'
+            for index, label in enumerate(detail_labels[:3])
+        ]
+    )
     return (
         f'<svg width="420" height="260" viewBox="0 0 420 260" xmlns="http://www.w3.org/2000/svg">'
         f'<rect x="12" y="12" width="396" height="236" rx="32" fill="{colors[0]}"/>'
-        f'<circle cx="122" cy="128" r="58" fill="{colors[2]}"/>'
-        f'<rect x="188" y="82" width="150" height="92" rx="20" fill="{colors[3]}"/>'
-        f'<line x1="168" y1="128" x2="188" y2="128" stroke="{colors[1]}" stroke-width="8"/>'
-        f'<text x="40" y="224" fill="{colors[1]}" font-size="28" font-weight="700">{safe_label}</text>'
+        f'<rect x="34" y="34" width="352" height="54" rx="20" fill="{colors[1]}"/>'
+        f'<text x="56" y="68" fill="#FFFFFF" font-size="24" font-weight="700">{safe_label}</text>'
+        f'{body}'
+        f'{detail_chips}'
         f'</svg>'
     )
 
 
-def sanitize_svg(svg_text: str) -> str:
+def sanitize_svg(svg_text: str, fallback_label: str = "主题资产", palette: List[str] = None, fallback_details: List[str] = None) -> str:
     # SVG 来自大模型，必须只保留基础图形，禁止脚本、外链、事件属性和 foreignObject。
     raw = (svg_text or "").strip()
     match = re.search(r"<svg[\s\S]*?</svg>", raw, flags=re.I)
@@ -1230,7 +1331,7 @@ def sanitize_svg(svg_text: str) -> str:
     try:
         root = ET.fromstring(raw)
     except ET.ParseError:
-        return _fallback_svg("视觉元素")
+        return _fallback_svg(fallback_label, palette, fallback_details)
 
     def clean_node(node):
         tag = _strip_svg_namespace(node.tag)
@@ -1260,7 +1361,7 @@ def sanitize_svg(svg_text: str) -> str:
 
     cleaned = clean_node(root)
     if cleaned is None:
-        return _fallback_svg("视觉元素")
+        return _fallback_svg(fallback_label, palette, fallback_details)
     return ET.tostring(cleaned, encoding="unicode", short_empty_elements=True)
 
 
@@ -1296,6 +1397,31 @@ def _svg_color(value: str, default: str = "#1D1D1F") -> str:
     return default
 
 
+def _svg_opacity(value: str, default: float = 1.0) -> float:
+    # SVG 兜底渲染也要尊重 opacity，背景纹理常靠低透明度保持不抢正文。
+    try:
+        opacity = float(value)
+    except (TypeError, ValueError):
+        opacity = default
+    return max(0.0, min(1.0, opacity))
+
+
+def _svg_rgba(value: str, opacity: float = 1.0, default: str = "#1D1D1F"):
+    color = _svg_color(value, default)
+    if color == "transparent":
+        return None
+    return tuple(int(color[index:index + 2], 16) for index in (1, 3, 5)) + (int(255 * opacity),)
+
+
+def _remove_svg_text_nodes(node) -> None:
+    # 背景和舞台 SVG 作为纹理使用时隐藏模型内文字，但保留其它图形和透明度。
+    for child in list(node):
+        if _strip_svg_namespace(child.tag) == "text":
+            node.remove(child)
+            continue
+        _remove_svg_text_nodes(child)
+
+
 def render_svg_to_image(svg_path: str, size: tuple[int, int], include_text: bool = True) -> Optional[object]:
     # 优先使用 cairosvg；没有依赖时解析基础 SVG 图形，保证本地环境也能出图。
     if not svg_path or not os.path.exists(svg_path):
@@ -1307,6 +1433,13 @@ def render_svg_to_image(svg_path: str, size: tuple[int, int], include_text: bool
 
         if include_text:
             png_bytes = cairosvg.svg2png(url=svg_path, output_width=size[0], output_height=size[1])
+        else:
+            with open(svg_path, "r", encoding="utf-8") as f:
+                root = ET.fromstring(sanitize_svg(f.read()))
+            _remove_svg_text_nodes(root)
+            svg_bytes = ET.tostring(root, encoding="utf-8", short_empty_elements=True)
+            png_bytes = cairosvg.svg2png(bytestring=svg_bytes, output_width=size[0], output_height=size[1])
+        if png_bytes:
             return Image.open(BytesIO(png_bytes)).convert("RGBA")
     except Exception:
         pass
@@ -1322,47 +1455,57 @@ def render_svg_to_image(svg_path: str, size: tuple[int, int], include_text: bool
         sx = size[0] / max(source_w, 1)
         sy = size[1] / max(source_h, 1)
         image = Image.new("RGBA", size, (255, 255, 255, 0))
-        draw = ImageDraw.Draw(image)
 
         def xy(x, y):
             return x * sx, y * sy
 
-        def draw_node(node):
+        def draw_on_overlay(callback):
+            overlay = Image.new("RGBA", size, (255, 255, 255, 0))
+            overlay_draw = ImageDraw.Draw(overlay)
+            callback(overlay_draw)
+            image.alpha_composite(overlay)
+
+        def draw_node(node, inherited_opacity: float = 1.0):
             tag = _strip_svg_namespace(node.tag)
+            node_opacity = inherited_opacity * _svg_opacity(node.get("opacity"), 1.0)
+            if node_opacity <= 0:
+                return
             fill = _svg_color(node.get("fill"), "#1D1D1F")
             stroke = _svg_color(node.get("stroke"), fill)
             stroke_width = max(1, int(_svg_float(node.get("stroke-width"), 2) * max(sx, sy)))
-            fill_value = None if fill == "transparent" else fill
+            fill_value = _svg_rgba(fill, node_opacity)
+            stroke_value = _svg_rgba(stroke, node_opacity)
             if tag == "rect":
                 x, y = xy(_svg_float(node.get("x")), _svg_float(node.get("y")))
                 w, h = _svg_float(node.get("width")) * sx, _svg_float(node.get("height")) * sy
                 radius = int(_svg_float(node.get("rx"), 0) * sx)
-                draw.rounded_rectangle((x, y, x + w, y + h), radius=radius, fill=fill_value, outline=stroke, width=stroke_width)
+                draw_on_overlay(lambda d: d.rounded_rectangle((x, y, x + w, y + h), radius=radius, fill=fill_value, outline=stroke_value, width=stroke_width))
             elif tag == "circle":
                 cx, cy = xy(_svg_float(node.get("cx")), _svg_float(node.get("cy")))
                 r = _svg_float(node.get("r")) * min(sx, sy)
-                draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=fill_value, outline=stroke, width=stroke_width)
+                draw_on_overlay(lambda d: d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=fill_value, outline=stroke_value, width=stroke_width))
             elif tag == "ellipse":
                 cx, cy = xy(_svg_float(node.get("cx")), _svg_float(node.get("cy")))
                 rx, ry = _svg_float(node.get("rx")) * sx, _svg_float(node.get("ry")) * sy
-                draw.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=fill_value, outline=stroke, width=stroke_width)
+                draw_on_overlay(lambda d: d.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=fill_value, outline=stroke_value, width=stroke_width))
             elif tag == "line":
-                draw.line((xy(_svg_float(node.get("x1")), _svg_float(node.get("y1"))), xy(_svg_float(node.get("x2")), _svg_float(node.get("y2")))), fill=stroke, width=stroke_width)
+                draw_on_overlay(lambda d: d.line((xy(_svg_float(node.get("x1")), _svg_float(node.get("y1"))), xy(_svg_float(node.get("x2")), _svg_float(node.get("y2")))), fill=stroke_value, width=stroke_width))
             elif tag in ("polyline", "polygon"):
                 pairs = re.findall(r"(-?\d+(?:\.\d+)?),?\s*(-?\d+(?:\.\d+)?)", node.get("points", ""))
                 points = [xy(float(x), float(y)) for x, y in pairs]
                 if len(points) >= 2 and tag == "polyline":
-                    draw.line(points, fill=stroke, width=stroke_width)
+                    draw_on_overlay(lambda d: d.line(points, fill=stroke_value, width=stroke_width))
                 elif len(points) >= 3:
-                    draw.polygon(points, fill=fill_value, outline=stroke)
+                    draw_on_overlay(lambda d: d.polygon(points, fill=fill_value, outline=stroke_value))
             elif tag == "text":
                 if not include_text:
                     return
                 x, y = xy(_svg_float(node.get("x")), _svg_float(node.get("y")))
                 font_size = int(max(14, _svg_float(node.get("font-size"), 24) * min(sx, sy)))
-                draw.text((x, y), node.text or "", font=_font(font_size, "700" in str(node.get("font-weight", ""))), fill=fill if fill != "transparent" else "#1D1D1F")
+                text_fill = _svg_rgba(fill, node_opacity, "#1D1D1F") or _svg_rgba("#1D1D1F", node_opacity)
+                draw_on_overlay(lambda d: d.text((x, y), node.text or "", font=_font(font_size, "700" in str(node.get("font-weight", ""))), fill=text_fill))
             for child in list(node):
-                draw_node(child)
+                draw_node(child, node_opacity)
 
         draw_node(root)
         return image
@@ -1537,17 +1680,56 @@ def match_visual_scene(text: str, visual_design: Dict = None) -> Dict:
     if not isinstance(visual_design, dict):
         return {}
     clean = re.sub(r"\s+", "", text or "")
+    clean_lower = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", clean).lower()
+    scene_aliases = {
+        # 常见产业资产名补充自然台词别名，避免必须逐字写出 scene_cards.keyword 才能换图。
+        "old_pc_tree": ["卖电脑", "pc老牌", "老牌公司", "pc客户", "客户基础", "企业入口", "企业it能力"],
+        "gpu_vs_system": ["不只是买gpu", "不只买gpu", "不是买gpu", "单买gpu", "gpu不是系统", "gpu不是完整系统", "不是一块显卡", "不是几块显卡", "gpu本身", "gpu都不造", "核心部件", "完整系统"],
+        "ai_infrastructure_stack": ["ai基础设施", "基础设施", "算力存储网络", "cpu内存", "高速网络", "存储机柜", "电力散热", "网络和服务", "工程系统", "可用系统", "散热", "供电", "液冷"],
+        "server_rack_glow": ["poweredge", "ai服务器", "服务器整机", "服务器机柜", "单台服务器", "gpu节点"],
+        "cio_procurement_dashboard": ["企业采购", "cio", "可采购", "采购方案", "能买的方案", "企业能买", "进机房", "过流程", "稳定跑", "部署服务", "售后支持", "预算", "交付", "运维"],
+        "private_ai_datacenter": ["私有ai", "本地数据中心", "数据安全", "本地部署", "合规", "金融", "医疗", "制造", "政府", "自建"],
+        "hybrid_cloud_bridge": ["混合ai", "混合云", "本地加云", "本地数据中心和云", "公有云"],
+        "storage_data_pipeline": ["存储瓶颈", "数据供不上", "gpu等待", "gpu等", "数据管道", "存储网络"],
+    }
     for scene in visual_design.get("scene_cards", []) or []:
         if not isinstance(scene, dict):
             continue
         keyword = re.sub(r"\s+", "", str(scene.get("keyword") or ""))
         if keyword and keyword in clean:
             cleaned_scene = dict(scene)
-            cleaned_scene["label"] = visual_element_label(cleaned_scene.get("label") or keyword, keyword)
+            cleaned_scene["label"] = visual_display_label(cleaned_scene.get("label") or keyword, keyword)
             return cleaned_scene
+    best_scene = {}
+    best_score = 0
+    for scene in visual_design.get("scene_cards", []) or []:
+        if not isinstance(scene, dict):
+            continue
+        asset_name = str(scene.get("asset") or "").strip()
+        tokens = [
+            scene.get("keyword", ""),
+            scene.get("label", ""),
+            *scene_aliases.get(asset_name, []),
+        ]
+        fallback_label, fallback_details = _fallback_svg_labels(asset_name, "", visual_design)
+        tokens.extend([fallback_label, *fallback_details])
+        score = 0
+        for token in tokens:
+            token_clean = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(token or "")).lower()
+            if len(token_clean) < 2 or token_clean in ("ai", "pc"):
+                continue
+            if token_clean in clean_lower:
+                score += min(max(len(token_clean), 2), 12)
+        if score > best_score:
+            best_score = score
+            best_scene = dict(scene)
+    if best_scene and best_score >= 3:
+        keyword = re.sub(r"\s+", "", str(best_scene.get("keyword") or ""))
+        best_scene["label"] = visual_display_label(best_scene.get("label") or keyword, keyword)
+        return best_scene
     elements = visual_design.get("main_elements", []) if isinstance(visual_design.get("main_elements"), list) else []
     if elements:
-        element = visual_element_label(elements[0], "本期主视觉")
+        element = visual_display_label(elements[0], "本期主视觉")
         return {"keyword": element, "asset": "hero", "label": element[:24]}
     return {"keyword": "主题", "asset": "hero", "label": "本期主视觉"}
 
@@ -1571,6 +1753,29 @@ def visual_element_label(item, fallback: str = "") -> str:
     text = re.sub(r"[}\]]+$", "", text)
     text = re.sub(r"^['\"]?(name|label|title|keyword|text)['\"]?\s*:\s*['\"]?", "", text, flags=re.I)
     text = text.split("',")[0].split('",')[0].strip(" '\"")
+    return text[:24] or fallback
+
+
+def visual_display_label(item, fallback: str = "") -> str:
+    # 面向观众的标签必须是产业词，不展示“左侧/右侧/老树/根系”这类模型构图提示和隐喻。
+    raw = visual_element_label(item, fallback).strip()
+    if not raw:
+        return fallback
+    text = raw
+    for word in ("画面左侧", "画面右侧", "左侧", "右侧", "中央", "中间", "左边", "右边", "上方", "下方", "前景", "背景"):
+        text = text.replace(word, "")
+    text = text.strip(" ：:·-—,，、")
+    compact = re.sub(r"\s+", "", text)
+    if "PC" in compact and "企业入口" in compact:
+        return "PC企业入口"
+    if "PC" in compact and ("老树" in compact or "根" in compact):
+        return "PC客户基础"
+    if "工程桥" in compact:
+        return "整机集成交付"
+    if "AI" in compact and "数据中心" in compact and compact in ("AI数据中心", "AI数据中心群"):
+        return "AI数据中心"
+    text = text.replace("老树", "老牌公司").replace("根系", "客户基础").replace("工程桥", "工程交付")
+    text = text.strip(" ：:·-—,，、")
     return text[:24] or fallback
 
 
@@ -1637,6 +1842,10 @@ def create_text_card(
     width = 1920
     height = 1080
     image = Image.new("RGB", (width, height), "#F5F5F7")
+    asset_paths = visual_design.get("asset_paths", {}) if isinstance(visual_design, dict) and isinstance(visual_design.get("asset_paths"), dict) else {}
+    # 每期专属 background.svg 先铺满整张视频卡，后续 iOS 内容层再叠上去，形成统一的大背景。
+    if asset_paths.get("background"):
+        paste_svg_asset(image, asset_paths.get("background", ""), (0, 0, width, height))
     draw = ImageDraw.Draw(image)
 
     # 新版视频页改成“视觉舞台 + 正文信息区 + 产业线索”，移除旧版竖条、右侧竖面板和底部进度条。
@@ -1665,7 +1874,6 @@ def create_text_card(
     draw.rounded_rectangle((188, 280, 748, 754), radius=30, fill="#F7F7FA", outline="#E5E5EA", width=2)
     draw.line((246, 754, 246, 808, 692, 808, 692, 754), fill="#D1D1D6", width=4)
     if visual_design and scene:
-        asset_paths = visual_design.get("asset_paths", {}) if isinstance(visual_design, dict) else {}
         scene_asset_path = asset_paths.get(scene.get("asset", ""))
         # 同一张视频页组合背景、主视觉和命中元素，避免只有一个孤立 SVG 显得单薄。
         if asset_paths.get("background"):
@@ -1689,7 +1897,14 @@ def create_text_card(
         draw.rounded_rectangle((430, 500, 660, 640), radius=34, fill="#1D1D1F")
         draw.line((490, 520, 430, 500), fill="#8E8E93", width=10)
     elements = visual_design.get("main_elements", []) if isinstance(visual_design, dict) and isinstance(visual_design.get("main_elements"), list) else []
-    clue_words = [visual_element_label(item)[:10] for item in elements[:3] if visual_element_label(item)]
+    # 产业线索只取清洗后的业务标签，避免把模型的构图方位词直接画到视频里。
+    clue_words = []
+    for item in elements:
+        word = visual_display_label(item)[:10]
+        if word and word not in clue_words:
+            clue_words.append(word)
+        if len(clue_words) >= 3:
+            break
     while len(clue_words) < 3:
         clue_words.append(["材料", "基板", "算力"][len(clue_words)])
     node_x = [210, 412, 612]
@@ -2020,7 +2235,14 @@ def generate_video_from_script(series: Dict, episode: Dict, result: Dict) -> Dic
     if not visual_design:
         visual_design = build_visual_design(series, episode, result, use_llm=True)
     else:
+        # 复用旧视觉设计时也补齐场景 SVG，避免老产物继续缺资产并回退到同一张 hero。
+        visual_design = ensure_scene_card_svg_assets(visual_design, output_dir, use_llm=False)
         result["visual_design"] = visual_design
+        result["visual_asset_paths"] = visual_design.get("asset_paths", {})
+        visual_design_path = result.get("visual_design_path") or os.path.join(output_dir, "visual_design.json")
+        with open(visual_design_path, "w", encoding="utf-8") as f:
+            json.dump(visual_design, f, ensure_ascii=False, indent=2)
+        result["visual_design_path"] = visual_design_path
     print("[深度视频] 开始生成画面卡片", flush=True)
     image_paths = create_deep_slide_images(series, episode, script_path, audio_path, visual_design=visual_design)
     print("[深度视频] 开始合成视频", flush=True)
@@ -2150,9 +2372,9 @@ def normalize_visual_design(series: Dict, episode: Dict, design: Dict, context_t
     if not isinstance(normalized.get("main_elements"), list):
         normalized["main_elements"] = fallback["main_elements"]
     normalized["main_elements"] = [
-        visual_element_label(item)[:20]
+        visual_display_label(item)[:20]
         for item in normalized["main_elements"][:6]
-        if visual_element_label(item)
+        if visual_display_label(item)
     ] or fallback["main_elements"]
     if not isinstance(normalized.get("svg_prompts"), dict):
         normalized["svg_prompts"] = fallback["svg_prompts"]
@@ -2170,7 +2392,7 @@ def normalize_visual_design(series: Dict, episode: Dict, design: Dict, context_t
         scene_cards.append({
             "keyword": keyword[:20],
             "asset": str(item.get("asset") or "hero")[:30],
-            "label": visual_element_label(item.get("label") or keyword)[:24],
+            "label": visual_display_label(item.get("label") or keyword)[:24],
         })
     normalized["scene_cards"] = scene_cards or fallback["scene_cards"]
     return normalized
@@ -2180,6 +2402,7 @@ def generate_visual_svg_asset(name: str, prompt: str, design: Dict, output_dir: 
     # 每个视觉元素单独生成 SVG，封面和视频卡片都复用同一份资产。
     os.makedirs(output_dir, exist_ok=True)
     path = os.path.join(output_dir, f"{safe_filename(name)}.svg")
+    fallback_label, fallback_details = _fallback_svg_labels(name, prompt, design)
     svg_text = ""
     if use_llm:
         llm_prompt = (
@@ -2194,10 +2417,50 @@ def generate_visual_svg_asset(name: str, prompt: str, design: Dict, output_dir: 
             svg_text = call_llm(llm_prompt)
         except Exception:
             svg_text = ""
-    cleaned = sanitize_svg(svg_text or _fallback_svg(name, design.get("palette")))
+    cleaned = sanitize_svg(
+        svg_text or _fallback_svg(fallback_label, design.get("palette"), fallback_details),
+        fallback_label=fallback_label,
+        palette=design.get("palette"),
+        fallback_details=fallback_details,
+    )
     with open(path, "w", encoding="utf-8") as f:
         f.write(cleaned)
     return path
+
+
+def ensure_scene_card_svg_assets(design: Dict, output_dir: str, use_llm: bool = True) -> Dict:
+    # 场景卡片必须有真实 SVG 文件，否则视频页会反复回退 hero，看起来像图片没有变化。
+    if not isinstance(design, dict):
+        return {}
+    asset_dir = os.path.join(output_dir, "visual_assets")
+    asset_paths = dict(design.get("asset_paths") if isinstance(design.get("asset_paths"), dict) else {})
+    svg_prompts = design.get("svg_prompts") if isinstance(design.get("svg_prompts"), dict) else {}
+    svg_prompts.setdefault("background", "生成适合作为整张深度视频卡片背景的主题 SVG，使用低对比科技纹理、网格和产业节点，不能喧宾夺主。")
+    background_path = str(asset_paths.get("background") or "").strip()
+    background_check_path = background_path if os.path.isabs(background_path) else os.path.join(os.getcwd(), background_path)
+    if not background_path or not os.path.exists(background_check_path):
+        # 所有深度主题都必须有 background.svg，视频卡片会把它铺满整张 1920x1080 画布。
+        asset_paths["background"] = generate_visual_svg_asset("background", str(svg_prompts["background"]), design, asset_dir, use_llm=use_llm)
+    for scene in (design.get("scene_cards") or [])[:8]:
+        if not isinstance(scene, dict):
+            continue
+        asset_name = str(scene.get("asset") or "").strip()
+        if not asset_name:
+            continue
+        current_path = asset_paths.get(asset_name, "")
+        check_path = current_path if os.path.isabs(current_path) else os.path.join(os.getcwd(), current_path)
+        if current_path and os.path.exists(check_path):
+            continue
+        label = visual_display_label(scene.get("label") or scene.get("keyword") or asset_name, asset_name)
+        keyword = visual_element_label(scene.get("keyword") or label, label)
+        # 缺少专属 prompt 时，用场景标签补一个明确任务，让兜底 SVG 也贴合产业线索。
+        prompt = str(svg_prompts.get(asset_name) or f"生成{label}的短视频场景 SVG，突出关键词：{keyword}。")
+        asset_paths[asset_name] = generate_visual_svg_asset(asset_name, prompt, design, asset_dir, use_llm=use_llm)
+        if asset_name not in svg_prompts:
+            svg_prompts[asset_name] = prompt
+    design["asset_paths"] = asset_paths
+    design["svg_prompts"] = svg_prompts
+    return design
 
 
 def build_visual_design(series: Dict, episode: Dict, result: Dict, use_llm: bool = True) -> Dict:
@@ -2214,6 +2477,7 @@ def build_visual_design(series: Dict, episode: Dict, result: Dict, use_llm: bool
             "JSON 字段：cover_title、subtitle、style、composition、palette、main_elements、svg_prompts、scene_cards。\n"
             "composition 可用 center_bridge、single_subject、system_diagram、network_map、timeline、contrast_split，但要按内容选择。\n"
             "svg_prompts 至少包含 hero、bridge、background；scene_cards 每项包含 keyword、asset、label，用于视频卡片匹配。\n"
+            "main_elements 和 scene_cards.label 必须是观众能直接理解的产业环节短词，不要写左侧、右侧、中央、老树、根系、桥这类构图或隐喻词。\n"
             f"系列：{series.get('title', '')}\n主题：{episode.get('title', '')}\n问题：{_episode_question(episode)}\n"
         )
         try:
@@ -2226,6 +2490,8 @@ def build_visual_design(series: Dict, episode: Dict, result: Dict, use_llm: bool
     for name, asset_prompt in list(design.get("svg_prompts", {}).items())[:6]:
         asset_paths[name] = generate_visual_svg_asset(name, str(asset_prompt), design, asset_dir, use_llm=use_llm)
     design["asset_paths"] = asset_paths
+    design = ensure_scene_card_svg_assets(design, output_dir, use_llm=use_llm)
+    asset_paths = design["asset_paths"]
 
     design_path = os.path.join(output_dir, "visual_design.json")
     with open(design_path, "w", encoding="utf-8") as f:
@@ -2506,14 +2772,15 @@ def create_deep_cover_image(
     if not pasted:
         elements = design.get("main_elements", []) if isinstance(design.get("main_elements"), list) else []
         for index, label in enumerate(elements[:3]):
-            clean_label = visual_element_label(label)
+            clean_label = visual_display_label(label)
             x = 660 + (index % 2) * 145
             y = 250 + index * 120
             draw.rounded_rectangle((x, y, x + 190, y + 76), radius=24, fill=colors[2 if index == 0 else 3])
             draw.text((x + 20, y + 22), clean_label[:8], font=_font(24, True), fill="#FFFFFF")
     paste_svg_asset(image, asset_paths.get("bridge", ""), (650, 470, 930, 650))
     elements = design.get("main_elements", []) if isinstance(design.get("main_elements"), list) else []
-    cover_nodes = [visual_element_label(item)[:8] for item in elements[:3] if visual_element_label(item)]
+    # 封面底部节点和视频内“产业线索”共用清洗规则，避免同一坏标签在封面继续出现。
+    cover_nodes = [visual_display_label(item)[:8] for item in elements[:3] if visual_display_label(item)]
     while len(cover_nodes) < 3:
         cover_nodes.append(["味之素", "ABF薄膜", "GPU封装"][len(cover_nodes)])
     # 底部节点展示“公司到算力底座”的关系，使用离散节点，避免看起来像播放进度条。

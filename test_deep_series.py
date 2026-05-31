@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -737,6 +738,27 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn(asset_paths["bridge"], used_paths)
         self.assertIn(asset_paths["background"], used_paths)
 
+    def test_create_text_card_uses_background_svg_as_full_canvas_background(self):
+        # 深度系列每张视频卡都应该先铺满本期 background.svg，再叠加 iOS 内容层。
+        from PIL import Image
+
+        background_path = os.path.join(self.tmpdir, "background.svg")
+        with open(background_path, "w", encoding="utf-8") as f:
+            f.write('<svg width="1920" height="1080"><rect x="0" y="0" width="1920" height="1080" fill="#FF9500"/></svg>')
+        image_path = os.path.join(self.tmpdir, "card.png")
+
+        deep_series.create_text_card(
+            "标题",
+            "系列 · 女主持",
+            "正文内容",
+            image_path,
+            visual_design={"asset_paths": {"background": background_path}, "main_elements": ["背景测试"]},
+            scene={"asset": "background", "label": "背景测试"},
+        )
+
+        image = Image.open(image_path).convert("RGB")
+        self.assertEqual(image.getpixel((8, 8)), (255, 149, 0))
+
     def test_step_video_disables_transition_clicks_for_deep_series(self):
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
         image_path = os.path.join(self.tmpdir, "slide.png")
@@ -868,6 +890,141 @@ class TestDeepSeries(unittest.TestCase):
         self.assertNotIn("onclick", cleaned)
         self.assertNotIn("onload", cleaned)
 
+    def test_generate_visual_svg_asset_uses_topic_fallback_when_model_svg_is_invalid(self):
+        # SVG 模型输出不可解析时，兜底图也要保留主题语义，不能退化成“视觉元素”通用图。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["AI服务器", "企业采购", "竞争风险"],
+        }
+
+        with patch("deep_series.call_llm", return_value="不是有效 SVG"):
+            path = deep_series.generate_visual_svg_asset(
+                "risk_competition",
+                "市场竞争风险图谱：NVIDIA依赖、大客户议价、竞品压力。",
+                design,
+                self.tmpdir,
+                use_llm=True,
+            )
+
+        with open(path, "r", encoding="utf-8") as f:
+            svg = f.read()
+        self.assertIn("竞争风险图谱", svg)
+        self.assertIn("客户议价", svg)
+        self.assertNotIn("视觉元素", svg)
+
+    def test_generate_visual_svg_asset_uses_chinese_topic_fallback_without_llm(self):
+        # 离线或禁用 LLM 时，英文资产 key 也要生成可读中文主题图，而不是把 data_center_cooling 画到页面上。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["数据中心", "冷却回路", "PUE"],
+        }
+
+        path = deep_series.generate_visual_svg_asset(
+            "data_center_cooling",
+            "AI 数据中心冷却系统：服务器机柜、冷却回路、PUE 仪表。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+
+        with open(path, "r", encoding="utf-8") as f:
+            svg = f.read()
+        self.assertIn("数据中心冷却", svg)
+        self.assertIn("冷却回路", svg)
+        self.assertNotIn("data_center_cooling", svg)
+        self.assertNotIn("视觉元素", svg)
+
+    def test_generate_visual_svg_asset_fallback_varies_non_text_shapes(self):
+        # 视频合成会隐藏 SVG 内文字，所以兜底图的图形结构也必须随场景变化。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["AI服务器", "企业采购", "数据管道"],
+        }
+
+        first_path = deep_series.generate_visual_svg_asset(
+            "gpu_vs_system",
+            "GPU 不是完整系统：服务器、存储、网络一起交付。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+        second_path = deep_series.generate_visual_svg_asset(
+            "cio_procurement_dashboard",
+            "企业采购面板：预算、交付、运维。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+
+        with open(first_path, "r", encoding="utf-8") as f:
+            first_svg = f.read()
+        with open(second_path, "r", encoding="utf-8") as f:
+            second_svg = f.read()
+        first_shapes = re.sub(r"<text[\s\S]*?</text>", "", first_svg)
+        second_shapes = re.sub(r"<text[\s\S]*?</text>", "", second_svg)
+        self.assertNotEqual(first_shapes, second_shapes)
+
+    def test_generate_visual_svg_asset_fallback_keeps_detail_text_contrast(self):
+        # 详情文字不能再用白字压在白色面板上，Dell 场景 SVG 会因此看不清。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["企业采购", "交付", "运维"],
+        }
+
+        path = deep_series.generate_visual_svg_asset(
+            "cio_procurement_dashboard",
+            "企业采购面板：预算、交付、运维。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+
+        with open(path, "r", encoding="utf-8") as f:
+            svg = f.read()
+        self.assertNotIn('y="158" fill="#FFFFFF"', svg)
+        self.assertIn('fill="#1D1D1F"', svg)
+        self.assertIn('预算', svg)
+
+    def test_generate_visual_svg_asset_uses_storage_pipeline_label(self):
+        # Dell 的存储数据管道资产要显示产业词，不能把 prompt 里的“生成……”当成标题。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["存储网络", "数据供给", "GPU等待"],
+        }
+
+        path = deep_series.generate_visual_svg_asset(
+            "storage_data_pipeline",
+            "生成数据供不上，GPU 等待的短视频场景 SVG，突出关键词：存储瓶颈。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+
+        with open(path, "r", encoding="utf-8") as f:
+            svg = f.read()
+        self.assertIn("数据供给瓶颈", svg)
+        self.assertNotIn("生成数据供不上", svg)
+
+    def test_generate_visual_svg_asset_server_rack_prefers_rack_shape(self):
+        # 服务器整机场景即使包含“交付”，也应该优先画机柜堆栈，而不是采购仪表盘。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["AI服务器整机", "机柜", "交付"],
+        }
+
+        path = deep_series.generate_visual_svg_asset(
+            "server_rack_glow",
+            "生成 AI 服务器整机的短视频场景 SVG，突出关键词：PowerEdge 服务器。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+
+        with open(path, "r", encoding="utf-8") as f:
+            svg = f.read()
+        self.assertIn('x="88" y="104"', svg)
+        self.assertNotIn('x="44" y="112"', svg)
+
     def test_build_visual_design_generates_design_json_and_svg_assets(self):
         series = {"title": "AI时代的隐形地基"}
         episode = {
@@ -914,6 +1071,93 @@ class TestDeepSeries(unittest.TestCase):
         self.assertGreaterEqual(len(result["visual_asset_paths"]), 3)
         for path in result["visual_asset_paths"].values():
             self.assertTrue(os.path.exists(path))
+
+    def test_build_visual_design_generates_missing_scene_card_assets(self):
+        # 场景卡片如果没有自己的 SVG，真实渲染会反复回退 hero，导致 Dell 这类页面看起来没有变化。
+        series = {"title": "AI时代老树开新花"}
+        episode = {
+            "title": "Dell：卖电脑的公司为什么吃到 AI 服务器红利",
+            "question": "Dell 为什么能从 PC 客户基础切到 AI 服务器整机交付？",
+        }
+        result = {
+            "script_path": os.path.join(self.tmpdir, "script.md"),
+            "research_path": os.path.join(self.tmpdir, "research.md"),
+        }
+        with open(result["script_path"], "w", encoding="utf-8") as f:
+            f.write("女：企业买 AI 基础设施，不是只买 GPU，而是买整套能交付的系统。")
+        with open(result["research_path"], "w", encoding="utf-8") as f:
+            f.write("Dell 的 AI 服务器业务覆盖整机、存储、网络、散热和运维。")
+
+        design_json = json.dumps(
+            {
+                "cover_title": "Dell吃到AI服务器红利",
+                "svg_prompts": {
+                    "hero": "生成 Dell AI 服务器主视觉",
+                    "bridge": "生成整机交付桥接图",
+                    "background": "生成数据中心背景",
+                },
+                "scene_cards": [
+                    {"keyword": "AI 基础设施", "asset": "ai_infrastructure_stack", "label": "AI 基础设施"},
+                ],
+            },
+            ensure_ascii=False,
+        )
+        svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">AI</text></svg>'
+
+        with patch("deep_series.call_llm", side_effect=[design_json, svg, svg, svg, svg]):
+            design = deep_series.build_visual_design(series, episode, result)
+
+        self.assertIn("ai_infrastructure_stack", design["asset_paths"])
+        self.assertTrue(os.path.exists(design["asset_paths"]["ai_infrastructure_stack"]))
+        self.assertEqual(result["visual_asset_paths"]["ai_infrastructure_stack"], design["asset_paths"]["ai_infrastructure_stack"])
+
+    def test_build_visual_design_always_generates_background_svg(self):
+        # 即使模型返回很多其它 SVG prompt，也必须为深度视频生成整页背景 background.svg。
+        series = {"title": "AI时代老树开新花"}
+        episode = {"title": "Dell：卖电脑的公司为什么吃到 AI 服务器红利"}
+        result = {
+            "script_path": os.path.join(self.tmpdir, "script.md"),
+            "research_path": os.path.join(self.tmpdir, "research.md"),
+        }
+        with open(result["script_path"], "w", encoding="utf-8") as f:
+            f.write("女：Dell 的 AI 服务器红利来自企业级基础设施。")
+        with open(result["research_path"], "w", encoding="utf-8") as f:
+            f.write("AI 服务器需要 GPU、存储、网络、供电和散热。")
+        design_json = json.dumps(
+            {
+                "cover_title": "Dell吃到AI服务器红利",
+                "svg_prompts": {
+                    "hero": "主视觉",
+                    "bridge": "桥接图",
+                    "cost_stack": "价值分布",
+                    "risk_competition": "竞争风险",
+                    "gpu_vs_system": "GPU 与系统",
+                    "server_rack_glow": "服务器整机",
+                },
+            },
+            ensure_ascii=False,
+        )
+        svg = '<svg width="420" height="260"><rect x="0" y="0" width="420" height="260" fill="#007AFF"/></svg>'
+
+        with patch("deep_series.call_llm", side_effect=[design_json, svg, svg, svg, svg, svg, svg, svg, svg]):
+            design = deep_series.build_visual_design(series, episode, result)
+
+        self.assertIn("background", design["asset_paths"])
+        self.assertTrue(os.path.exists(design["asset_paths"]["background"]))
+
+    def test_ensure_scene_card_svg_assets_backfills_missing_background_svg(self):
+        # 旧产物复用视觉设计时，也要补齐 background.svg，避免只有新生成主题才有整页背景。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+            "svg_prompts": {"hero": "主视觉"},
+            "asset_paths": {},
+            "scene_cards": [],
+        }
+
+        updated = deep_series.ensure_scene_card_svg_assets(design, self.tmpdir, use_llm=False)
+
+        self.assertIn("background", updated["asset_paths"])
+        self.assertTrue(os.path.exists(updated["asset_paths"]["background"]))
 
     def test_create_deep_cover_image_uses_visual_design_assets(self):
         output_dir = self.tmpdir
@@ -1014,6 +1258,54 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(design["scene_cards"][0]["keyword"], "机柜")
         self.assertEqual(design["scene_cards"][0]["label"], "AI 数据中心机柜")
 
+    def test_normalize_visual_design_turns_layout_metaphors_into_industry_clues(self):
+        # Dell 这类产业线索展示给观众看，不能直接暴露“左侧/右侧/老树/根系”这类构图提示词。
+        design = deep_series.normalize_visual_design(
+            {"title": "AI时代老树开新花"},
+            {"title": "Dell：卖电脑的公司为什么吃到 AI 服务器红利"},
+            {
+                "main_elements": ["左侧老树与 PC 根系", "中央工程桥", "右侧 AI 数据中心"],
+                "scene_cards": [
+                    {"keyword": "PC 老牌公司", "asset": "hero", "label": "老树：PC 与企业入口"},
+                ],
+            },
+            "",
+        )
+
+        self.assertEqual(design["main_elements"][:3], ["PC客户基础", "整机集成交付", "AI数据中心"])
+        self.assertEqual(design["scene_cards"][0]["label"], "PC企业入口")
+
+    def test_match_visual_scene_uses_industry_aliases_when_keyword_is_not_exact(self):
+        # Dell 脚本里的自然表达不一定逐字等于 scene_cards.keyword，匹配要能靠产业别名命中场景。
+        visual_design = {
+            "main_elements": ["PC客户基础", "整机集成交付", "AI数据中心"],
+            "scene_cards": [
+                {"keyword": "PC 老牌公司", "asset": "old_pc_tree", "label": "PC企业入口"},
+                {"keyword": "不是只买 GPU", "asset": "gpu_vs_system", "label": "GPU 不是完整系统"},
+                {"keyword": "存储瓶颈", "asset": "storage_data_pipeline", "label": "数据供不上，GPU 等待"},
+            ],
+        }
+
+        self.assertEqual(
+            deep_series.match_visual_scene("Dell 不就是卖电脑的吗，", visual_design)["asset"],
+            "old_pc_tree",
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("企业要的不是一块显卡，而是一整套系统。", visual_design)["asset"],
+            "gpu_vs_system",
+        )
+        visual_design["scene_cards"].append(
+            {"keyword": "AI 基础设施", "asset": "ai_infrastructure_stack", "label": "算力、存储、网络、散热"}
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("大模型还需要 CPU、内存、高速网络、存储、机柜、电力和散热。", visual_design)["asset"],
+            "ai_infrastructure_stack",
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("数据供不上时，GPU 只能等。", visual_design)["asset"],
+            "storage_data_pipeline",
+        )
+
     def test_render_svg_to_image_can_hide_model_text_labels(self):
         svg_path = os.path.join(self.tmpdir, "labelled.svg")
         with open(svg_path, "w", encoding="utf-8") as f:
@@ -1022,6 +1314,27 @@ class TestDeepSeries(unittest.TestCase):
         image = deep_series.render_svg_to_image(svg_path, (100, 100), include_text=False)
 
         self.assertIsNotNone(image)
+        colors = image.convert("RGB").getcolors(maxcolors=100000)
+        red_pixels = sum(count for count, color in colors if color[0] > 180 and color[1] < 80 and color[2] < 80)
+        self.assertEqual(red_pixels, 0)
+
+    def test_render_svg_to_image_hides_text_but_keeps_opacity(self):
+        # background.svg 常用低透明度纹理；隐藏文字时也必须保留 opacity，否则整张背景会被错误画白。
+        svg_path = os.path.join(self.tmpdir, "opacity_background.svg")
+        with open(svg_path, "w", encoding="utf-8") as f:
+            f.write(
+                '<svg width="100" height="100">'
+                '<rect x="0" y="0" width="100" height="100" fill="#000000"/>'
+                '<rect x="0" y="0" width="100" height="100" fill="#FFFFFF" opacity="0.1"/>'
+                '<text x="0" y="60" fill="#FF0000" font-size="60">TXT</text>'
+                '</svg>'
+            )
+
+        image = deep_series.render_svg_to_image(svg_path, (100, 100), include_text=False)
+
+        self.assertIsNotNone(image)
+        pixel = image.convert("RGB").getpixel((8, 8))
+        self.assertLess(pixel[0], 80)
         colors = image.convert("RGB").getcolors(maxcolors=100000)
         red_pixels = sum(count for count, color in colors if color[0] > 180 and color[1] < 80 and color[2] < 80)
         self.assertEqual(red_pixels, 0)
