@@ -769,6 +769,83 @@
           "question": "为什么 AI 基建最后还是缺工程人才？重点探讨数据中心运维、集群调度、供电冷却、网络排障和安全治理，大模型时代真正稀缺的是跨学科工程能力。"
         }
       ]
+    },
+    {
+      "title": "AI时代，机器人先学会打工",
+      "description": "围绕机器人从实验室走向真实产业的关键变化展开：大模型给机器人装上大脑，传感器和电机决定身体，数据决定学习速度，而商业场景决定谁能活下来。这个系列不讲科幻，而讲机器人最先会在哪些地方落地、谁会被改变、哪些公司和行业会先吃到红利。",
+      "episodes": [
+        {
+          "title": "机器人不是来当管家的，是先来打工的",
+          "question": "为什么机器人革命不会先从家用万能管家开始，而是先从工厂、仓库、巡检和清洁这些能算清 ROI 的岗位开始？重点探讨人形机器人的热度和真实商业落地之间的距离。",
+          "generated": true,
+          "generated_at": "2026-06-01 11:05:03",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\agent_interaction.log",
+          "estimated_seconds": 201.1,
+          "quality_block_reason": "脚本预计 201 秒，超过 180 秒",
+          "fallback_used": true,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\机器人不是来当管家的，是先来打工的_2026-06-01.mp4",
+          "published": true,
+          "published_at": "2026-06-01 11:29:55",
+          "review_blocked": false,
+          "review_ready": true,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\cover_option_3.png"
+          ],
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\background.svg",
+            "humanoid_robot_warehouse_box": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\humanoid_robot_warehouse_box.svg",
+            "factory_robot_arm_production_l": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\factory_robot_arm_production_l.svg",
+            "roi_dashboard_payback_period": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\roi_dashboard_payback_period.svg",
+            "living_room_toys_pet_cables": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\living_room_toys_pet_cables.svg",
+            "robot_vacuum_clean_floor": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\robot_vacuum_clean_floor.svg",
+            "amr_robot_smart_warehouse": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\amr_robot_smart_warehouse.svg",
+            "patrol_robot_industrial_park_n": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\patrol_robot_industrial_park_n.svg",
+            "cleaning_robot_shopping_mall": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人不是来当管家的，是先来打工的\\2026-06-01\\visual_assets\\cleaning_robot_shopping_mall.svg"
+          },
+          "publish_title": "别急着让机器人当管家",
+          "publish_desc": "人形机器人为什么不先进入家庭当万能管家？因为机器人商业化的第一关，不是像不像人，而是能不能在真实岗位里算清 ROI、稳定回本。\n\n从特斯拉 Optimus、Figure、Agility Robotics，到优必选、宇树科技、傅利叶，人形机器人和具身智能正在加速走向工厂、仓库、园区巡检、商业清洁等 B 端场景。相比复杂家庭，工业机器人、机械臂、AGV/AMR、自动化产线、仓储物流、智能制造和供应链自动化，更容易把任务边界、人工替代、维护成本、连续工作时长算明白。\n\n所以机器人革命的第一站，很可能不是客厅，而是工位：搬运、上下料、分拣、夜间巡检、商业清洁。未来几年，看机器人别只看发布会演示，要看它在哪上班、每天干多久、出错谁负责、客户为什么继续付钱。\n\n互动问题：你觉得机器人最先会替代哪类工作：搬运、清洁、巡检，还是家务？\n\n关键词：AI时代、机器人先学会打工、人形机器人、具身智能、大模型、工业机器人、特斯拉 Optimus、Figure、Agility Robotics、优必选、宇树科技、傅利叶、机械臂、AGV、AMR、自动化产线、ROI、智能制造、仓储物流、园区巡检、商业清洁、供应链自动化、机器人商业化",
+          "publish_tags": "机器人,人形机器人,具身智能,人工智能,工业机器人,仓储物流,巡检机器人,清洁机器人,机器人商业化,智能制造,AGV,AMR,机械臂,特斯拉Optimus",
+          "actual_seconds": 246.3
+        },
+        {
+          "title": "机器人的大脑，正在被大模型重写",
+          "question": "大模型为什么会改变机器人？重点探讨过去机器人依赖固定程序和规则，现在开始通过视觉语言模型理解任务、环境和人的自然语言指令。"
+        },
+        {
+          "title": "最难的不是会聊天，是会拿起一个杯子",
+          "question": "为什么让机器人稳定抓取、行走和操作物体，比让 AI 写一段话更难？重点探讨身体智能、力控、平衡、避障和真实世界泛化这些机器人核心难题。"
+        },
+        {
+          "title": "工厂会最先变成机器人的训练场",
+          "question": "为什么制造业最适合机器人先落地？重点探讨汽车厂、电子厂和标准化产线里的可控环境、稳定任务、数据积累和明确投资回报。"
+        },
+        {
+          "title": "仓库、外卖和清洁：机器人最现实的战场",
+          "question": "为什么物流仓储、配送、商用清洁和酒店服务，比家庭机器人更接近商业闭环？重点探讨重复劳动、用工成本、场景边界和规模化部署。"
+        },
+        {
+          "title": "机器人时代最缺的，可能不是机器人公司",
+          "question": "为什么机器人产业真正的机会可能藏在上游？重点探讨电机、减速器、传感器、电池、仿真训练、数据采集和边缘算力这些底层供应链。"
+        },
+        {
+          "title": "当机器人真的便宜下来，谁的工作会先变？",
+          "question": "如果机器人价格持续下降，哪些工作会最先被重构？重点探讨重复体力劳动、危险岗位、标准化服务和人机协作，而不是简单地判断所有工作都会被替代。"
+        }
+      ]
     }
   ]
 }

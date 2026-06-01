@@ -1,0 +1,15 @@
+2026-06-01 11:09:24,528 __init__.py[line:13](Pid:8528 Tname:MainThread) ERROR Uncaught exception:
+Traceback (most recent call last):
+  File "__main__.py", line 42, in <module>
+  File "__main__.py", line 21, in arg_parser
+  File "asyncio\runners.py", line 204, in run
+  File "asyncio\runners.py", line 127, in run
+  File "asyncio\base_events.py", line 719, in run_until_complete
+  File "__main__.py", line 33, in main
+  File "concurrent\futures\thread.py", line 86, in run
+  File "concurrent\futures\thread.py", line 73, in run
+RuntimeError: [1mUnknown Error[22m
+├╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:158:14[23m
+│
+╰─▶ [1mResponseData { code: 21005, data: None, message: "Tag不能为空，总数量不能超过12个， 并且单个不能超过20个字", ttl: Some(1) }[22m
+    ╰╴at [3mD:\a\biliup\biliup\crates\biliup-cli\src\uploader.rs:158:14[23m

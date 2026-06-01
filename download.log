@@ -282,3 +282,36 @@
 2026-05-31 20:49:56  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:529: All files uploaded successfully, checkpoint removed
 2026-05-31 20:49:57  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:365: ResponseData { code: 0, data: Some(Object {"aid": Number(116669263453042), "bvid": String("BV1dFVS6YEgV"), "push_intro": Object {"show": Number(0), "text": String("")}, "submitact_banner": Object {"hotact_text": String(""), "hotact_url": String(""), "list": Null}}), message: "0", ttl: Some(1) }
 2026-05-31 20:49:57  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:367: APP接口投稿成功
+2026-06-01 11:08:56  INFO ThreadId(19) stream_gears::server: crates\stream-gears\src\server.rs:449: Tracing initialized with daily rotation
+2026-06-01 11:08:56  INFO ThreadId(19) biliup::uploader::credential: crates\biliup\src\uploader\credential.rs:211: 更新cookie
+2026-06-01 11:08:56  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:304: user: ai博客每日简报
+2026-06-01 11:08:56  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:339: number of concurrent futures: 3
+2026-06-01 11:08:56  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:363: No checkpoint found, starting fresh upload
+2026-06-01 11:08:57  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=tx&zone=cs: 1172
+2026-06-01 11:08:59  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=akbd&zone=cs: 1856
+2026-06-01 11:09:01  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=bda2&zone=cs: 1803
+2026-06-01 11:09:03  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=bldsa&zone=cs: 1854
+2026-06-01 11:09:05  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=estx&zone=cs: 1746
+2026-06-01 11:09:05  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:402: Line { os: Upos, probe_url: "//upos-cs-upcdntx.bilivideo.com/OK", query: "probe_version=20250923&upcdn=tx&zone=cs", cost: 1172 }
+2026-06-01 11:09:05  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:149: pre_upload: {"build":2140000,"name":"机器人不是来当管家的，是先来打工的_2026-06-01.mp4","profile":"ugcupos/bup","r":"upos","size":110567689,"ssl":0,"version":"2.14.0"}
+2026-06-01 11:09:24  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:506: Upload completed: 机器人不是来当管家的，是先来打工的_2026-06-01.mp4 => cost 19.10s, 5.79 MB/s.
+2026-06-01 11:09:24  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:517: Checkpoint saved: 1 files uploaded
+2026-06-01 11:09:24  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:529: All files uploaded successfully, checkpoint removed
+2026-06-01 11:09:24  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:365: ResponseData { code: 21005, data: None, message: "Tag不能为空，总数量不能超过12个， 并且单个不能超过20个字", ttl: Some(1) }
+2026-06-01 11:29:26  INFO ThreadId(19) stream_gears::server: crates\stream-gears\src\server.rs:449: Tracing initialized with daily rotation
+2026-06-01 11:29:26  INFO ThreadId(19) biliup::uploader::credential: crates\biliup\src\uploader\credential.rs:211: 更新cookie
+2026-06-01 11:29:26  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:304: user: ai博客每日简报
+2026-06-01 11:29:26  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:339: number of concurrent futures: 3
+2026-06-01 11:29:26  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:363: No checkpoint found, starting fresh upload
+2026-06-01 11:29:28  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=bda2&zone=cs: 1103
+2026-06-01 11:29:29  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=akbd&zone=cs: 1806
+2026-06-01 11:29:31  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=tx&zone=cs: 1761
+2026-06-01 11:29:33  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=bldsa&zone=cs: 1852
+2026-06-01 11:29:35  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:99: probe_version=20250923&upcdn=estx&zone=cs: 1772
+2026-06-01 11:29:35  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:402: Line { os: Upos, probe_url: "//upos-cs-upcdnbda2.bilivideo.com/OK", query: "probe_version=20250923&upcdn=bda2&zone=cs", cost: 1103 }
+2026-06-01 11:29:35  INFO ThreadId(19) biliup::uploader::line: crates\biliup\src\uploader\line.rs:149: pre_upload: {"build":2140000,"name":"机器人不是来当管家的，是先来打工的_2026-06-01.mp4","profile":"ugcupos/bup","r":"upos","size":110567689,"ssl":0,"version":"2.14.0"}
+2026-06-01 11:29:54  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:506: Upload completed: 机器人不是来当管家的，是先来打工的_2026-06-01.mp4 => cost 19.19s, 5.76 MB/s.
+2026-06-01 11:29:54  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:517: Checkpoint saved: 1 files uploaded
+2026-06-01 11:29:54  INFO ThreadId(19) biliup_cli::uploader: crates\biliup-cli\src\uploader.rs:529: All files uploaded successfully, checkpoint removed
+2026-06-01 11:29:54  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:365: ResponseData { code: 0, data: Some(Object {"aid": Number(116672719491506), "bvid": String("BV144V96hEu6"), "push_intro": Object {"show": Number(0), "text": String("")}, "submitact_banner": Object {"hotact_text": String(""), "hotact_url": String(""), "list": Null}}), message: "0", ttl: Some(1) }
+2026-06-01 11:29:54  INFO ThreadId(19) biliup::uploader::bilibili: crates\biliup\src\uploader\bilibili.rs:367: APP接口投稿成功

@@ -116,12 +116,17 @@ def _is_retryable_llm_error(exc: Exception) -> bool:
     if status_code in (408, 409, 429, 500, 502, 503, 504, 524):
         return True
 
-    message = str(exc).lower()
+    # 流式读取的异常有时只体现在异常类型里，所以类型名和错误文本一起判断。
+    message = f"{exc.__class__.__name__}: {exc}".lower()
     retry_markers = [
         "timeout",
         "timed out",
         "connection error",
         "apiconnectionerror",
+        "remoteprotocolerror",
+        "protocol error",
+        "peer closed connection",
+        "incomplete chunked read",
         "internalservererror",
         "error code: 524",
         "retryable",

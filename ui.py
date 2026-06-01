@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import re
 import traceback
 import datetime
 import threading
@@ -53,6 +54,46 @@ BILIBILI_DESC = (
 BILIBILI_TAGS = "AI,technology,news"
 DEEP_BILIBILI_TAGS = "AI,technology,deep video"
 BILIBILI_TID = "171"
+BILIBILI_MAX_TAG_COUNT = 12
+BILIBILI_MAX_TAG_LENGTH = 20
+
+
+def normalize_biliup_tags(tags, fallback_tags=BILIBILI_TAGS):
+    # B站投稿接口限制最多 12 个标签、单个最多 20 字；发布前裁剪，避免视频上传完才投稿失败。
+    raw_tags = str(tags or "")
+    pieces = re.split(r"[,，、;；|/\r\n]+", raw_tags)
+    cleaned = []
+    seen = set()
+    for piece in pieces:
+        tag = piece.strip()
+        if not tag:
+            continue
+        tag = tag[:BILIBILI_MAX_TAG_LENGTH]
+        if tag in seen:
+            continue
+        cleaned.append(tag)
+        seen.add(tag)
+        if len(cleaned) >= BILIBILI_MAX_TAG_COUNT:
+            break
+    if cleaned:
+        return ",".join(cleaned)
+    if fallback_tags and fallback_tags != tags:
+        return normalize_biliup_tags(fallback_tags, "")
+    return "AI"
+
+
+def get_biliup_response_code(output_text):
+    # biliup 会先上传文件，再调用投稿接口；只有最终 ResponseData code 为 0 才算真正发布成功。
+    codes = re.findall(r"ResponseData\s*\{\s*code:\s*(-?\d+)", output_text or "")
+    return int(codes[-1]) if codes else None
+
+
+def is_biliup_publish_success(return_code, output_text):
+    # 兼容没有 ResponseData 的旧日志：退出码非 0 一律失败；有接口码时必须等于 0。
+    if return_code != 0:
+        return False
+    response_code = get_biliup_response_code(output_text)
+    return response_code in (None, 0)
 
 
 class NewsBriefApp:
@@ -1269,6 +1310,8 @@ class NewsBriefApp:
             )
             desc = latest_result.get("publish_desc") or desc
             tags = latest_result.get("publish_tags") or DEEP_BILIBILI_TAGS
+        # 深度系列的 AI 标签可能超过 B站限制，命令生成时统一收口到接口允许的范围。
+        tags = normalize_biliup_tags(tags)
         command = [self.biliup_command or "biliup"]
         cookie_path = self.resolve_biliup_cookie_path()
         if cookie_path:
@@ -1310,6 +1353,7 @@ class NewsBriefApp:
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUTF8"] = "1"
+        output_lines = []
         self.append_log(f"开始发布视频：{video_path}\n")
         try:
             process = subprocess.Popen(
@@ -1325,12 +1369,16 @@ class NewsBriefApp:
             )
             if process.stdout is not None:
                 for line in process.stdout:
+                    output_lines.append(line)
                     self.append_log(line)
 
             return_code = process.wait()
-            if return_code == 0:
+            output_text = "".join(output_lines)
+            if is_biliup_publish_success(return_code, output_text):
                 self.append_log("B站发布完成。\n")
                 return True
+            elif return_code == 0:
+                self.append_log("B站发布失败，投稿接口返回异常，请检查上方 B站返回信息。\n")
             else:
                 self.append_log(f"B站发布失败，退出码：{return_code}\n")
         except Exception:

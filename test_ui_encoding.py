@@ -301,6 +301,42 @@ class TestUiEncoding(unittest.TestCase):
         self.assertEqual(command[command.index("--tag") + 1], "AI,搜索,科技")
         self.assertEqual(command[command.index("--desc") + 1], "AI生成的发布简介")
 
+    def test_biliup_command_limits_tags_for_bilibili_rule(self):
+        # 失败日志里的标签超过 B站数量限制，这里固定住命令侧的裁剪结果。
+        app = object.__new__(ui.NewsBriefApp)
+        video_path = os.path.join("D:\\output", "deep.mp4")
+        app.biliup_command = "biliup"
+        app.resolve_biliup_cookie_path = lambda: ""
+        app.latest_result = {
+            "series": "Series",
+            "episode": "Episode",
+            "publish_title": "Title",
+            "publish_desc": "Desc",
+            "publish_tags": "tag01,tag02,tag03,tag04,tag05,tag06,tag07,tag08,tag09,tag10,tag11,tag12,tag13",
+        }
+
+        command = app.build_biliup_upload_command(video_path)
+
+        self.assertEqual(command[command.index("--tag") + 1], "tag01,tag02,tag03,tag04,tag05,tag06,tag07,tag08,tag09,tag10,tag11,tag12")
+
+    def test_publish_video_once_rejects_nonzero_bilibili_response_code(self):
+        # biliup 上传文件成功不代表投稿成功，ResponseData 非 0 时不能更新发布状态。
+        app = object.__new__(ui.NewsBriefApp)
+        app.biliup_command = "biliup"
+        app.latest_result = {}
+        app.resolve_biliup_cookie_path = lambda: ""
+        logs = []
+        app.append_log = logs.append
+
+        output = [
+            'ResponseData { code: 21005, data: None, message: "Tag不能为空，总数量不能超过12个， 并且单个不能超过20个字", ttl: Some(1) }\n'
+        ]
+        with patch("ui.subprocess.Popen", return_value=FakeProcess(output)):
+            published = app.publish_video_once("demo.mp4")
+
+        self.assertFalse(published)
+        self.assertNotIn("Traceback", "".join(logs))
+
     def test_biliup_command_prefixes_deep_series_title(self):
         app = object.__new__(ui.NewsBriefApp)
         video_path = os.path.join("D:\\output", "深度主题.mp4")

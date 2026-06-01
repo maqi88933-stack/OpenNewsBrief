@@ -199,6 +199,27 @@ class TestDeepSeries(unittest.TestCase):
         fake_llm.stream.assert_called_once()
         fake_llm.invoke.assert_not_called()
 
+    def test_call_llm_retries_stream_remote_protocol_error(self):
+        fake_llm = types.SimpleNamespace(
+            stream=MagicMock(side_effect=[
+                RuntimeError("peer closed connection without sending complete message body (incomplete chunked read)"),
+                [types.SimpleNamespace(content="重试后成功")],
+            ]),
+            invoke=MagicMock(),
+        )
+        fake_factory = MagicMock()
+        fake_factory.return_value.getDeepseek.return_value = fake_llm
+
+        # 流式 Responses API 偶发半包中断时，深度系列应重试同一次 LLM 任务，而不是直接让整集生成失败。
+        with patch.dict(sys.modules, {"util.llm": types.SimpleNamespace(LLmFactory=fake_factory)}), \
+                patch("deep_series.time.sleep") as mock_sleep:
+            result = deep_series.call_llm("提示词", "资料正文")
+
+        self.assertEqual(result, "重试后成功")
+        self.assertEqual(fake_llm.stream.call_count, 2)
+        fake_llm.invoke.assert_not_called()
+        mock_sleep.assert_called_once()
+
     def test_call_llm_retries_retryable_timeout_error(self):
         fake_llm = types.SimpleNamespace(invoke=MagicMock(side_effect=[
             RuntimeError("Error code: 524 - retryable timeout"),
