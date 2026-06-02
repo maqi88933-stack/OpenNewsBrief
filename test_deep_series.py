@@ -482,6 +482,56 @@ class TestDeepSeries(unittest.TestCase):
         mock_slides.assert_called_once()
         mock_video.assert_called_once()
 
+    def test_generate_video_from_audio_rebuilds_stale_system_visual_design(self):
+        # 老版本已经落盘的错误视觉设计不能在重生成视频时继续复用，否则当前这期仍会画成味精/HBM/封装。
+        script_path = os.path.join(self.tmpdir, "script.md")
+        research_path = os.path.join(self.tmpdir, "research.md")
+        audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        visual_design_path = os.path.join(self.tmpdir, "visual_design.json")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：AI 基建最怕系统跑不稳，要看运维、调度、供电冷却、网络故障和安全治理。")
+        with open(research_path, "w", encoding="utf-8") as f:
+            f.write("这意味着早期关注 GPU、HBM 和先进封装，但现在更难的是工程团队把复杂系统跑稳。")
+        with open(audio_path, "wb") as f:
+            f.write(b"audio")
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            json.dump({"total_duration": 12.0, "segments": []}, f)
+        with open(visual_design_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "main_elements": ["味精颗粒", "高带宽内存", "GPU芯片", "封装基板"],
+                    "scene_cards": [{"keyword": "味精颗粒", "asset": "hero", "label": "味精颗粒"}],
+                    "asset_paths": {},
+                },
+                f,
+                ensure_ascii=False,
+            )
+        captured_designs = []
+
+        def fake_create_slides(_series, _episode, _script_path, _audio_path, visual_design=None):
+            captured_designs.append(visual_design)
+            return ["slide.png"]
+
+        result = {
+            "script_path": script_path,
+            "research_path": research_path,
+            "audio_path": audio_path,
+            "visual_design_path": visual_design_path,
+        }
+        with patch("deep_series.create_deep_slide_images", side_effect=fake_create_slides), \
+                patch("deep_series.step_video", return_value=os.path.join(self.tmpdir, "demo.mp4")):
+            deep_series.generate_video_from_audio(
+                {"title": "AI时代最缺的不是芯片"},
+                {
+                    "title": "AI 最缺的可能是能把系统跑稳的人",
+                    "question": "为什么 AI 基建最后还是缺工程人才？重点探讨数据中心运维、集群调度、供电冷却、网络故障、安全治理和跨领域工程能力。",
+                },
+                result,
+            )
+
+        self.assertIn("稳定运行", captured_designs[0]["main_elements"])
+        self.assertNotIn("味精颗粒", captured_designs[0]["main_elements"])
+
     def test_generate_tts_from_script_keeps_oversized_audio_for_review(self):
         script_path = os.path.join(self.tmpdir, "script.md")
         with open(script_path, "w", encoding="utf-8") as f:
@@ -802,7 +852,7 @@ class TestDeepSeries(unittest.TestCase):
         self.assertNotEqual(image.getpixel((190, 876)), (199, 154, 168))
         self.assertNotEqual(image.getpixel((1700, 390)), (199, 154, 168))
 
-    def test_create_text_card_composes_multiple_svg_assets(self):
+    def test_create_text_card_uses_background_and_one_foreground_svg(self):
         image_path = os.path.join(self.tmpdir, "multi_svg_slide.png")
         asset_paths = {
             "hero": os.path.join(self.tmpdir, "hero.svg"),
@@ -826,10 +876,12 @@ class TestDeepSeries(unittest.TestCase):
             )
 
         used_paths = [call.args[1] for call in mock_paste.call_args_list]
-        # 视频页要组合多个 SVG 元素，避免每张卡只展示一个孤立主图。
-        self.assertIn(asset_paths["hero"], used_paths)
+        # 视频页只贴命中的前景 SVG，避免多张主图互相遮挡；背景仍按独立纹理铺满。
+        self.assertNotIn(asset_paths["hero"], used_paths)
         self.assertIn(asset_paths["bridge"], used_paths)
         self.assertIn(asset_paths["background"], used_paths)
+        foreground_call = [call for call in mock_paste.call_args_list if call.args[1] == asset_paths["bridge"]][0]
+        self.assertTrue(foreground_call.kwargs["include_text"])
 
     def test_create_text_card_uses_background_svg_as_full_canvas_background(self):
         # 深度系列每张视频卡都应该先铺满本期 background.svg，再叠加 iOS 内容层。
@@ -1117,6 +1169,34 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("数据供给瓶颈", svg)
         self.assertNotIn("生成数据供不上", svg)
 
+    def test_generate_visual_svg_asset_cleans_system_ops_prompt_labels(self):
+        # 系统跑稳主题的 SVG 要画运维状态图，不能把生成任务描述残片直接显示到图里。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["稳定运行", "集群调度", "供电冷却", "网络排障", "安全治理"],
+        }
+
+        path = deep_series.generate_visual_svg_asset(
+            "hero",
+            "生成稳定运行、集群调度、供电冷却的简洁科技SVG，适合短视频封面。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+
+        with open(path, "r", encoding="utf-8") as f:
+            svg = f.read()
+        self.assertIn(">集群调度<", svg)
+        self.assertIn(">供电冷却<", svg)
+        self.assertIn(">网络排障<", svg)
+        self.assertIn('points="88,170 136,146 184,158 232,124 292,142 340,112"', svg)
+        self.assertNotIn('x="34" y="34" width="352" height="54"', svg)
+        self.assertNotIn('y="60"', svg)
+        self.assertNotIn(">稳定运行<", svg)
+        self.assertNotIn("生成稳定运行", svg)
+        self.assertNotIn("供电冷却的简洁", svg)
+        self.assertNotIn("适合短视频封面", svg)
+
     def test_generate_visual_svg_asset_server_rack_prefers_rack_shape(self):
         # 服务器整机场景即使包含“交付”，也应该优先画机柜堆栈，而不是采购仪表盘。
         design = {
@@ -1387,6 +1467,33 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(design["main_elements"][:3], ["PC客户基础", "整机集成交付", "AI数据中心"])
         self.assertEqual(design["scene_cards"][0]["label"], "PC企业入口")
 
+    def test_fallback_visual_design_prioritizes_system_stability_theme(self):
+        # 这期主题是系统跑稳，兜底视觉不能被背景段落里的“这意味着”、HBM、封装误导成味精或芯片供应链。
+        context_text = (
+            "这意味着 AI 基建不是买服务器这么简单。"
+            "早期行业关注 GPU、HBM 和先进封装，但现在更难的是运维、调度、网络、供电冷却和安全治理。"
+        )
+
+        design = deep_series.normalize_visual_design(
+            {"title": "AI时代最缺的不是芯片"},
+            {
+                "title": "AI 最缺的可能是能把系统跑稳的人",
+                "question": "为什么 AI 基建最后还是缺工程人才？重点探讨数据中心运维、集群调度、供电冷却、网络故障、安全治理和跨领域工程能力。",
+            },
+            {},
+            context_text,
+        )
+
+        elements = " ".join(design["main_elements"])
+        self.assertIn("工程团队", elements)
+        self.assertIn("稳定运行", elements)
+        self.assertIn("集群调度", elements)
+        self.assertIn("供电冷却", elements)
+        self.assertIn("网络排障", elements)
+        self.assertNotIn("味精颗粒", elements)
+        self.assertNotIn("高带宽内存", elements)
+        self.assertNotIn("封装基板", elements)
+
     def test_match_visual_scene_uses_industry_aliases_when_keyword_is_not_exact(self):
         # Dell 脚本里的自然表达不一定逐字等于 scene_cards.keyword，匹配要能靠产业别名命中场景。
         visual_design = {
@@ -1484,6 +1591,42 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(len(image_paths), 1)
         self.assertIs(captured_designs[0][0], visual_design)
         self.assertEqual(captured_designs[0][1]["label"], "ABF薄膜")
+
+    def test_create_text_card_shows_one_foreground_svg_with_text(self):
+        # 左侧视觉舞台只贴一张前景 SVG，并保留 SVG 内文字，避免主图被二次贴图遮盖。
+        hero_path = os.path.join(self.tmpdir, "hero.svg")
+        bridge_path = os.path.join(self.tmpdir, "bridge.svg")
+        background_path = os.path.join(self.tmpdir, "background.svg")
+        for path in (hero_path, bridge_path, background_path):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write('<svg width="420" height="260"><rect width="420" height="260" fill="#FFFFFF"/><text x="20" y="40">工程团队</text></svg>')
+        calls = []
+
+        def fake_paste(_image, svg_path, box, include_text=False):
+            calls.append((os.path.basename(svg_path), box, include_text))
+            return True
+
+        with patch("deep_series.paste_svg_asset", side_effect=fake_paste):
+            deep_series.create_text_card(
+                "AI 最缺的可能是能把系统跑稳的人",
+                "深度观点",
+                "锅反而甩到排障的人身上？",
+                os.path.join(self.tmpdir, "slide.png"),
+                visual_design={
+                    "main_elements": ["工程团队", "稳定运行", "集群调度"],
+                    "asset_paths": {
+                        "background": background_path,
+                        "hero": hero_path,
+                        "bridge": bridge_path,
+                    },
+                },
+                scene={"asset": "bridge", "label": "稳定运行"},
+            )
+
+        foreground_calls = [item for item in calls if item[0] in ("hero.svg", "bridge.svg")]
+        self.assertEqual(len(foreground_calls), 1)
+        self.assertEqual(foreground_calls[0][0], "bridge.svg")
+        self.assertTrue(foreground_calls[0][2])
 
     @patch("deep_series.step_video", return_value="demo.mp4")
     @patch("deep_series.create_deep_slide_images", return_value=["cover.png", "section.png"])
