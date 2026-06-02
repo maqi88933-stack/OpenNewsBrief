@@ -45,6 +45,19 @@ class TestUiWorker(unittest.TestCase):
             flush=True,
         )
 
+    @patch("ui_worker.deep_series.generate_episode_tts_by_titles", return_value={"audio_path": "demo.mp3"})
+    @patch("builtins.print")
+    def test_main_cli_dispatches_deep_generate_tts_mode(self, mock_print, mock_generate_tts):
+        # 合成 TTS 是独立阶段，必须能从 UI 子进程单独分发，避免点击“合成TTS”时继续生成 MP4。
+        code = ui_worker.main_cli(["--deep-generate-tts", "AI未来三年系列", "AI 为什么会替代搜索？"])
+
+        self.assertEqual(code, 0)
+        mock_generate_tts.assert_called_once_with("AI未来三年系列", "AI 为什么会替代搜索？")
+        mock_print.assert_called_once_with(
+            "__RESULT__" + json.dumps({"audio_path": "demo.mp3"}, ensure_ascii=False),
+            flush=True,
+        )
+
     @patch("ui_worker.main.run_topic_pipeline", return_value={"topic": "AI 每日简报"})
     @patch("builtins.print")
     def test_main_cli_dispatches_daily_topic_mode(self, mock_print, mock_run_topic_pipeline):

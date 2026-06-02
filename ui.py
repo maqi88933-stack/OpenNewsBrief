@@ -447,9 +447,27 @@ class NewsBriefApp:
             cursor="hand2",
         )
         self.deep_run_series_button.pack(fill="x", pady=(10, 0))
+        media_btn_row = tk.Frame(inner, bg=CARD_COLOR)
+        media_btn_row.pack(fill="x", pady=(10, 0))
+        self.deep_generate_tts_button = tk.Button(
+            media_btn_row,
+            text="合成TTS",
+            command=self.start_deep_generate_tts,
+            bg=SUCCESS_COLOR,
+            fg="white",
+            activebackground=SUCCESS_COLOR,
+            activeforeground="white",
+            relief="flat",
+            borderwidth=0,
+            font=("Microsoft YaHei UI", 10, "bold"),
+            padx=16,
+            pady=10,
+            cursor="hand2",
+        )
+        self.deep_generate_tts_button.pack(side="left", fill="x", expand=True)
         self.deep_generate_video_button = tk.Button(
-            inner,
-            text="审核后生成视频",
+            media_btn_row,
+            text="合成视频",
             command=self.start_deep_generate_video,
             bg=PRIMARY_COLOR,
             fg="white",
@@ -462,7 +480,7 @@ class NewsBriefApp:
             pady=10,
             cursor="hand2",
         )
-        self.deep_generate_video_button.pack(fill="x", pady=(10, 0))
+        self.deep_generate_video_button.pack(side="left", fill="x", expand=True, padx=(8, 0))
         self.refresh_deep_lists()
 
     def build_entry(self, parent, label, text_var):
@@ -741,8 +759,12 @@ class NewsBriefApp:
         for episode in series.get("episodes", []):
             if episode.get("generated") and episode.get("video_path"):
                 status = "已生成"
+            elif self.is_deep_audio_overtime(episode):
+                status = "音频超时"
+            elif episode.get("audio_path"):
+                status = "待合成视频"
             elif episode.get("review_ready") and episode.get("script_path"):
-                status = "待生成视频"
+                status = "待合成TTS"
             else:
                 status = "未生成"
             self.deep_episode_list.insert("end", f"[{status}] {episode.get('title', '未命名主题')}")
@@ -812,6 +834,17 @@ class NewsBriefApp:
             self.deep_publish_selected_button.config(state="normal", bg=SUCCESS_COLOR)
             self.deep_publish_all_button.config(state="normal", bg=SUCCESS_COLOR)
 
+    def set_deep_media_buttons(self, state):
+        # TTS 和视频已经拆成两个阶段，运行或发布时必须一起禁用，避免用户交叉点击造成产物错乱。
+        disabled = state == "disabled"
+        for attr, normal_bg in (
+            ("deep_generate_tts_button", SUCCESS_COLOR),
+            ("deep_generate_video_button", PRIMARY_COLOR),
+        ):
+            button = getattr(self, attr, None)
+            if button:
+                button.config(state=state, bg=BUTTON_DISABLED if disabled else normal_bg)
+
     def refresh_deep_publish_list(self):
         if not hasattr(self, "deep_pending_publish_list"):
             return
@@ -838,7 +871,7 @@ class NewsBriefApp:
         self.is_running = True
         self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
-        self.deep_generate_video_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
         self.publish_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.status_var.set("正在生成每日简报...")
         worker = threading.Thread(target=self.run_topics, args=(topics,), daemon=True)
@@ -855,7 +888,7 @@ class NewsBriefApp:
         self.is_running = True
         self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
-        self.deep_generate_video_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
         self.publish_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.status_var.set("正在调研和写稿...")
         worker = threading.Thread(target=self.run_deep_episode, args=(series["title"], episode["title"]), daemon=True)
@@ -877,10 +910,38 @@ class NewsBriefApp:
         self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_series_button.config(state="disabled", bg=BUTTON_DISABLED)
-        self.deep_generate_video_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
         self.publish_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.status_var.set("正在生成整组稿件...")
         worker = threading.Thread(target=self.run_deep_series, args=(series["title"],), daemon=True)
+        worker.start()
+
+    def start_deep_generate_tts(self):
+        if self.is_running:
+            return
+        series, episode = self.get_selected_deep_target()
+        if not series or not episode:
+            self.append_log("请先选择一个深度系列和主题。\n")
+            return
+        script_path = episode.get("script_path", "")
+        if not script_path or not os.path.exists(script_path):
+            self.append_log("未找到脚本，请先执行调研和写稿。\n")
+            return
+        if not messagebox.askyesno("合成TTS", "请确认已人工审核并修改脚本，是否开始合成TTS？", parent=self.root):
+            return
+
+        self.is_running = True
+        self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.deep_run_series_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
+        self.publish_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.status_var.set("正在合成深度TTS...")
+        worker = threading.Thread(
+            target=self.run_deep_generate_tts,
+            args=(series["title"], episode["title"]),
+            daemon=True,
+        )
         worker.start()
 
     def start_deep_generate_video(self):
@@ -894,16 +955,20 @@ class NewsBriefApp:
         if not script_path or not os.path.exists(script_path):
             self.append_log("未找到脚本，请先执行调研和写稿。\n")
             return
-        if not messagebox.askyesno("生成视频", "请确认已人工审核并修改脚本，是否开始生成视频？", parent=self.root):
+        audio_path = episode.get("audio_path", "")
+        if not audio_path or not os.path.exists(audio_path):
+            self.append_log("未找到TTS音频，请先点击“合成TTS”。\n")
+            return
+        if not messagebox.askyesno("合成视频", "将使用已合成的TTS音频生成视频，是否继续？", parent=self.root):
             return
 
         self.is_running = True
         self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_series_button.config(state="disabled", bg=BUTTON_DISABLED)
-        self.deep_generate_video_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
         self.publish_button.config(state="disabled", bg=BUTTON_DISABLED)
-        self.status_var.set("正在生成深度视频...")
+        self.status_var.set("正在合成深度视频...")
         worker = threading.Thread(
             target=self.run_deep_generate_video,
             args=(series["title"], episode["title"]),
@@ -970,12 +1035,29 @@ class NewsBriefApp:
         finally:
             self.finish_run()
 
+    def run_deep_generate_tts(self, series_title, episode_title):
+        try:
+            self.append_log(f"\n{'=' * 56}\n")
+            self.append_log(f"开始合成深度TTS：{series_title} / {episode_title}\n")
+            self.append_log(f"{'=' * 56}\n")
+            # TTS 合成单独走子进程，避免 ChatTTS 长时间运行时卡住主界面。
+            result = self.run_worker_subprocess(["--deep-generate-tts", series_title, episode_title])
+            if result:
+                self.latest_result = result
+                self.update_result_panel(result)
+                # TTS 产物会写回配置，刷新后表格状态从“待合成TTS”进入“待合成视频”。
+                self.reload_deep_config(series_title, episode_title)
+        except Exception:
+            self.append_log(traceback.format_exc())
+        finally:
+            self.finish_run()
+
     def run_deep_generate_video(self, series_title, episode_title):
         try:
             self.append_log(f"\n{'=' * 56}\n")
-            self.append_log(f"开始生成深度视频：{series_title} / {episode_title}\n")
+            self.append_log(f"开始合成深度视频：{series_title} / {episode_title}\n")
             self.append_log(f"{'=' * 56}\n")
-            # 生成视频改走子进程，避免长任务把当前界面卡住。
+            # 视频合成单独走子进程，并且只复用已经生成好的 TTS 音频。
             result = self.run_worker_subprocess(["--deep-generate-video", series_title, episode_title])
             if result:
                 self.latest_result = result
@@ -1071,7 +1153,7 @@ class NewsBriefApp:
             self.run_button.config(state="normal", bg=PRIMARY_COLOR)
             self.deep_run_button.config(state="normal", bg="#111111")
             self.deep_run_series_button.config(state="normal", bg="#2C2C2E")
-            self.deep_generate_video_button.config(state="normal", bg=PRIMARY_COLOR)
+            self.set_deep_media_buttons("normal")
             if not self.is_publishing:
                 self.publish_button.config(state="normal", bg=SUCCESS_COLOR)
             self.status_var.set(f"就绪 {datetime.datetime.now().strftime('%H:%M:%S')}")
@@ -1130,7 +1212,7 @@ class NewsBriefApp:
         self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_series_button.config(state="disabled", bg=BUTTON_DISABLED)
-        self.deep_generate_video_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
         self.status_var.set("正在发布到B站...")
         worker = threading.Thread(target=self.publish_to_bilibili, args=(video_path,), daemon=True)
         worker.start()
@@ -1175,7 +1257,7 @@ class NewsBriefApp:
         self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
         self.deep_run_series_button.config(state="disabled", bg=BUTTON_DISABLED)
-        self.deep_generate_video_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
         self.status_var.set("正在批量发布深度视频...")
         worker = threading.Thread(target=self.publish_many_to_bilibili, args=(results,), daemon=True)
         worker.start()
@@ -1409,7 +1491,7 @@ class NewsBriefApp:
                 self.run_button.config(state="normal", bg=PRIMARY_COLOR)
                 self.deep_run_button.config(state="normal", bg="#111111")
                 self.deep_run_series_button.config(state="normal", bg="#2C2C2E")
-                self.deep_generate_video_button.config(state="normal", bg=PRIMARY_COLOR)
+                self.set_deep_media_buttons("normal")
             self.status_var.set(f"发布完成 {datetime.datetime.now().strftime('%H:%M:%S')}")
             self.refresh_deep_lists()
             self.refresh_deep_publish_list()
@@ -1571,9 +1653,16 @@ class NewsBriefApp:
             "#2C2C2E",
             "white",
         )
+        self.deep_generate_tts_button = self.create_action_button(
+            run_actions,
+            "合成TTS",
+            self.start_deep_generate_tts,
+            SUCCESS_COLOR,
+            "white",
+        )
         self.deep_generate_video_button = self.create_action_button(
             run_actions,
-            "审核后生成视频",
+            "合成视频",
             self.start_deep_generate_video,
             PRIMARY_COLOR,
             "white",
@@ -1602,6 +1691,14 @@ class NewsBriefApp:
     def get_episode_status(self, episode):
         return self.get_deep_episode_status(episode)
 
+    def is_deep_audio_overtime(self, episode):
+        # TTS 已经完整生成但超过 3 分钟时，状态页要明确提示超时，而不是继续显示可合成视频。
+        try:
+            actual_seconds = float(episode.get("actual_seconds") or 0)
+        except (TypeError, ValueError):
+            actual_seconds = 0
+        return actual_seconds > deep_series.DEEP_TARGET_MAX_SECONDS
+
     def get_deep_episode_status(self, episode):
         if episode.get("review_blocked"):
             return "审核阻断"
@@ -1609,8 +1706,12 @@ class NewsBriefApp:
             return "已发布"
         if episode.get("generated") and episode.get("video_path"):
             return "待发布"
+        if self.is_deep_audio_overtime(episode):
+            return "音频超时"
+        if episode.get("audio_path"):
+            return "待合成视频"
         if episode.get("review_ready") and episode.get("script_path"):
-            return "待生成视频"
+            return "待合成TTS"
         return "未生成"
 
     def format_deep_quality(self, episode):
@@ -1618,7 +1719,12 @@ class NewsBriefApp:
         source_count = int(episode.get("source_count") or 0)
         seconds = episode.get("actual_seconds") or episode.get("estimated_seconds") or 0
         seconds_text = f"{float(seconds):.0f}秒" if seconds else "未知"
-        risk_text = "阻断" if episode.get("review_blocked") else "通过"
+        if episode.get("review_blocked"):
+            risk_text = "阻断"
+        elif self.is_deep_audio_overtime(episode):
+            risk_text = "超时"
+        else:
+            risk_text = "通过"
         return f"源{source_count} / {seconds_text} / {risk_text}"
 
     def refresh_deep_lists(self, selected_series_title=None, selected_episode_title=None):

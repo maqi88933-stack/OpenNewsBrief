@@ -766,7 +766,43 @@
         },
         {
           "title": "AI 最缺的可能是能把系统跑稳的人",
-          "question": "为什么 AI 基建最后还是缺工程人才？重点探讨数据中心运维、集群调度、供电冷却、网络排障和安全治理，大模型时代真正稀缺的是跨学科工程能力。"
+          "question": "为什么 AI 基建最后还是缺工程人才？重点探讨数据中心运维、集群调度、供电冷却、网络排障和安全治理，大模型时代真正稀缺的是跨学科工程能力。",
+          "generated": true,
+          "generated_at": "2026-06-02 11:14:52",
+          "published": false,
+          "published_at": "",
+          "review_ready": true,
+          "review_blocked": false,
+          "research_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\research.md",
+          "audit_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\audit.md",
+          "script_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\script.md",
+          "script_notes_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\script_notes.md",
+          "documentary_package_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\documentary_package.md",
+          "audio_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\dialogue.mp3",
+          "video_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\AI_最缺的可能是能把系统跑稳的人_2026-06-02.mp4",
+          "publish_assets_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\publish_assets.json",
+          "agent_log_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\agent_interaction.log",
+          "quality_report_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\quality_report.json",
+          "visual_design_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\visual_assets\\background.svg"
+          },
+          "source_count": 0,
+          "estimated_seconds": 222.0,
+          "actual_seconds": 232.0,
+          "quality_block_reason": "音频实际 232 秒，超过 180 秒",
+          "fallback_used": true,
+          "publish_title": "AI最缺的可能是能把系统跑稳的人",
+          "publish_desc": "AI时代最缺的不是芯片 / AI 最缺的可能是能把系统跑稳的人 的深度内容发布文案。\n\n互动问题：你更赞同A还是B？为什么\n\n关键词：AI、时代最缺的不是芯片、最缺的可能是能把系统跑稳、的人、基建最后还是缺工程人才、重点探讨数据中心运维、集群调度、供电冷却",
+          "publish_tags": "AI,深度内容,纪录片,口播",
+          "cover_path": "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\cover.png",
+          "cover_option_paths": [
+            "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\cover_option_1.png",
+            "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\cover_option_2.png",
+            "D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代最缺的不是芯片\\AI_最缺的可能是能把系统跑稳的人\\2026-06-02\\cover_option_3.png"
+          ]
         }
       ]
     },

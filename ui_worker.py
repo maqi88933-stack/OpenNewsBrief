@@ -7,6 +7,7 @@ import main
 
 RESULT_PREFIX = "__RESULT__"
 DEEP_MODE = "--deep"
+DEEP_GENERATE_TTS_MODE = "--deep-generate-tts"
 DEEP_GENERATE_VIDEO_MODE = "--deep-generate-video"
 
 
@@ -35,7 +36,7 @@ def ensure_arg_count(args: list[str], expected: int, message: str) -> bool:
 
 
 def run_deep_command(mode: str, args: list[str]) -> int:
-    # 深度系列目前只有两种命令：生成研究稿件，或基于已审脚本补生成视频。
+    # 深度系列按阶段分发：先写稿，再单独合成 TTS，最后复用 TTS 合成视频。
     # 这里集中分发，后面如果继续扩展新的深度命令，只需要在这一处补入口。
     if not ensure_arg_count(args, 2, "请传入深度系列标题和主题标题"):
         return 2
@@ -43,6 +44,8 @@ def run_deep_command(mode: str, args: list[str]) -> int:
     series_title, episode_title = args[0], args[1]
     if mode == DEEP_MODE:
         result = deep_series.run_episode_by_titles(series_title, episode_title)
+    elif mode == DEEP_GENERATE_TTS_MODE:
+        result = deep_series.generate_episode_tts_by_titles(series_title, episode_title)
     else:
         result = deep_series.generate_episode_video_by_titles(series_title, episode_title)
     print_result(result)
@@ -60,6 +63,9 @@ def main_cli(argv: list[str] = None):
     mode = argv[0]
     if mode == DEEP_MODE:
         return run_deep_command(DEEP_MODE, argv[1:])
+
+    if mode == DEEP_GENERATE_TTS_MODE:
+        return run_deep_command(DEEP_GENERATE_TTS_MODE, argv[1:])
 
     if mode == DEEP_GENERATE_VIDEO_MODE:
         return run_deep_command(DEEP_GENERATE_VIDEO_MODE, argv[1:])

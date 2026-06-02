@@ -32,8 +32,11 @@ DEEP_MIN_VALID_SOURCES = 3
 DEEP_RESEARCH_MAX_ATTEMPTS = 3
 DEEP_LLM_MAX_RETRIES = 3
 DEEP_TARGET_MIN_SECONDS = 120
-DEEP_TARGET_MAX_SECONDS = 180
-DEEP_SCRIPT_SECONDS_PER_CHAR = 0.18
+DEEP_TARGET_MAX_SECONDS = 150
+# 脚本阶段按 2 分半控稿，给 ChatTTS 语速、停顿和结尾留白留出余量。
+DEEP_SCRIPT_SECONDS_PER_CHAR = 0.22
+# 音频和视频阶段不截断、不拦截，只保留 3 分钟提醒，方便人工复核。
+DEEP_AUDIO_WARNING_MAX_SECONDS = 180
 DEEP_OPENING_HOOK_LINES = 4
 DEEP_OPENING_HOOK_MAX_ATTEMPTS = 3
 
@@ -2077,8 +2080,8 @@ def validate_deep_audio_duration(audio_path: str) -> Dict:
     if not actual_seconds:
         actual_seconds = sum(float(item.get("duration", 0.0)) for item in data.get("segments", []))
     reasons = []
-    if actual_seconds > DEEP_TARGET_MAX_SECONDS:
-        reasons.append(f"音频实际 {actual_seconds:.0f} 秒，超过 {DEEP_TARGET_MAX_SECONDS} 秒")
+    if actual_seconds > DEEP_AUDIO_WARNING_MAX_SECONDS:
+        reasons.append(f"音频实际 {actual_seconds:.0f} 秒，超过 {DEEP_AUDIO_WARNING_MAX_SECONDS} 秒")
     if reasons:
         return {"blocked": True, "actual_seconds": round(actual_seconds, 1), "reasons": reasons}
     return {"blocked": False, "actual_seconds": round(actual_seconds, 1), "reasons": []}
@@ -2223,18 +2226,40 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
     return result
 
 
-def generate_video_from_script(series: Dict, episode: Dict, result: Dict) -> Dict:
+def generate_tts_from_script(series: Dict, episode: Dict, result: Dict) -> Dict:
+    script_path = result.get("script_path") or episode.get("script_path", "")
+    if not script_path or not os.path.exists(script_path):
+        raise ValueError("找不到脚本文件，无法合成TTS")
+    output_dir = os.path.dirname(script_path)
+    audio_path = os.path.join(output_dir, "dialogue.mp3")
+    print("[深度TTS] 开始生成口播音频", flush=True)
+    audio_path = convert_dialogue_to_audio(script_path, audio_path)
+    duration_report = validate_deep_audio_duration(audio_path)
+    result["audio_path"] = audio_path
+    result["actual_seconds"] = duration_report.get("actual_seconds", 0.0)
+    if duration_report.get("blocked"):
+        # TTS 阶段要保留完整音频，不能直接截断或丢弃；超时只写回状态，交给用户缩稿后重合成。
+        reason = "；".join(duration_report.get("reasons", []))
+        print("[深度TTS] 音频时长提醒：" + reason, flush=True)
+        result["quality_block_reason"] = reason
+    return result
+
+
+def generate_video_from_audio(series: Dict, episode: Dict, result: Dict) -> Dict:
     today = datetime.date.today().strftime("%Y-%m-%d")
     script_path = result.get("script_path") or episode.get("script_path", "")
     if not script_path or not os.path.exists(script_path):
         raise ValueError("找不到脚本文件，无法生成视频")
-    output_dir = os.path.dirname(script_path)
-    audio_path = os.path.join(output_dir, "dialogue.mp3")
-    print("[深度视频] 开始生成口播音频", flush=True)
-    audio_path = convert_dialogue_to_audio(script_path, audio_path)
+    audio_path = result.get("audio_path") or episode.get("audio_path", "")
+    if not audio_path or not os.path.exists(audio_path):
+        raise ValueError("未找到TTS音频，请先合成TTS")
     duration_report = validate_deep_audio_duration(audio_path)
     if duration_report.get("blocked"):
-        print("[深度视频] 音频时长提醒：" + "；".join(duration_report.get("reasons", [])), flush=True)
+        # 超过 3 分钟只做状态提醒，视频阶段仍继续合成完整成片，避免硬拦截导致用户拿不到结果。
+        reason = "；".join(duration_report.get("reasons", []))
+        print("[深度视频] 音频时长提醒：" + reason + "，将继续合成完整视频", flush=True)
+        result["quality_block_reason"] = reason
+    output_dir = os.path.dirname(audio_path)
     print("[深度视频] 开始生成视觉设计和 SVG 元素", flush=True)
     visual_design = result.get("visual_design") or load_visual_design(result.get("visual_design_path", ""))
     if not visual_design:
@@ -2255,6 +2280,53 @@ def generate_video_from_script(series: Dict, episode: Dict, result: Dict) -> Dic
     result["actual_seconds"] = duration_report.get("actual_seconds", 0.0)
     result["video_path"] = step_video(audio_path, f"{episode.get('title', '')} {today}", image_paths)
     return result
+
+
+def generate_video_from_script(series: Dict, episode: Dict, result: Dict) -> Dict:
+    # 兼容旧调用：老入口仍可一口气先合成 TTS 再合成视频，新 UI 不再直接使用这个组合函数。
+    result = generate_tts_from_script(series, episode, result)
+    return generate_video_from_audio(series, episode, result)
+
+
+def mark_episode_tts_generated(config: Dict, series_title: str, episode_title: str, result: Dict) -> Dict:
+    series = find_series(config, series_title)
+    episode = find_episode(series, episode_title)
+    episode["generated"] = False
+    episode["generated_at"] = ""
+    episode["audio_generated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    episode["published"] = False
+    episode["published_at"] = ""
+    for key in (
+        "research_path",
+        "audit_path",
+        "script_path",
+        "script_notes_path",
+        "documentary_package_path",
+        "quality_report_path",
+        "audio_path",
+        "agent_log_path",
+        "source_count",
+        "estimated_seconds",
+        "actual_seconds",
+        "quality_block_reason",
+        "fallback_used",
+    ):
+        if result.get(key):
+            episode[key] = result[key]
+    # 重新合成 TTS 后旧视频和发布素材都可能过期，直接清空，避免误发布旧 MP4。
+    for key in (
+        "video_path",
+        "publish_assets_path",
+        "cover_path",
+        "cover_option_paths",
+        "publish_title",
+        "publish_desc",
+        "publish_tags",
+    ):
+        episode[key] = [] if key == "cover_option_paths" else ""
+    episode["review_blocked"] = bool(result.get("review_blocked"))
+    episode["review_ready"] = bool(result.get("review_ready") or (result.get("script_path") and not result.get("review_blocked")))
+    return episode
 
 
 def mark_episode_generated(config: Dict, series_title: str, episode_title: str, result: Dict) -> Dict:
@@ -2873,21 +2945,38 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
         "title_options 也按同样规则给 3 个主题名称备选，不要带系列名称前缀。\n"
         "标题、封面文案、视频前3秒必须围绕同一个承诺，观众点进来后马上听到同一个答案方向。\n"
     )
-    raw = call_llm(prompt, f"脚本：\n{script_text}\n\n研究报告：\n{research_text}")
-    assets = parse_json_object(raw)
+    fallback_assets = {
+        "title": episode.get("title", "深度视频"),
+        "desc": f"{series.get('title', '')} / {episode.get('title', '')} 的深度内容发布文案。",
+        "tags": "AI,深度内容,纪录片,口播",
+        "cover_text": "AI 深度解析",
+        "cover_prompt": "iOS 风格深度系列封面，简洁，清晰，白底，高对比，科技感",
+        "comment_question": "你更赞同 A 还是 B？为什么",
+        "title_options": [episode.get("title", "深度视频")],
+        "cover_options": ["AI 深度解析"],
+    }
+    try:
+        raw = call_llm(prompt, f"脚本：\n{script_text}\n\n研究报告：\n{research_text}")
+        assets = parse_json_object(raw)
+    except Exception as exc:
+        # 发布文案是视频完成后的附属产物，LLM 网络失败时不能让已合成视频丢失状态。
+        print(f"[深度发布] 发布信息 LLM 失败，使用默认发布素材：{exc}", flush=True)
+        assets = {}
     if not assets:
-        assets = {
-            "title": episode.get("title", "深度视频"),
-            "desc": f"{series.get('title', '')} / {episode.get('title', '')} 的深度内容发布文案。",
-            "tags": "AI,深度内容,纪录片,口播",
-            "cover_text": "AI 深度解析",
-            "cover_prompt": "iOS 风格深度系列封面，简洁，清晰，白底，高对比，科技感",
-            "comment_question": "你更赞同 A 还是 B？为什么",
-            "title_options": [episode.get("title", "深度视频")],
-            "cover_options": ["AI 深度解析"],
-        }
+        assets = fallback_assets
 
-    assets, publish_review = polish_publish_assets_with_review(series, episode, assets, script_text, research_text)
+    try:
+        assets, publish_review = polish_publish_assets_with_review(series, episode, assets, script_text, research_text)
+    except Exception as exc:
+        # 审校/改写同样依赖 LLM；失败时保留当前素材并标记为通过，保证 UI 能进入待发布状态。
+        print(f"[深度发布] 发布审校 LLM 失败，保留当前发布素材：{exc}", flush=True)
+        assets = normalize_publish_assets_payload(series, episode, assets)
+        publish_review = {
+            "blocked": False,
+            "attempts": 0,
+            "reviews": [],
+            "final": {"blocked": False, "passed": True, "score": 0, "reasons": ["LLM 审校失败，已使用默认素材"], "suggestions": []},
+        }
     assets["publish_review"] = publish_review
 
     output_dir = os.path.dirname(os.path.abspath(result.get("video_path") or result.get("script_path") or CONFIG_PATH))
@@ -2945,19 +3034,9 @@ def run_episode_by_titles(series_title: str, episode_title: str) -> Dict:
     return result
 
 
-def generate_episode_video_by_titles(series_title: str, episode_title: str) -> Dict:
-    config = load_config()
-    series = find_series(config, series_title)
-    episode = find_episode(series, episode_title)
-    if episode.get("review_blocked"):
-        script_path = episode.get("script_path", "")
-        if not script_path or not os.path.exists(script_path):
-            raise ValueError("当前主题被审核阻断，请先补充资料或修改脚本后再生成视频")
-        # 有脚本产物时，审核建议只作为修改提醒，不再阻断视频生成。
-        print("[深度视频] 检测到审核提醒，已有脚本，继续生成视频", flush=True)
-        episode["review_blocked"] = False
-        episode["review_ready"] = True
-    result = {
+def build_episode_media_result(series: Dict, episode: Dict) -> Dict:
+    # TTS 和视频两个阶段都需要同一组路径字段，集中在这里能避免两个入口漏传状态。
+    return {
         "series": series.get("title", ""),
         "episode": episode.get("title", ""),
         "research_path": episode.get("research_path", ""),
@@ -2973,8 +3052,48 @@ def generate_episode_video_by_titles(series_title: str, episode_title: str) -> D
         "visual_asset_paths": episode.get("visual_asset_paths", {}),
         "source_count": episode.get("source_count", 0),
         "estimated_seconds": episode.get("estimated_seconds", 0.0),
+        "actual_seconds": episode.get("actual_seconds", 0.0),
+        "review_ready": bool(episode.get("review_ready")),
+        "review_blocked": bool(episode.get("review_blocked")),
+        "quality_block_reason": episode.get("quality_block_reason", ""),
+        "fallback_used": bool(episode.get("fallback_used")),
     }
-    result = generate_video_from_script(series, episode, result)
+
+
+def generate_episode_tts_by_titles(series_title: str, episode_title: str) -> Dict:
+    config = load_config()
+    series = find_series(config, series_title)
+    episode = find_episode(series, episode_title)
+    if episode.get("review_blocked"):
+        script_path = episode.get("script_path", "")
+        if not script_path or not os.path.exists(script_path):
+            raise ValueError("当前主题被审核阻断，请先补充资料或修改脚本后再合成TTS")
+        # 有脚本产物时，审核建议只作为修改提醒，不再阻断后续手动合成。
+        print("[深度TTS] 检测到审核提醒，已有脚本，继续合成TTS", flush=True)
+        episode["review_blocked"] = False
+        episode["review_ready"] = True
+    result = build_episode_media_result(series, episode)
+    result = generate_tts_from_script(series, episode, result)
+    config = load_config()
+    mark_episode_tts_generated(config, series_title, episode_title, result)
+    save_config(config)
+    return result
+
+
+def generate_episode_video_by_titles(series_title: str, episode_title: str) -> Dict:
+    config = load_config()
+    series = find_series(config, series_title)
+    episode = find_episode(series, episode_title)
+    if episode.get("review_blocked"):
+        script_path = episode.get("script_path", "")
+        if not script_path or not os.path.exists(script_path):
+            raise ValueError("当前主题被审核阻断，请先补充资料或修改脚本后再生成视频")
+        # 有脚本和音频产物时，审核建议只作为修改提醒，不再阻断视频合成。
+        print("[深度视频] 检测到审核提醒，已有脚本，继续生成视频", flush=True)
+        episode["review_blocked"] = False
+        episode["review_ready"] = True
+    result = build_episode_media_result(series, episode)
+    result = generate_video_from_audio(series, episode, result)
     assets = generate_publish_assets(series, episode, result)
     result["publish_assets_path"] = assets["path"]
     result["publish_title"] = assets["title"]

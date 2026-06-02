@@ -248,7 +248,7 @@ class TestDeepSeries(unittest.TestCase):
 
         prompt = mock_llm.call_args_list[0].args[0]
         # 留存优化必须写进脚本提示词，而不是只靠人工写稿时记住。
-        self.assertIn("120-180秒", prompt)
+        self.assertIn("120-150秒", prompt)
         self.assertIn("前3秒", prompt)
         self.assertIn("前30秒", prompt)
         self.assertIn("优先使用尖锐疑问句或反常识结论", prompt)
@@ -337,6 +337,25 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(report["attempts"], 2)
         self.assertLessEqual(report["estimated_seconds"], deep_series.DEEP_TARGET_MAX_SECONDS)
         self.assertIn("压缩", mock_llm.call_args.args[0])
+
+    def test_dialogue_duration_estimate_blocks_chattts_three_minute_script(self):
+        script = "女：" + "这" * 820
+
+        report = deep_series.assess_dialogue_duration(script)
+
+        # ChatTTS 真实语速比原来的字符估算更慢，接近 3 分钟的稿子必须提前拦住压缩。
+        self.assertTrue(report["blocked"])
+        self.assertGreater(report["estimated_seconds"], deep_series.DEEP_TARGET_MAX_SECONDS)
+
+    def test_dialogue_duration_estimate_blocks_above_two_and_half_minutes(self):
+        script = "女：" + "这" * 690
+
+        report = deep_series.assess_dialogue_duration(script)
+
+        # 用户希望最终尽量落在 2 分半，所以脚本阶段要提前压住接近 150 秒的稿子。
+        self.assertTrue(report["blocked"])
+        self.assertEqual(deep_series.DEEP_TARGET_MAX_SECONDS, 150)
+        self.assertGreater(report["estimated_seconds"], deep_series.DEEP_TARGET_MAX_SECONDS)
 
     def test_generate_dialogue_script_with_duration_guard_polishes_opening(self):
         first_script = (
@@ -433,6 +452,59 @@ class TestDeepSeries(unittest.TestCase):
         self.assertTrue(report["blocked"])
         self.assertEqual(report["actual_seconds"], 181.0)
         self.assertIn("超过", "；".join(report["reasons"]))
+
+    def test_generate_video_from_script_allows_audio_over_three_minutes(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：这是一段已经生成好的长脚本。")
+
+        def write_oversized_audio(_script_path, output_path):
+            with open(output_path, "wb") as f:
+                f.write(b"audio")
+            with open(output_path + ".timing.json", "w", encoding="utf-8") as f:
+                json.dump({"total_duration": 181.0, "segments": []}, f)
+            return output_path
+
+        with patch("deep_series.convert_dialogue_to_audio", side_effect=write_oversized_audio), \
+                patch("deep_series.build_visual_design", return_value={}), \
+                patch("deep_series.create_deep_slide_images", return_value=["slide.png"]) as mock_slides, \
+                patch("deep_series.step_video", return_value=os.path.join(self.tmpdir, "demo.mp4")) as mock_video:
+            result = deep_series.generate_video_from_script(
+                {"title": "测试系列"},
+                {"title": "测试主题"},
+                {"script_path": script_path},
+            )
+
+        # 超过 3 分钟只作为质量提醒，视频阶段不能拦截，否则会让用户无法生成完整成片。
+        self.assertEqual(result["actual_seconds"], 181.0)
+        self.assertIn("超过", result["quality_block_reason"])
+        self.assertTrue(result["video_path"].endswith("demo.mp4"))
+        mock_slides.assert_called_once()
+        mock_video.assert_called_once()
+
+    def test_generate_tts_from_script_keeps_oversized_audio_for_review(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：这是一段完整脚本，哪怕超时也要先完整合成。")
+
+        def write_oversized_audio(_script_path, output_path):
+            with open(output_path, "wb") as f:
+                f.write(b"audio")
+            with open(output_path + ".timing.json", "w", encoding="utf-8") as f:
+                json.dump({"total_duration": 181.0, "segments": []}, f)
+            return output_path
+
+        with patch("deep_series.convert_dialogue_to_audio", side_effect=write_oversized_audio):
+            result = deep_series.generate_tts_from_script(
+                {"title": "测试系列"},
+                {"title": "测试主题"},
+                {"script_path": script_path},
+            )
+
+        # TTS 阶段不截断、不丢弃超长音频，只把超时原因写回状态，留给用户缩稿后重合成。
+        self.assertTrue(result["audio_path"].endswith("dialogue.mp3"))
+        self.assertEqual(result["actual_seconds"], 181.0)
+        self.assertIn("超过", result["quality_block_reason"])
 
     def test_clean_script_output_strips_headers_and_keeps_dialogue(self):
         raw = "---\n\n### 标题\n女：搜索正在变成答案入口。\n\n男：未来的软件入口会变成 AI 对话。\n"
@@ -888,6 +960,25 @@ class TestDeepSeries(unittest.TestCase):
         review_prompt = mock_llm.call_args_list[1].args[0]
         self.assertIn("标题党式点击欲", review_prompt)
         self.assertIn("搜索关键词", review_prompt)
+
+    @patch("deep_series.create_deep_cover_options", return_value=["cover1.png", "cover2.png", "cover3.png"])
+    @patch("deep_series.create_deep_cover_image", return_value="cover.png")
+    def test_generate_publish_assets_uses_default_when_llm_connection_fails(self, _cover, _cover_options):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：LLM 不可用时，也不能让已经合成的视频丢失状态。")
+        result = {"script_path": script_path, "video_path": os.path.join(self.tmpdir, "demo.mp4")}
+        series = {"title": "AI时代最缺的不是芯片"}
+        episode = {"title": "AI 最缺的可能是能把系统跑稳的人"}
+
+        with patch("deep_series.call_llm", side_effect=RuntimeError("Connection error.")):
+            assets = deep_series.generate_publish_assets(series, episode, result)
+
+        # 发布素材 LLM 失败时走本地默认文案，保证视频合成后的状态仍能写回配置。
+        self.assertEqual(assets["title"], deep_series.normalize_publish_title(episode["title"], episode["title"], series["title"]))
+        self.assertIn("关键词", assets["desc"])
+        self.assertFalse(assets["publish_review"]["blocked"])
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "publish_assets.json")))
 
     def test_sanitize_svg_removes_scripts_external_links_and_keeps_shapes(self):
         raw_svg = (
@@ -1478,12 +1569,20 @@ class TestDeepSeries(unittest.TestCase):
         self.assertTrue(os.path.exists(result["script_notes_path"]))
 
     def test_generate_episode_video_preserves_config_changes_during_generation(self):
+        audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        with open(audio_path, "wb") as f:
+            f.write(b"audio")
         config = {
             "series": [
                 {
                     "title": "Series A",
                     "description": "Demo",
-                    "episodes": [{"title": "Episode A", "question": "Question A", "script_path": "script.md"}],
+                    "episodes": [{
+                        "title": "Episode A",
+                        "question": "Question A",
+                        "script_path": "script.md",
+                        "audio_path": audio_path,
+                    }],
                 }
             ]
         }
@@ -1497,7 +1596,7 @@ class TestDeepSeries(unittest.TestCase):
             return result
 
         with patch("deep_series.CONFIG_PATH", self.config_path), \
-                patch("deep_series.generate_video_from_script", side_effect=generate_side_effect), \
+                patch("deep_series.generate_video_from_audio", side_effect=generate_side_effect), \
                 patch(
                     "deep_series.generate_publish_assets",
                     return_value={
@@ -1514,10 +1613,11 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual([item["title"] for item in latest["series"]], ["Series A", "Series B"])
         self.assertTrue(latest["series"][0]["episodes"][0]["generated"])
 
-    def test_generate_episode_video_continues_when_review_blocked_but_script_exists(self):
+    def test_generate_episode_tts_by_titles_writes_audio_without_video(self):
         script_path = os.path.join(self.tmpdir, "script.md")
         with open(script_path, "w", encoding="utf-8") as f:
-            f.write("女：已有脚本。\n男：继续生成。")
+            f.write("女：已有脚本。\n男：先合成音频。")
+        audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
         config = {
             "series": [
                 {
@@ -1527,8 +1627,87 @@ class TestDeepSeries(unittest.TestCase):
                         "title": "Episode A",
                         "question": "Question A",
                         "script_path": script_path,
-                        "review_blocked": True,
-                        "quality_block_reason": "脚本预计 185 秒，超过 180 秒",
+                    }],
+                }
+            ]
+        }
+        deep_series.save_config(config, self.config_path)
+
+        def fake_convert(_script_path, output_path):
+            self.assertEqual(output_path, os.path.join(self.tmpdir, "dialogue.mp3"))
+            return audio_path
+
+        with patch("deep_series.CONFIG_PATH", self.config_path), \
+                patch("deep_series.convert_dialogue_to_audio", side_effect=fake_convert) as mock_convert, \
+                patch("deep_series.validate_deep_audio_duration", return_value={"blocked": False, "actual_seconds": 42.0, "reasons": []}):
+            result = deep_series.generate_episode_tts_by_titles("Series A", "Episode A")
+
+        self.assertEqual(result["audio_path"], audio_path)
+        self.assertEqual(result["actual_seconds"], 42.0)
+        self.assertEqual(result.get("video_path", ""), "")
+        mock_convert.assert_called_once_with(script_path, os.path.join(self.tmpdir, "dialogue.mp3"))
+        latest = deep_series.load_config(self.config_path)
+        episode = latest["series"][0]["episodes"][0]
+        self.assertEqual(episode["audio_path"], audio_path)
+        self.assertEqual(episode["actual_seconds"], 42.0)
+        self.assertFalse(episode.get("generated", False))
+        self.assertEqual(episode.get("video_path", ""), "")
+
+    def test_generate_episode_tts_by_titles_records_oversized_audio_state(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：已有脚本，完整合成后再判断是否超时。")
+        audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        config = {
+            "series": [
+                {
+                    "title": "Series A",
+                    "description": "Demo",
+                    "episodes": [{"title": "Episode A", "question": "Question A", "script_path": script_path}],
+                }
+            ]
+        }
+        deep_series.save_config(config, self.config_path)
+
+        def fake_convert(_script_path, output_path):
+            with open(output_path, "wb") as f:
+                f.write(b"audio")
+            return audio_path
+
+        with patch("deep_series.CONFIG_PATH", self.config_path), \
+                patch("deep_series.convert_dialogue_to_audio", side_effect=fake_convert), \
+                patch("deep_series.validate_deep_audio_duration", return_value={"blocked": True, "actual_seconds": 181.0, "reasons": ["音频实际 181 秒，超过 180 秒"]}):
+            result = deep_series.generate_episode_tts_by_titles("Series A", "Episode A")
+
+        self.assertEqual(result["audio_path"], audio_path)
+        self.assertEqual(result["actual_seconds"], 181.0)
+        self.assertIn("超过", result["quality_block_reason"])
+        latest = deep_series.load_config(self.config_path)
+        episode = latest["series"][0]["episodes"][0]
+        self.assertEqual(episode["audio_path"], audio_path)
+        self.assertEqual(episode["actual_seconds"], 181.0)
+        self.assertIn("超过", episode["quality_block_reason"])
+        self.assertFalse(episode.get("generated", False))
+
+    def test_generate_episode_video_uses_existing_tts_without_resynthesizing(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：已有脚本。\n男：继续生成。")
+        with open(audio_path, "wb") as f:
+            f.write(b"audio")
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            f.write('{"total_duration": 42.0, "segments": []}')
+        config = {
+            "series": [
+                {
+                    "title": "Series A",
+                    "description": "Demo",
+                    "episodes": [{
+                        "title": "Episode A",
+                        "question": "Question A",
+                        "script_path": script_path,
+                        "audio_path": audio_path,
                     }],
                 }
             ]
@@ -1536,7 +1715,10 @@ class TestDeepSeries(unittest.TestCase):
         deep_series.save_config(config, self.config_path)
 
         with patch("deep_series.CONFIG_PATH", self.config_path), \
-                patch("deep_series.generate_video_from_script", return_value={"script_path": script_path, "video_path": os.path.join(self.tmpdir, "demo.mp4")}), \
+                patch("deep_series.convert_dialogue_to_audio", side_effect=AssertionError("不应在视频阶段重新合成 TTS")) as mock_convert, \
+                patch("deep_series.build_visual_design", return_value={}), \
+                patch("deep_series.create_deep_slide_images", return_value=["cover.png"]), \
+                patch("deep_series.step_video", return_value=os.path.join(self.tmpdir, "demo.mp4")), \
                 patch(
                     "deep_series.generate_publish_assets",
                     return_value={
@@ -1550,10 +1732,29 @@ class TestDeepSeries(unittest.TestCase):
             result = deep_series.generate_episode_video_by_titles("Series A", "Episode A")
 
         self.assertTrue(result["video_path"].endswith("demo.mp4"))
+        mock_convert.assert_not_called()
         latest = deep_series.load_config(self.config_path)
         episode = latest["series"][0]["episodes"][0]
-        self.assertFalse(episode["review_blocked"])
         self.assertTrue(episode["generated"])
+
+    def test_generate_episode_video_requires_existing_tts_audio(self):
+        script_path = os.path.join(self.tmpdir, "script.md")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：已有脚本。")
+        config = {
+            "series": [
+                {
+                    "title": "Series A",
+                    "description": "Demo",
+                    "episodes": [{"title": "Episode A", "question": "Question A", "script_path": script_path}],
+                }
+            ]
+        }
+        deep_series.save_config(config, self.config_path)
+
+        with patch("deep_series.CONFIG_PATH", self.config_path):
+            with self.assertRaisesRegex(ValueError, "请先合成TTS"):
+                deep_series.generate_episode_video_by_titles("Series A", "Episode A")
 
     def test_run_episode_by_titles_preserves_config_changes_during_generation(self):
         config = {

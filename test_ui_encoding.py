@@ -25,7 +25,9 @@ class TestUiEncoding(unittest.TestCase):
         self.assertEqual(app.get_deep_episode_status({"review_blocked": True}), "审核阻断")
         self.assertEqual(app.get_deep_episode_status({"generated": True, "video_path": "demo.mp4", "published": True}), "已发布")
         self.assertEqual(app.get_deep_episode_status({"generated": True, "video_path": "demo.mp4"}), "待发布")
-        self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md"}), "待生成视频")
+        self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md", "audio_path": "demo.mp3", "actual_seconds": 181.0}), "音频超时")
+        self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md", "audio_path": "demo.mp3"}), "待合成视频")
+        self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md"}), "待合成TTS")
         self.assertEqual(app.get_deep_episode_status({}), "未生成")
 
     def test_format_deep_quality_shows_source_duration_and_risk(self):
@@ -41,6 +43,10 @@ class TestUiEncoding(unittest.TestCase):
         episode["review_blocked"] = True
         episode["quality_block_reason"] = "有效来源不足"
         self.assertEqual(app.format_deep_quality(episode), "源4 / 118秒 / 阻断")
+
+        episode["review_blocked"] = False
+        episode["actual_seconds"] = 181.0
+        self.assertEqual(app.format_deep_quality(episode), "源4 / 181秒 / 超时")
 
     def test_get_deep_publish_episodes_filters_by_tab(self):
         app = object.__new__(ui.NewsBriefApp)
@@ -85,6 +91,7 @@ class TestUiEncoding(unittest.TestCase):
         episode = {
             "title": "AI 为什么会替代搜索？",
             "video_path": "demo.mp4",
+            "publish_desc": "已有发布简介",
             "published": True,
         }
 
@@ -157,7 +164,24 @@ class TestUiEncoding(unittest.TestCase):
         mock_run.assert_called_once_with(["--deep-generate-video", "AI未来三年系列", "AI 为什么会替代搜索？"])
         mock_generate.assert_not_called()
         self.assertEqual(app.latest_result, payload)
-        self.assertTrue(any("开始生成深度视频" in item for item in logs))
+        self.assertTrue(any("开始合成深度视频" in item for item in logs))
+
+    def test_deep_generate_tts_runs_in_worker_subprocess(self):
+        app = object.__new__(ui.NewsBriefApp)
+        app.latest_result = {}
+        logs = []
+        app.append_log = logs.append
+        app.update_result_panel = lambda _result: None
+        app.reload_deep_config = lambda *_args, **_kwargs: None
+        app.finish_run = lambda: None
+
+        payload = {"audio_path": "deep.mp3"}
+        with patch.object(app, "run_worker_subprocess", return_value=payload) as mock_run:
+            app.run_deep_generate_tts("AI未来三年系列", "AI 为什么会替代搜索？")
+
+        mock_run.assert_called_once_with(["--deep-generate-tts", "AI未来三年系列", "AI 为什么会替代搜索？"])
+        self.assertEqual(app.latest_result, payload)
+        self.assertTrue(any("开始合成深度TTS" in item for item in logs))
 
     def test_post_ui_queues_background_thread_callbacks(self):
         class FakeRoot:
