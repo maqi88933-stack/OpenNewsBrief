@@ -268,6 +268,8 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("不要使用“你有没有想过”", prompt)
         self.assertIn("不要使用“想象一下”", prompt)
         self.assertIn("不要使用“今天我们探讨”", prompt)
+        self.assertIn("克制互动埋点", prompt)
+        self.assertIn("不要写“把绝了打在弹幕上”", prompt)
         # 深度系列只保留两个主持人的聊天感，避免“主持人对话 + 旁白”的第三角色混入。
         self.assertNotIn("旁白", prompt)
         self.assertIn("女：/男：", prompt)
@@ -963,12 +965,13 @@ class TestDeepSeries(unittest.TestCase):
         # 发布标题、封面和开头承诺必须一致，减少点击后发现内容不符造成的秒退。
         self.assertIn("视频前3秒", prompt)
         self.assertIn("同一个承诺", prompt)
-        # B站标题的主题部分可以改写，但必须基于原始主题且由上传侧统一补系列前缀。
+        # B站标题直接使用自然标题，系列信息只放进简介和标签，避免信息流里像自动打卡。
         self.assertIn("原始主题标题", prompt)
         self.assertIn("不需要完全照抄", prompt)
         self.assertIn("更吸引眼球", prompt)
-        self.assertIn("系列名称：主题名称", prompt)
-        self.assertIn("不要把系列名称写进 title", prompt)
+        self.assertIn("不要强制套用系列名前缀", prompt)
+        self.assertIn("实体词或反差点尽量前置", prompt)
+        self.assertIn("封面只保留一个核心反差词", prompt)
         self.assertIn("标题", prompt)
         self.assertIn("封面文案", prompt)
         self.assertEqual(assets["title"], "搜索入口正在消失")
@@ -1381,6 +1384,36 @@ class TestDeepSeries(unittest.TestCase):
 
         self.assertTrue(os.path.exists(cover_path))
         self.assertGreater(os.path.getsize(cover_path), 1000)
+
+    def test_create_deep_cover_image_places_large_hook_in_upper_half(self):
+        from PIL import Image
+
+        assets = {
+            "title": "味精厂卡位AI芯片",
+            "cover_text": "味精厂造芯底",
+            "visual_design": {
+                "cover_title": "味精厂造芯片？",
+                "subtitle": "味之素 · ABF薄膜 · AI芯片封装",
+                "style": "科技财经、强反差、iOS干净排版",
+                "composition": "single_subject",
+                "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+                "main_elements": ["味之素", "ABF薄膜", "GPU封装"],
+                "asset_paths": {},
+            },
+        }
+
+        cover_path = deep_series.create_deep_cover_image(
+            {"title": "AI时代的隐形地基"},
+            {"title": "味之素：味精公司为什么成了高端芯片底座"},
+            assets,
+            self.tmpdir,
+        )
+
+        image = Image.open(cover_path).convert("RGB")
+        upper_title_crop = image.crop((112, 190, 600, 245))
+        dark_pixels = sum(1 for r, g, b in upper_title_crop.getdata() if r < 80 and g < 80 and b < 80)
+        # 信息流封面要让反差钩子尽早进入视野，不能把大标题压到画面中部。
+        self.assertGreater(dark_pixels, 40)
 
     def test_create_deep_cover_image_does_not_paste_background_outside_card(self):
         from PIL import Image

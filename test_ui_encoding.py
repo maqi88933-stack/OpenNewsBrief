@@ -321,7 +321,7 @@ class TestUiEncoding(unittest.TestCase):
             with patch("ui.os.path.exists", return_value=True):
                 command = app.build_biliup_upload_command(video_path)
 
-        self.assertEqual(command[command.index("--title") + 1], "AI未来三年系列：AI搜索替代深度解析")
+        self.assertEqual(command[command.index("--title") + 1], "AI搜索替代深度解析")
         self.assertEqual(command[command.index("--tag") + 1], "AI,搜索,科技")
         self.assertEqual(command[command.index("--desc") + 1], "AI生成的发布简介")
 
@@ -361,7 +361,7 @@ class TestUiEncoding(unittest.TestCase):
         self.assertFalse(published)
         self.assertNotIn("Traceback", "".join(logs))
 
-    def test_biliup_command_prefixes_deep_series_title(self):
+    def test_biliup_command_keeps_deep_series_natural_title(self):
         app = object.__new__(ui.NewsBriefApp)
         video_path = os.path.join("D:\\output", "深度主题.mp4")
         app.biliup_command = "biliup"
@@ -377,9 +377,9 @@ class TestUiEncoding(unittest.TestCase):
             with patch("ui.os.path.exists", return_value=True):
                 command = app.build_biliup_upload_command(video_path)
 
-        self.assertEqual(command[command.index("--title") + 1], "AI未来三年系列：AI搜索替代深度解析")
+        self.assertEqual(command[command.index("--title") + 1], "AI搜索替代深度解析")
 
-    def test_biliup_command_does_not_duplicate_deep_series_title_prefix(self):
+    def test_biliup_command_strips_existing_deep_series_title_prefix(self):
         app = object.__new__(ui.NewsBriefApp)
         video_path = os.path.join("D:\\output", "深度主题.mp4")
         app.biliup_command = "biliup"
@@ -395,7 +395,7 @@ class TestUiEncoding(unittest.TestCase):
             with patch("ui.os.path.exists", return_value=True):
                 command = app.build_biliup_upload_command(video_path)
 
-        self.assertEqual(command[command.index("--title") + 1], "AI未来三年系列：AI搜索替代深度解析")
+        self.assertEqual(command[command.index("--title") + 1], "AI搜索替代深度解析")
 
     def test_build_deep_publish_preview_text_reads_assets_file(self):
         app = object.__new__(ui.NewsBriefApp)
@@ -419,7 +419,7 @@ class TestUiEncoding(unittest.TestCase):
         finally:
             os.remove(assets_path)
 
-        self.assertIn("标题：AI时代的隐形地基：味精公司卡住AI芯片？", text)
+        self.assertIn("标题：味精公司卡住AI芯片？", text)
         self.assertIn("简介：", text)
         self.assertIn("ABF绝缘膜", text)
         self.assertIn("标签：AI芯片,味之素,ABF,封装基板", text)

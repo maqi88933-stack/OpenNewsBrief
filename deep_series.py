@@ -557,8 +557,9 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "7. 男主持的前两次发问必须像观众刷到视频时的反问，不要温和捧哏。\n"
         "8. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
         "9. 每隔一段留一个悬念，方便观众继续看下去。\n"
-        "10. 结尾要落到一个站得住的问题。\n"
-        "11. 每一行只使用“女：/男：”这种格式；不要连续输出同一个主持人的多行发言，同一主持人的连续表达必须合并到同一行。\n"
+        "10. 中段可以加入一句克制互动埋点，但要像自然口播，不要写“把绝了打在弹幕上”这类破坏质感的弹幕口号。\n"
+        "11. 结尾要落到一个站得住的问题。\n"
+        "12. 每一行只使用“女：/男：”这种格式；不要连续输出同一个主持人的多行发言，同一主持人的连续表达必须合并到同一行。\n"
     )
     raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
@@ -2907,7 +2908,7 @@ def create_deep_cover_image(
 
     asset_paths = design.get("asset_paths", {}) if isinstance(design.get("asset_paths"), dict) else {}
 
-    # 封面改成科技杂志式版面：主体仍是 iOS 白卡，但增加产业图谱、节点和细节纹理。
+    # 封面走信息流优先的 iOS 白卡版式：先让大字钩子可读，再保留少量产业线索。
     for x, y, r, color in ((248, 170, 92, "#ECECF0"), (884, 178, 126, "#F0F0F3"), (886, 850, 96, "#ECECF0")):
         draw.ellipse((x - r, y - r, x + r, y + r), fill=color)
     draw.rounded_rectangle((58, 66, 1022, 1014), radius=54, fill="#FFFFFF")
@@ -2916,7 +2917,8 @@ def create_deep_cover_image(
     # 模型背景只作为卡片内部纹理，不能铺满整张封面破坏 iOS 留白。
     paste_svg_asset(image, asset_paths.get("background", ""), (604, 150, 974, 760))
     draw.text((112, 118), "OpenNewsBrief", font=_font(28, True), fill=colors[2])
-    draw.text((112, 928), series.get("title", "Deep Series")[:22], font=_font(26, True), fill="#8E8E93")
+    # 系列名降级到底部浅灰，避免封面第一眼先看到栏目名。
+    draw.text((112, 928), series.get("title", "Deep Series")[:22], font=_font(22, True), fill="#C7C7CC")
 
     if composition == "network_map":
         for x, y, r in ((738, 230, 54), (882, 372, 72), (704, 520, 58), (862, 690, 48)):
@@ -2959,27 +2961,27 @@ def create_deep_cover_image(
             prev_x, prev_y = node_positions[index - 1]
             draw.line((prev_x + 56, prev_y + 26, x - 16, y_node + 26), fill="#D1D1D6", width=5)
         draw.ellipse((x - 10, y_node + 16, x + 10, y_node + 36), fill=colors[2 if index == 0 else 3])
-        draw.rounded_rectangle((x + 18, y_node, x + 136, y_node + 52), radius=22, fill="#F2F2F7")
-        draw.text((x + 34, y_node + 13), cover_nodes[index], font=_font(20, True), fill="#3A3A3C")
+        draw.rounded_rectangle((x + 18, y_node, x + 136, y_node + 52), radius=22, fill="#F7F7FA")
+        draw.text((x + 34, y_node + 13), cover_nodes[index], font=_font(20, True), fill="#6E6E73")
 
     title_text = normalize_cover_text(cover_text if cover_text is not None else design.get("cover_title") or assets.get("cover_text", ""), assets.get("title", ""))
     if cover_text is None and design.get("cover_title"):
         title_text = str(design.get("cover_title"))[:16]
-    title_font, title_lines = _fit_text_block(draw, title_text, 480, 260, start_size=86, min_size=48, bold=True, max_lines=3)
-    y = 250
+    title_font, title_lines = _fit_text_block(draw, title_text, 520, 330, start_size=108, min_size=58, bold=True, max_lines=3)
+    y = 198
     for line in title_lines:
         draw.text((112, y), line, font=title_font, fill=colors[1])
         y += _measure_text_size(draw, line, title_font)[1] + 16
     subtitle = str(design.get("subtitle") or assets.get("title") or episode.get("title", ""))[:36]
-    subtitle_font, subtitle_lines = _fit_text_block(draw, subtitle, 480, 110, start_size=34, min_size=24, bold=True, max_lines=2)
+    subtitle_font, subtitle_lines = _fit_text_block(draw, subtitle, 500, 98, start_size=30, min_size=22, bold=True, max_lines=2)
     y += 18
     for line in subtitle_lines:
         draw.text((112, y), line, font=subtitle_font, fill="#6E6E73")
         y += _measure_text_size(draw, line, subtitle_font)[1] + 8
 
     style_label = cover_style_label(str(design.get("style") or "科技财经"))
-    draw.rounded_rectangle((112, 796, 430, 860), radius=28, fill=colors[1])
-    draw.text((140, 814), style_label, font=_font(24, True), fill="#FFFFFF")
+    draw.rounded_rectangle((112, 796, 402, 856), radius=26, fill=colors[1])
+    draw.text((138, 812), style_label, font=_font(22, True), fill="#FFFFFF")
     for index, word in enumerate(cover_nodes[:3]):
         x = 112 + (index % 2) * 176
         y_chip = 652 + (index // 2) * 58
@@ -3013,7 +3015,7 @@ def create_deep_cover_options(series: Dict, episode: Dict, assets: Dict, output_
 
 def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
     # 发布信息只生成一次，后面发视频和发文案都直接复用。
-    # title 只保存“主题名称”部分，上传到 B 站时再统一拼成“系列名称：主题名称”。
+    # title 直接作为 B 站标题使用，系列名留在简介和合集里，避免信息流里显得程式化。
     script_text = read_text_if_exists(result.get("script_path", ""))
     research_text = read_text_if_exists(result.get("research_path", ""), limit=3000)
     prompt = (
@@ -3033,8 +3035,9 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
         "}\n"
         "要求：标题短一些，封面文案控制在 6 到 10 个字，评论问题适合互动。\n"
         "原始主题标题只是参考，title 不需要完全照抄原始标题，可以根据脚本和研究报告改写成更吸引眼球的主题名称。\n"
-        "B站最终标题基本格式固定为“系列名称：主题名称”，所以不要把系列名称写进 title，title 只返回主题名称部分。\n"
-        "title_options 也按同样规则给 3 个主题名称备选，不要带系列名称前缀。\n"
+        "B站最终标题直接使用 title，不要强制套用系列名前缀；实体词或反差点尽量前置，让标题像真人写的短句。\n"
+        "title_options 也按同样规则给 3 个自然标题备选，不要带系列名称前缀。\n"
+        "封面只保留一个核心反差词或短问句，不要堆多个解释词，也不要写成长句。\n"
         "标题、封面文案、视频前3秒必须围绕同一个承诺，观众点进来后马上听到同一个答案方向。\n"
     )
     fallback_assets = {

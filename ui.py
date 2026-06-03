@@ -1419,8 +1419,12 @@ class NewsBriefApp:
         title = (title or "").strip()
         if not series_title:
             return title
-        prefix = f"{series_title}："
-        return title if title.startswith(prefix) else prefix + title
+        # 深度系列标题直接用自然标题，系列信息放简介/合集；旧素材带前缀时这里顺手去掉。
+        for sep in ("：", ":", "-", "—", "_"):
+            prefix = f"{series_title}{sep}"
+            if title.startswith(prefix):
+                return title[len(prefix):].strip()
+        return title
 
     def publish_to_bilibili(self, video_path):
         try:
