@@ -338,7 +338,9 @@ class TestDeepSeries(unittest.TestCase):
         self.assertFalse(report["blocked"])
         self.assertEqual(report["attempts"], 2)
         self.assertLessEqual(report["estimated_seconds"], deep_series.DEEP_TARGET_MAX_SECONDS)
-        self.assertIn("压缩", mock_llm.call_args.args[0])
+        self.assertTrue(report["duration_agent_optimized"])
+        self.assertEqual(report["duration_agent_attempts"], 1)
+        self.assertIn("脚本时长优化代理", mock_llm.call_args.args[0])
 
     def test_dialogue_duration_estimate_blocks_chattts_three_minute_script(self):
         script = "女：" + "这" * 820
@@ -1448,6 +1450,49 @@ class TestDeepSeries(unittest.TestCase):
         image = Image.open(cover_path).convert("RGB")
         self.assertEqual(image.getpixel((8, 8)), (245, 245, 247))
 
+    def test_cover_quality_blocks_overlong_cover_title_before_publish(self):
+        assets = {
+            "cover_text": "AI深度解析",
+            "visual_design": {
+                "cover_title": "HOYA：眼镜公司为什么掌握光刻入口",
+                "main_elements": ["光学材料", "mask blanks"],
+            },
+        }
+
+        report = deep_series.assess_cover_quality(assets)
+
+        self.assertTrue(report["blocked"])
+        self.assertIn("封面主标题过长", "；".join(report["reasons"]))
+
+    def test_publish_gate_blocks_overtime_sparse_sources_and_cover_risk(self):
+        episode = {
+            "title": "HOYA：眼镜公司为什么掌握光刻入口",
+            "actual_seconds": 181.0,
+            "source_count": 2,
+            "cover_quality": {"blocked": True, "reasons": ["封面主标题过长，容易裁切"]},
+        }
+
+        gate = deep_series.assess_publish_gate({"title": "AI时代的隐形地基"}, episode)
+
+        self.assertTrue(gate["blocked"])
+        joined = "；".join(gate["reasons"])
+        self.assertIn("超过150秒", joined)
+        self.assertIn("有效来源不足", joined)
+        self.assertIn("封面", joined)
+
+    def test_publish_gate_allows_short_sourced_episode(self):
+        episode = {
+            "title": "味之素：味精公司为什么成了高端芯片底座",
+            "actual_seconds": 128.0,
+            "source_count": 4,
+            "cover_quality": {"blocked": False, "reasons": []},
+        }
+
+        gate = deep_series.assess_publish_gate({"title": "AI时代的隐形地基"}, episode)
+
+        self.assertFalse(gate["blocked"])
+        self.assertEqual(gate["reasons"], [])
+
     def test_cover_style_label_removes_template_words(self):
         # 封面上的风格胶囊不能暴露 iOS/View 这类模板词，只保留能描述内容的频道标签。
         self.assertEqual(deep_series.cover_style_label("iOS View、科技财经"), "科技财经")
@@ -1961,6 +2006,127 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(episode["script_path"], "script.md")
         self.assertEqual(episode["quality_block_reason"], "")
         self.assertFalse(episode["fallback_used"])
+
+    def test_generate_deep_feedback_advice_writes_report_and_codex_prompt(self):
+        metrics_path = os.path.join(self.tmpdir, "metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "videos": [
+                        {
+                            "series": "AI时代的隐形地基",
+                            "episode": "HOYA：眼镜公司为什么掌握光刻入口",
+                            "views": 320,
+                            "avg_view_seconds": 41,
+                            "completion_rate": 0.2,
+                            "click_rate": 0.018,
+                        }
+                    ]
+                },
+                f,
+                ensure_ascii=False,
+            )
+        config = {
+            "series": [
+                {
+                    "title": "AI时代的隐形地基",
+                    "episodes": [
+                        {
+                            "title": "HOYA：眼镜公司为什么掌握光刻入口",
+                            "publish_title": "HOYA站上光刻入口",
+                            "actual_seconds": 205.0,
+                            "source_count": 2,
+                            "quality_block_reason": "音频实际 205 秒，超过 180 秒",
+                        }
+                    ],
+                }
+            ]
+        }
+        with patch("deep_series.load_config", return_value=config), \
+                patch("deep_series.call_llm", return_value="## 优化建议\n\n请先收紧时长和封面。") as mock_llm:
+            result = deep_series.generate_deep_feedback_advice(metrics_path=metrics_path, output_dir=self.tmpdir)
+
+        self.assertTrue(os.path.exists(result["report_path"]))
+        self.assertTrue(os.path.exists(result["advice_path"]))
+        with open(result["advice_path"], "r", encoding="utf-8") as f:
+            advice = f.read()
+        self.assertIn("可复制给 Codex 的执行提示词", advice)
+        self.assertIn("请先收紧时长和封面", advice)
+        prompt = mock_llm.call_args.args[0]
+        self.assertIn("播放量", prompt)
+        self.assertIn("完播率", prompt)
+
+    def test_generate_deep_feedback_advice_auto_scrapes_bilibili_metrics(self):
+        metrics_path = os.path.join(self.tmpdir, "deep_feedback_metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({"videos": [{"episode": "HOYA站上光刻入口", "views": 320}]}, f, ensure_ascii=False)
+        config = {
+            "series": [
+                {
+                    "title": "AI时代的隐形地基",
+                    "episodes": [{"title": "HOYA站上光刻入口", "generated": True}],
+                }
+            ]
+        }
+
+        with patch("deep_series.load_config", return_value=config), \
+                patch("deep_series.call_llm", return_value="## 优化建议"), \
+                patch("crawler.bilibili_feedback.scrape_bilibili_article_metrics", return_value={
+                    "metrics_path": metrics_path,
+                    "metric_count": 1,
+                    "source": "bilibili_article_manager",
+                    "error": "",
+                }) as mock_scrape:
+            result = deep_series.generate_deep_feedback_advice(output_dir=self.tmpdir)
+
+        mock_scrape.assert_called_once()
+        self.assertEqual(result["metrics_path"], metrics_path)
+        self.assertEqual(result["metric_count"], 1)
+        self.assertEqual(result["metrics_source"], "bilibili_article_manager")
+        self.assertEqual(result["metrics_error"], "")
+        with open(result["report_path"], "r", encoding="utf-8") as f:
+            report = json.load(f)
+        self.assertEqual(report["summary"]["metric_count"], 1)
+
+    def test_generate_deep_feedback_advice_keeps_fallback_when_bilibili_scrape_fails(self):
+        config = {
+            "series": [
+                {
+                    "title": "AI时代的隐形地基",
+                    "episodes": [{"title": "HOYA站上光刻入口", "generated": True}],
+                }
+            ]
+        }
+
+        with patch("deep_series.load_config", return_value=config), \
+                patch("crawler.bilibili_feedback.scrape_bilibili_article_metrics", side_effect=RuntimeError("Chrome 用户目录被占用")), \
+                patch("deep_series.call_llm", side_effect=RuntimeError("skip ai")):
+            result = deep_series.generate_deep_feedback_advice(output_dir=self.tmpdir)
+
+        self.assertIn("Chrome 用户目录被占用", result["metrics_error"])
+        self.assertEqual(result["metric_count"], 0)
+        with open(result["advice_path"], "r", encoding="utf-8") as f:
+            advice = f.read()
+        self.assertIn("B站自动抓取失败", advice)
+        self.assertIn("不要在待发布或上传阶段拦截", advice)
+
+    def test_feedback_ai_prompt_prioritizes_metric_and_risk_rows(self):
+        videos = [
+            {"series": "旧系列", "episode": f"旧主题{i}", "actual_seconds": 90, "metrics": {}, "risks": []}
+            for i in range(25)
+        ]
+        videos.append({
+            "series": "AI时代的隐形地基",
+            "episode": "高风险主题",
+            "actual_seconds": 205,
+            "metrics": {"views": 120, "completion_rate": 0.2},
+            "risks": ["完播率偏低"],
+        })
+
+        prompt = deep_series.build_deep_feedback_ai_prompt({"summary": {}, "videos": videos})
+
+        self.assertIn("高风险主题", prompt)
+        self.assertNotIn("旧主题24", prompt)
 
     def test_create_deep_slide_images_keeps_dialogue_segments_and_writes_durations(self):
         script_path = os.path.join(self.tmpdir, "script.md")

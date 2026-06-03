@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import csv
 import datetime
 import json
 import math
@@ -39,6 +40,9 @@ DEEP_SCRIPT_SECONDS_PER_CHAR = 0.22
 DEEP_AUDIO_WARNING_MAX_SECONDS = 180
 DEEP_OPENING_HOOK_LINES = 4
 DEEP_OPENING_HOOK_MAX_ATTEMPTS = 3
+DEEP_FEEDBACK_METRICS_FILE = os.path.join(main.ROOT_DIR, "deepContent", "deep_feedback_metrics.json")
+DEEP_FEEDBACK_REPORT_FILE = "deep_feedback_report.json"
+DEEP_FEEDBACK_ADVICE_FILE = "deep_optimization_advice.md"
 
 
 # 这里保留一个最小可用的默认配置，方便首次启动时自动生成文件。
@@ -585,10 +589,10 @@ def assess_dialogue_duration(script: str) -> Dict:
     }
 
 
-def rewrite_dialogue_script_for_duration(series: Dict, episode: Dict, script: str, report: Dict) -> str:
-    # 超长脚本只做压缩重写，不重新发散，避免越改越长。
+def optimize_overtime_dialogue_script_with_agent(series: Dict, episode: Dict, script: str, report: Dict) -> str:
+    # 专门的脚本时长优化代理：只处理超时脚本，保留事实边界和双主持结构，不重新发散选题。
     prompt = (
-        "你是短视频脚本压缩编辑。\n"
+        "你是深度系列视频的脚本时长优化代理。\n"
         f"系列：{series.get('title', '')}\n"
         f"主题：{episode.get('title', '')}\n\n"
         f"请把下面脚本压缩到 {DEEP_TARGET_MIN_SECONDS}-{DEEP_TARGET_MAX_SECONDS} 秒。\n"
@@ -597,6 +601,11 @@ def rewrite_dialogue_script_for_duration(series: Dict, episode: Dict, script: st
         "压缩原因：" + "；".join(report.get("reasons", [])) + "\n"
     )
     return clean_script_output(call_llm(prompt, script))
+
+
+def rewrite_dialogue_script_for_duration(series: Dict, episode: Dict, script: str, report: Dict) -> str:
+    # 兼容旧调用名，实际统一交给“脚本时长优化代理”处理。
+    return optimize_overtime_dialogue_script_with_agent(series, episode, script, report)
 
 
 def extract_opening_hook(script: str, line_count: int = DEEP_OPENING_HOOK_LINES) -> str:
@@ -856,6 +865,9 @@ def _finish_dialogue_script_review(series: Dict, episode: Dict, research_report:
     final_report["attempts"] = attempts
     final_report["hook_review"] = hook_report
     final_report["retention_review"] = retention_report
+    final_report["duration_agent_optimized"] = bool(report.get("duration_agent_optimized"))
+    final_report["duration_agent_attempts"] = int(report.get("duration_agent_attempts") or 0)
+    final_report["duration_agent_initial_seconds"] = float(report.get("duration_agent_initial_seconds") or 0.0)
     if retention_report.get("blocked"):
         # 整体留存不足不直接卡死生成，但会进入质量报告，方便人工复查。
         final_report["blocked"] = True
@@ -867,13 +879,21 @@ def generate_dialogue_script_with_duration_guard(series: Dict, episode: Dict, re
     # 脚本生成后马上估算时长，最多重写三次，避免长稿继续进入 TTS 和视频渲染。
     script = ""
     report = {}
+    duration_agent_attempts = 0
+    duration_agent_initial_seconds = 0.0
     for attempt in range(1, DEEP_RESEARCH_MAX_ATTEMPTS + 1):
         if attempt == 1:
             script = generate_dialogue_script(series, episode, research_report, audit_report)
         else:
-            script = rewrite_dialogue_script_for_duration(series, episode, script, report)
+            duration_agent_attempts += 1
+            script = optimize_overtime_dialogue_script_with_agent(series, episode, script, report)
         report = assess_dialogue_duration(script)
         report["attempts"] = attempt
+        if attempt == 1:
+            duration_agent_initial_seconds = report.get("estimated_seconds", 0.0)
+        report["duration_agent_optimized"] = duration_agent_attempts > 0
+        report["duration_agent_attempts"] = duration_agent_attempts
+        report["duration_agent_initial_seconds"] = duration_agent_initial_seconds
         if not report["blocked"]:
             return _finish_dialogue_script_review(series, episode, research_report, audit_report, script, report)
     return _finish_dialogue_script_review(series, episode, research_report, audit_report, script, report)
@@ -2371,6 +2391,8 @@ def mark_episode_tts_generated(config: Dict, series_title: str, episode_title: s
         "publish_title",
         "publish_desc",
         "publish_tags",
+        "cover_quality",
+        "publish_gate",
     ):
         episode[key] = [] if key == "cover_option_paths" else ""
     episode["review_blocked"] = bool(result.get("review_blocked"))
@@ -2402,6 +2424,8 @@ def mark_episode_generated(config: Dict, series_title: str, episode_title: str, 
         "publish_title",
         "publish_desc",
         "publish_tags",
+        "cover_quality",
+        "publish_gate",
         "source_count",
         "estimated_seconds",
         "actual_seconds",
@@ -3013,6 +3037,87 @@ def create_deep_cover_options(series: Dict, episode: Dict, assets: Dict, output_
     return paths
 
 
+def assess_cover_quality(assets: Dict, cover_path: str = "") -> Dict:
+    # 封面质量先做可稳定自动化的硬检查：文字长度、基础尺寸和明显英文残片。
+    reasons: List[str] = []
+    warnings: List[str] = []
+    design = assets.get("visual_design") if isinstance(assets.get("visual_design"), dict) else {}
+    cover_text = re.sub(r"\s+", "", str(assets.get("cover_text") or ""))
+    cover_title = re.sub(r"\s+", "", str(design.get("cover_title") or assets.get("title") or ""))
+    if len(cover_text) > DEEP_COVER_TEXT_MAX_CHARS:
+        reasons.append(f"封面短文案超过{DEEP_COVER_TEXT_MAX_CHARS}字，移动端缩略图不稳定")
+    if len(cover_title) > 16:
+        reasons.append("封面主标题过长，容易裁切")
+
+    labels = []
+    for item in design.get("main_elements", []) or []:
+        labels.append(visual_display_label(item))
+    for scene in design.get("scene_cards", []) or []:
+        if isinstance(scene, dict):
+            labels.append(visual_display_label(scene.get("label") or scene.get("keyword")))
+    english_fragments = [
+        label for label in labels
+        if re.search(r"[A-Za-z]", label or "") and not re.fullmatch(r"[A-Z0-9]{2,8}", label or "")
+    ]
+    if english_fragments:
+        warnings.append("封面/画面标签含英文残片：" + "、".join(english_fragments[:3]))
+
+    if cover_path:
+        if not os.path.exists(cover_path):
+            reasons.append("封面图片文件不存在")
+        else:
+            try:
+                from PIL import Image
+                with Image.open(cover_path) as image:
+                    width, height = image.size
+                if width < 720 or height < 720:
+                    reasons.append("封面图片分辨率过低")
+            except Exception as exc:
+                warnings.append(f"封面图片无法读取：{exc}")
+    return {"blocked": bool(reasons), "reasons": reasons, "warnings": warnings}
+
+
+def assess_publish_gate(series: Dict, episode: Dict) -> Dict:
+    # 这里现在只做质量风险评估，结果给数据回流使用，不再阻断 UI 待发布和上传流程。
+    reasons: List[str] = []
+    warnings: List[str] = []
+    try:
+        actual_seconds = float(episode.get("actual_seconds") or 0)
+    except (TypeError, ValueError):
+        actual_seconds = 0.0
+    if actual_seconds > DEEP_TARGET_MAX_SECONDS:
+        reasons.append(f"视频实际{actual_seconds:.0f}秒，超过150秒")
+
+    if "source_count" in episode:
+        try:
+            source_count = int(episode.get("source_count") or 0)
+        except (TypeError, ValueError):
+            source_count = 0
+        if source_count < DEEP_MIN_VALID_SOURCES:
+            reasons.append(f"有效来源不足：{source_count}/{DEEP_MIN_VALID_SOURCES}")
+
+    quality_reason = str(episode.get("quality_block_reason") or "")
+    if quality_reason:
+        if "超过" in quality_reason or "有效来源不足" in quality_reason:
+            warnings.append(quality_reason)
+        else:
+            warnings.append("质量提醒：" + quality_reason)
+
+    cover_quality = episode.get("cover_quality")
+    if isinstance(cover_quality, dict):
+        if cover_quality.get("blocked"):
+            reasons.extend(str(item) for item in cover_quality.get("reasons", []))
+        warnings.extend(str(item) for item in cover_quality.get("warnings", []))
+
+    return {
+        "blocked": bool(reasons),
+        "series": series.get("title", ""),
+        "episode": episode.get("title", ""),
+        "reasons": reasons,
+        "warnings": warnings,
+    }
+
+
 def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
     # 发布信息只生成一次，后面发视频和发文案都直接复用。
     # title 直接作为 B 站标题使用，系列名留在简介和合集里，避免信息流里显得程式化。
@@ -3082,6 +3187,7 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
     assets["visual_design"] = visual_design
     assets["cover_path"] = create_deep_cover_image(series, episode, assets, output_dir)
     assets["cover_option_paths"] = create_deep_cover_options(series, episode, assets, output_dir)
+    assets["cover_quality"] = assess_cover_quality(assets, assets["cover_path"])
     assets_path = os.path.join(output_dir, "publish_assets.json")
     with open(assets_path, "w", encoding="utf-8") as f:
         json.dump(assets, f, ensure_ascii=False, indent=2)
@@ -3145,6 +3251,8 @@ def build_episode_media_result(series: Dict, episode: Dict) -> Dict:
         "quality_report_path": episode.get("quality_report_path", ""),
         "visual_design_path": episode.get("visual_design_path", ""),
         "visual_asset_paths": episode.get("visual_asset_paths", {}),
+        "cover_quality": episode.get("cover_quality", {}),
+        "publish_gate": episode.get("publish_gate", {}),
         "source_count": episode.get("source_count", 0),
         "estimated_seconds": episode.get("estimated_seconds", 0.0),
         "actual_seconds": episode.get("actual_seconds", 0.0),
@@ -3196,7 +3304,286 @@ def generate_episode_video_by_titles(series_title: str, episode_title: str) -> D
     result["publish_tags"] = assets["tags"]
     result["cover_path"] = assets.get("cover_path", "")
     result["cover_option_paths"] = assets.get("cover_option_paths", [])
+    result["cover_quality"] = assets.get("cover_quality", {})
+    gate_input = dict(episode)
+    gate_input.update(result)
+    result["publish_gate"] = assess_publish_gate(series, gate_input)
     config = load_config()
     mark_episode_generated(config, series_title, episode_title, result)
     save_config(config)
     return result
+
+
+def _metric_float(value, default: float = 0.0) -> float:
+    # B站导出的表格可能带百分号或空值，这里统一转成浮点数，后续规则就能稳定计算。
+    if value is None:
+        return default
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return default
+    is_percent = text.endswith("%")
+    text = text.rstrip("%")
+    try:
+        number = float(text)
+    except ValueError:
+        return default
+    if is_percent:
+        return number / 100
+    return number
+
+
+def _first_metric_value(row: Dict, keys: List[str], default=""):
+    for key in keys:
+        if key in row and row.get(key) not in (None, ""):
+            return row.get(key)
+    return default
+
+
+def normalize_feedback_metric_row(row: Dict) -> Dict:
+    # 同时兼容手写 JSON 和 B站数据表的中文列名，避免用户每次都手工改字段名。
+    return {
+        "series": str(_first_metric_value(row, ["series", "系列"], "")).strip(),
+        "episode": str(_first_metric_value(row, ["episode", "主题", "标题", "title"], "")).strip(),
+        "publish_title": str(_first_metric_value(row, ["publish_title", "发布标题", "稿件标题"], "")).strip(),
+        "video_path": str(_first_metric_value(row, ["video_path", "视频路径"], "")).strip(),
+        "views": int(_metric_float(_first_metric_value(row, ["views", "播放量", "播放"], 0))),
+        "avg_view_seconds": _metric_float(_first_metric_value(row, ["avg_view_seconds", "平均观看秒数", "平均观看时长"], 0)),
+        "completion_rate": _metric_float(_first_metric_value(row, ["completion_rate", "完播率"], 0)),
+        "click_rate": _metric_float(_first_metric_value(row, ["click_rate", "点击率", "封面点击率"], 0)),
+        "likes": int(_metric_float(_first_metric_value(row, ["likes", "点赞"], 0))),
+        "comments": int(_metric_float(_first_metric_value(row, ["comments", "评论"], 0))),
+        "shares": int(_metric_float(_first_metric_value(row, ["shares", "分享"], 0))),
+    }
+
+
+def load_feedback_metrics(metrics_path: str = None) -> List[Dict]:
+    # 指标文件不存在时返回空列表，系统仍能基于本地生成质量给出优化建议。
+    path = metrics_path or DEEP_FEEDBACK_METRICS_FILE
+    if not path or not os.path.exists(path):
+        return []
+    if path.lower().endswith(".csv"):
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            return [normalize_feedback_metric_row(row) for row in csv.DictReader(f)]
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    rows = data.get("videos", data) if isinstance(data, dict) else data
+    if not isinstance(rows, list):
+        return []
+    return [normalize_feedback_metric_row(row) for row in rows if isinstance(row, dict)]
+
+
+def collect_deep_feedback_metrics(metrics_path: str = None, auto_scrape: bool = True, output_dir: str = None) -> Dict:
+    # 自动回流入口：没有手工指标文件时，直接从已登录 Chrome 的 B站创作中心抓取稿件数据。
+    if metrics_path:
+        metric_count = len(load_feedback_metrics(metrics_path)) if os.path.exists(metrics_path) else 0
+        error = "" if os.path.exists(metrics_path) else f"指标文件不存在：{metrics_path}"
+        return {
+            "metrics_path": metrics_path,
+            "metric_count": metric_count,
+            "metrics_source": "manual_file",
+            "metrics_error": error,
+        }
+
+    output_dir = output_dir or os.path.dirname(DEEP_FEEDBACK_METRICS_FILE)
+    output_path = os.path.join(output_dir, os.path.basename(DEEP_FEEDBACK_METRICS_FILE))
+    if not auto_scrape:
+        return {
+            "metrics_path": output_path,
+            "metric_count": len(load_feedback_metrics(output_path)),
+            "metrics_source": "local_file",
+            "metrics_error": "",
+        }
+
+    try:
+        from crawler.bilibili_feedback import scrape_bilibili_article_metrics
+        result = scrape_bilibili_article_metrics(output_path=output_path)
+        return {
+            "metrics_path": result.get("metrics_path") or output_path,
+            "metric_count": int(result.get("metric_count") or 0),
+            "metrics_source": result.get("source") or "bilibili_article_manager",
+            "metrics_error": result.get("error") or "",
+        }
+    except Exception as exc:
+        return {
+            "metrics_path": output_path,
+            "metric_count": 0,
+            "metrics_source": "bilibili_article_manager",
+            "metrics_error": str(exc),
+        }
+
+
+def _feedback_metric_key(row: Dict) -> tuple:
+    return (
+        str(row.get("series") or "").strip(),
+        str(row.get("episode") or row.get("publish_title") or "").strip(),
+    )
+
+
+def _episode_feedback_risks(episode: Dict, metrics: Dict, gate: Dict) -> List[str]:
+    risks: List[str] = []
+    if gate.get("blocked"):
+        risks.extend(gate.get("reasons", []))
+    actual_seconds = _metric_float(episode.get("actual_seconds"), 0)
+    avg_view_seconds = _metric_float(metrics.get("avg_view_seconds"), 0)
+    completion_rate = _metric_float(metrics.get("completion_rate"), 0)
+    click_rate = _metric_float(metrics.get("click_rate"), 0)
+    if actual_seconds and avg_view_seconds and avg_view_seconds / actual_seconds < 0.35:
+        risks.append("平均观看时长低于总时长35%")
+    if completion_rate and completion_rate < 0.35:
+        risks.append("完播率偏低")
+    if click_rate and click_rate < 0.025:
+        risks.append("点击率偏低")
+    if episode.get("fallback_used"):
+        risks.append("使用保守写稿，可能缺少差异化信息")
+    return list(dict.fromkeys(str(item) for item in risks if item))
+
+
+def build_deep_feedback_report(config: Dict, metrics_path: str = None) -> Dict:
+    # 把平台指标和本地生成质量合并成一份机器可读报告，后续 AI 只消费这一份上下文。
+    metrics_rows = load_feedback_metrics(metrics_path)
+    metrics_by_key = {_feedback_metric_key(row): row for row in metrics_rows}
+    videos: List[Dict] = []
+    for series in config.get("series", []):
+        for episode in series.get("episodes", []):
+            metric = metrics_by_key.get((series.get("title", ""), episode.get("title", ""))) or \
+                metrics_by_key.get((series.get("title", ""), episode.get("publish_title", ""))) or {}
+            if not (episode.get("generated") or episode.get("published") or episode.get("video_path") or metric):
+                continue
+            gate = assess_publish_gate(series, episode)
+            risks = _episode_feedback_risks(episode, metric, gate)
+            videos.append({
+                "series": series.get("title", ""),
+                "episode": episode.get("title", ""),
+                "publish_title": episode.get("publish_title", ""),
+                "actual_seconds": _metric_float(episode.get("actual_seconds"), 0),
+                "estimated_seconds": _metric_float(episode.get("estimated_seconds"), 0),
+                "source_count": int(_metric_float(episode.get("source_count"), 0)),
+                "quality_block_reason": episode.get("quality_block_reason", ""),
+                "publish_gate": gate,
+                "metrics": metric,
+                "risks": risks,
+            })
+    summary = {
+        "video_count": len(videos),
+        "metric_count": len(metrics_rows),
+        "blocked_count": sum(1 for item in videos if item["publish_gate"].get("blocked")),
+        "low_click_count": sum(1 for item in videos if "点击率偏低" in item["risks"]),
+        "low_retention_count": sum(1 for item in videos if "完播率偏低" in item["risks"] or "平均观看时长低于总时长35%" in item["risks"]),
+    }
+    return {"summary": summary, "videos": videos}
+
+
+def build_deep_feedback_ai_prompt(report: Dict) -> str:
+    # 提示词明确要求输出可执行的 Codex 任务，避免只得到泛泛运营建议。
+    compact_rows = []
+    # 先把有平台指标或风险的视频交给 AI，避免历史配置里的老视频挤掉真正需要复盘的样本。
+    prompt_items = sorted(
+        report.get("videos", []),
+        key=lambda item: (
+            bool(item.get("risks")),
+            bool(item.get("metrics")),
+            _metric_float(item.get("actual_seconds"), 0),
+        ),
+        reverse=True,
+    )
+    for item in prompt_items[:20]:
+        metrics = item.get("metrics", {})
+        compact_rows.append({
+            "系列": item.get("series", ""),
+            "主题": item.get("episode", ""),
+            "发布标题": item.get("publish_title", ""),
+            "时长": item.get("actual_seconds") or item.get("estimated_seconds"),
+            "来源数": item.get("source_count"),
+            "播放量": metrics.get("views", 0),
+            "平均观看秒数": metrics.get("avg_view_seconds", 0),
+            "完播率": metrics.get("completion_rate", 0),
+            "点击率": metrics.get("click_rate", 0),
+            "风险": item.get("risks", []),
+        })
+    return (
+        "你是 OpenNewsBrief 深度系列增长和工程优化顾问。\n"
+        "请根据下面的数据回流报告，生成一份可以直接复制给 Codex 执行的优化建议。\n"
+        "要求：\n"
+        "1. 优先给代码层面的闭环任务，不要只写运营口号。\n"
+        "2. 分清点击率问题、完播率问题、资料质量问题和发布质量风险问题。\n"
+        "3. 每条建议都要说明应修改的模块或函数。\n"
+        "4. 输出中文 Markdown。\n\n"
+        f"汇总：{json.dumps(report.get('summary', {}), ensure_ascii=False)}\n"
+        f"视频数据：{json.dumps(compact_rows, ensure_ascii=False, indent=2)}"
+    )
+
+
+def fallback_deep_feedback_advice(report: Dict) -> str:
+    # LLM 不可用时也给出可执行的保底建议，保证数据回流命令不会空跑。
+    summary = report.get("summary", {})
+    lines = [
+        "## 规则生成的优化建议",
+        "",
+        f"- 当前纳入分析视频 {summary.get('video_count', 0)} 条，已有指标 {summary.get('metric_count', 0)} 条。",
+    ]
+    if summary.get("blocked_count", 0):
+        lines.append("- 先回到生成阶段处理质量风险：超过150秒、来源不足或封面风险的视频不要在待发布或上传阶段拦截。")
+    if summary.get("low_click_count", 0):
+        lines.append("- 点击率偏低时，优先重做封面首屏和标题承诺一致性。")
+    if summary.get("low_retention_count", 0):
+        lines.append("- 留存偏低时，把脚本压到650-750字，并单独生成前15秒冷开场。")
+    if len(lines) == 3:
+        lines.append("- 暂无平台指标，先补齐 B站播放量、点击率、平均观看和完播率。")
+    return "\n".join(lines)
+
+
+def generate_deep_feedback_advice(
+        metrics_path: str = None,
+        output_dir: str = None,
+        use_llm: bool = True,
+        auto_scrape: bool = True) -> Dict:
+    # 一键闭环入口：读取指标、合并本地质量、让 AI 生成建议，并落成可复制给 Codex 的 Markdown。
+    output_dir = output_dir or os.path.join(main.ROOT_DIR, "deepContent")
+    os.makedirs(output_dir, exist_ok=True)
+    metrics_result = collect_deep_feedback_metrics(metrics_path=metrics_path, auto_scrape=auto_scrape, output_dir=output_dir)
+    actual_metrics_path = metrics_result.get("metrics_path") or metrics_path
+    if actual_metrics_path and not os.path.exists(actual_metrics_path):
+        actual_metrics_path = metrics_path
+    report = build_deep_feedback_report(load_config(), metrics_path=actual_metrics_path)
+    report["metrics_collection"] = metrics_result
+    report_path = os.path.join(output_dir, DEEP_FEEDBACK_REPORT_FILE)
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+
+    prompt = build_deep_feedback_ai_prompt(report)
+    ai_advice = ""
+    if use_llm:
+        try:
+            ai_advice = call_llm(prompt)
+        except Exception as exc:
+            ai_advice = fallback_deep_feedback_advice(report) + f"\n\n> AI 建议生成失败，已使用规则兜底：{exc}"
+    else:
+        ai_advice = fallback_deep_feedback_advice(report)
+
+    if metrics_result.get("metrics_error"):
+        # 抓取失败时仍然产出建议文件，但把失败原因写在最前面，方便下一轮直接修数据链路。
+        prefix = "B站自动抓取失败" if metrics_result.get("metrics_source") == "bilibili_article_manager" else "指标文件读取提醒"
+        ai_advice = f"> {prefix}，已基于本地质量兜底：{metrics_result.get('metrics_error')}\n\n" + ai_advice
+
+    codex_prompt = (
+        "请在 `D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief` 中继续优化深度系列视频生成闭环。\n"
+        "先读取 `deepContent\\deep_feedback_report.json`，再根据报告里的点击率、完播率、平均观看时长、来源数和发布质量风险原因做窄范围改动。\n"
+        "发布列表和单个/批量发布不要在待发布或上传阶段拦截，超时脚本必须回到专门的优化代理处理。\n"
+        "优先顺序：质量风险回修、封面/首屏可读性、脚本时长、前15秒冷开场、数据回流字段。\n"
+        "不要修改每日简报功能，新增或修改代码都写具体中文注释，并运行相关 unittest。"
+    )
+    advice_path = os.path.join(output_dir, DEEP_FEEDBACK_ADVICE_FILE)
+    with open(advice_path, "w", encoding="utf-8") as f:
+        f.write("# 深度系列自动优化建议\n\n")
+        f.write(ai_advice.strip() + "\n\n")
+        f.write("## 可复制给 Codex 的执行提示词\n\n")
+        f.write("```text\n" + codex_prompt + "\n```\n")
+    return {
+        "report_path": report_path,
+        "advice_path": advice_path,
+        "summary": report.get("summary", {}),
+        "metrics_path": metrics_result.get("metrics_path") or "",
+        "metric_count": metrics_result.get("metric_count") or report.get("summary", {}).get("metric_count", 0),
+        "metrics_source": metrics_result.get("metrics_source") or "",
+        "metrics_error": metrics_result.get("metrics_error") or "",
+    }

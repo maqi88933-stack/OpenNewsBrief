@@ -58,6 +58,19 @@ class TestUiWorker(unittest.TestCase):
             flush=True,
         )
 
+    @patch("ui_worker.deep_series.generate_deep_feedback_advice", return_value={"advice_path": "deep_advice.md"})
+    @patch("builtins.print")
+    def test_main_cli_dispatches_deep_feedback_mode(self, mock_print, mock_feedback):
+        # 数据回流入口固定走 deep_series，由 worker 统一把建议文件路径返回给 UI 或命令行调用方。
+        code = ui_worker.main_cli(["--deep-feedback", "metrics.json"])
+
+        self.assertEqual(code, 0)
+        mock_feedback.assert_called_once_with(metrics_path="metrics.json")
+        mock_print.assert_called_once_with(
+            "__RESULT__" + json.dumps({"advice_path": "deep_advice.md"}, ensure_ascii=False),
+            flush=True,
+        )
+
     @patch("ui_worker.main.run_topic_pipeline", return_value={"topic": "AI 每日简报"})
     @patch("builtins.print")
     def test_main_cli_dispatches_daily_topic_mode(self, mock_print, mock_run_topic_pipeline):

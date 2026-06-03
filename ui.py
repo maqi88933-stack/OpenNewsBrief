@@ -40,6 +40,7 @@ TEXT_COLOR = "#1D1D1F"
 SUBTEXT_COLOR = "#6E6E73"
 PRIMARY_COLOR = "#007AFF"
 SUCCESS_COLOR = "#34C759"
+FEEDBACK_COLOR = "#5856D6"
 BORDER_COLOR = "#DADAE0"
 SOFT_BLUE = "#EAF3FF"
 BUTTON_DISABLED = "#B9C7D8"
@@ -840,6 +841,7 @@ class NewsBriefApp:
         for attr, normal_bg in (
             ("deep_generate_tts_button", SUCCESS_COLOR),
             ("deep_generate_video_button", PRIMARY_COLOR),
+            ("deep_feedback_button", FEEDBACK_COLOR),
         ):
             button = getattr(self, attr, None)
             if button:
@@ -975,6 +977,22 @@ class NewsBriefApp:
             daemon=True,
         )
         worker.start()
+
+    def start_deep_feedback(self):
+        if self.is_running or self.is_publishing:
+            return
+
+        self.is_running = True
+        self.run_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.deep_run_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.deep_run_series_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.set_deep_media_buttons("disabled")
+        self.publish_button.config(state="disabled", bg=BUTTON_DISABLED)
+        self.status_var.set("正在生成数据回流建议...")
+        # 数据回流会调用 AI 生成建议，放到后台线程里执行，避免卡住 Tk 主界面。
+        worker = threading.Thread(target=self.run_deep_feedback, daemon=True)
+        worker.start()
+
     def run_topics(self, topics):
         try:
             if not os.path.exists(self.worker_python):
@@ -1064,6 +1082,31 @@ class NewsBriefApp:
                 self.update_result_panel(result)
                 # 生成完成后重新读取配置，但保留当前选中的系列和主题。
                 self.reload_deep_config(series_title, episode_title)
+        except Exception:
+            self.append_log(traceback.format_exc())
+        finally:
+            self.finish_run()
+
+    def run_deep_feedback(self):
+        try:
+            self.append_log(f"\n{'=' * 56}\n")
+            self.append_log("开始生成深度系列数据回流建议\n")
+            self.append_log(f"{'=' * 56}\n")
+            # 不传手工指标文件时，worker 会优先从已登录 Chrome 的 B站创作中心自动抓取数据。
+            result = self.run_worker_subprocess(["--deep-feedback"])
+            if result:
+                self.latest_result = result
+                report_path = result.get("report_path", "")
+                advice_path = result.get("advice_path", "")
+                metric_count = result.get("metric_count", 0)
+                metrics_error = result.get("metrics_error", "")
+                self.append_log(f"B站回流指标：{metric_count} 条\n")
+                if metrics_error:
+                    self.append_log(f"B站回流提醒：{metrics_error}\n")
+                if report_path:
+                    self.append_log(f"数据回流报告：{report_path}\n")
+                if advice_path:
+                    self.append_log(f"优化建议文件：{advice_path}\n")
         except Exception:
             self.append_log(traceback.format_exc())
         finally:
@@ -1275,6 +1318,11 @@ class NewsBriefApp:
             "publish_title": episode.get("publish_title", ""),
             "publish_desc": episode.get("publish_desc", ""),
             "publish_tags": episode.get("publish_tags", ""),
+            "source_count": episode.get("source_count", 0),
+            "estimated_seconds": episode.get("estimated_seconds", 0.0),
+            "actual_seconds": episode.get("actual_seconds", 0.0),
+            "quality_block_reason": episode.get("quality_block_reason", ""),
+            "cover_quality": episode.get("cover_quality", {}),
             "published": bool(episode.get("published")),
         }
         assets_path = result.get("publish_assets_path")
@@ -1285,6 +1333,7 @@ class NewsBriefApp:
                 result["publish_title"] = result["publish_title"] or assets.get("title", "")
                 result["publish_desc"] = result["publish_desc"] or assets.get("desc", "")
                 result["publish_tags"] = result["publish_tags"] or assets.get("tags", "")
+                result["cover_quality"] = result["cover_quality"] or assets.get("cover_quality", {})
             except (OSError, json.JSONDecodeError):
                 pass
         if result.get("video_path") and not result.get("publish_desc"):
@@ -1294,13 +1343,16 @@ class NewsBriefApp:
                 result["publish_title"] = assets.get("title", "")
                 result["publish_desc"] = assets.get("desc", "")
                 result["publish_tags"] = assets.get("tags", "")
+                result["cover_quality"] = assets.get("cover_quality", {})
                 episode["publish_assets_path"] = result["publish_assets_path"]
                 episode["publish_title"] = result["publish_title"]
                 episode["publish_desc"] = result["publish_desc"]
                 episode["publish_tags"] = result["publish_tags"]
+                episode["cover_quality"] = result["cover_quality"]
                 deep_series.save_config(self.deep_config)
             except Exception as exc:
                 self.append_log(f"AI 发布信息生成失败：{exc}\n")
+        result["publish_gate"] = deep_series.assess_publish_gate(series, result)
         return result
 
     def mark_deep_episode_published(self, series_title, episode_title):
@@ -1671,6 +1723,13 @@ class NewsBriefApp:
             PRIMARY_COLOR,
             "white",
         )
+        self.deep_feedback_button = self.create_action_button(
+            run_actions,
+            "数据回流建议",
+            self.start_deep_feedback,
+            FEEDBACK_COLOR,
+            "white",
+        )
         self.refresh_deep_lists()
 
     def create_action_button(self, parent, text, command, bg, fg):
@@ -1702,6 +1761,13 @@ class NewsBriefApp:
         except (TypeError, ValueError):
             actual_seconds = 0
         return actual_seconds > deep_series.DEEP_TARGET_MAX_SECONDS
+
+    def get_deep_publish_gate(self, series, episode):
+        # 这里只保留质量风险读取能力，发布阶段不再用它拦截视频。
+        gate = episode.get("publish_gate")
+        if isinstance(gate, dict) and gate.get("reasons") is not None:
+            return gate
+        return deep_series.assess_publish_gate(series or {}, episode or {})
 
     def get_deep_episode_status(self, episode):
         if episode.get("review_blocked"):

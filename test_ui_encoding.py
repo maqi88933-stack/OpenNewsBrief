@@ -25,6 +25,7 @@ class TestUiEncoding(unittest.TestCase):
         self.assertEqual(app.get_deep_episode_status({"review_blocked": True}), "审核阻断")
         self.assertEqual(app.get_deep_episode_status({"generated": True, "video_path": "demo.mp4", "published": True}), "已发布")
         self.assertEqual(app.get_deep_episode_status({"generated": True, "video_path": "demo.mp4"}), "待发布")
+        self.assertEqual(app.get_deep_episode_status({"generated": True, "video_path": "demo.mp4", "actual_seconds": 181.0, "source_count": 0}), "待发布")
         self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md", "audio_path": "demo.mp3", "actual_seconds": 181.0}), "音频超时")
         self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md", "audio_path": "demo.mp3"}), "待合成视频")
         self.assertEqual(app.get_deep_episode_status({"review_ready": True, "script_path": "demo.md"}), "待合成TTS")
@@ -56,6 +57,7 @@ class TestUiEncoding(unittest.TestCase):
                 {"title": "A", "generated": True, "video_path": "a.mp4", "published": False},
                 {"title": "B", "generated": True, "video_path": "b.mp4", "published": True},
                 {"title": "C", "generated": False, "video_path": "c.mp4", "published": False},
+                {"title": "D", "generated": True, "video_path": "d.mp4", "published": False, "actual_seconds": 181.0},
             ],
         }
 
@@ -63,8 +65,26 @@ class TestUiEncoding(unittest.TestCase):
             pending = app.get_deep_publish_episodes(series, "pending")
             published = app.get_deep_publish_episodes(series, "published")
 
-        self.assertEqual([episode.get("title") for _series, episode in pending], ["A"])
+        self.assertEqual([episode.get("title") for _series, episode in pending], ["A", "D"])
         self.assertEqual([episode.get("title") for _series, episode in published], ["B"])
+
+    def test_build_deep_publish_result_exposes_publish_gate_reason(self):
+        app = object.__new__(ui.NewsBriefApp)
+        app.append_log = lambda _text: None
+        app.deep_config = {"series": []}
+        series = {"title": "AI未来三年系列"}
+        episode = {
+            "title": "超长主题",
+            "video_path": "demo.mp4",
+            "publish_desc": "已有发布简介",
+            "actual_seconds": 181.0,
+            "source_count": 2,
+        }
+
+        result = app.build_deep_publish_result(series, episode)
+
+        self.assertTrue(result["publish_gate"]["blocked"])
+        self.assertIn("超过150秒", "；".join(result["publish_gate"]["reasons"]))
 
     def test_mark_deep_episode_published_updates_config(self):
         app = object.__new__(ui.NewsBriefApp)
@@ -98,6 +118,73 @@ class TestUiEncoding(unittest.TestCase):
         result = app.build_deep_publish_result(series, episode)
 
         self.assertTrue(result["published"])
+
+    def test_selected_publish_does_not_block_on_publish_gate(self):
+        app = object.__new__(ui.NewsBriefApp)
+        logs = []
+        app.is_running = False
+        app.is_publishing = False
+        app.append_log = logs.append
+        app.get_generated_deep_episodes = lambda: [({"title": "系列"}, {"title": "超时主题"})]
+        app.deep_pending_publish_list = type("FakeList", (), {"curselection": lambda _self: (0,)})()
+        result = {
+            "episode": "超时主题",
+            "video_path": "demo.mp4",
+            "publish_gate": {"blocked": True, "reasons": ["视频实际181秒，超过150秒"]},
+        }
+        app.build_deep_publish_result = lambda _series, _episode: result
+        app.update_result_panel = lambda value: setattr(app, "_updated_result", value)
+        app.start_publish_to_bilibili = lambda: setattr(app, "_started_publish", True)
+
+        app.start_publish_selected_deep_video()
+
+        self.assertEqual(app.latest_result, result)
+        self.assertEqual(app._updated_result, result)
+        self.assertTrue(app._started_publish)
+        self.assertNotIn("发布门禁未通过", "".join(logs))
+
+    def test_batch_publish_keeps_gate_blocked_after_build_result(self):
+        app = object.__new__(ui.NewsBriefApp)
+        logs = []
+        app.is_running = False
+        app.is_publishing = False
+        app.append_log = logs.append
+        app.get_generated_deep_episodes = lambda: [({"title": "系列"}, {"title": "阻断"}), ({"title": "系列"}, {"title": "通过"})]
+        app.resolve_biliup_command = lambda: "biliup"
+        blocked = {"episode": "阻断", "video_path": "blocked.mp4", "publish_gate": {"blocked": True, "reasons": ["封面主标题过长"]}}
+        passed = {"episode": "通过", "video_path": "passed.mp4", "publish_gate": {"blocked": False, "reasons": []}}
+        app.build_deep_publish_result = lambda _series, episode: blocked if episode["title"] == "阻断" else passed
+
+        class FakeButton:
+            def config(self, **_kwargs):
+                pass
+
+        class FakeStatus:
+            def set(self, _text):
+                pass
+
+        class FakeThread:
+            def __init__(self, target, args, daemon=False):
+                self.args = args
+
+            def start(self):
+                # 这里只截获批量发布队列，不启动真实上传线程。
+                app._publish_results = self.args[0]
+
+        app.publish_button = FakeButton()
+        app.deep_publish_selected_button = FakeButton()
+        app.deep_publish_all_button = FakeButton()
+        app.run_button = FakeButton()
+        app.deep_run_button = FakeButton()
+        app.deep_run_series_button = FakeButton()
+        app.status_var = FakeStatus()
+        app.set_deep_media_buttons = lambda _state: None
+
+        with patch("ui.threading.Thread", FakeThread):
+            app.start_publish_deep_series_videos()
+
+        self.assertEqual(app._publish_results, [blocked, passed])
+        self.assertNotIn("跳过发布", "".join(logs))
 
     def test_worker_subprocess_forces_utf8_output(self):
         app = object.__new__(ui.NewsBriefApp)
@@ -182,6 +269,25 @@ class TestUiEncoding(unittest.TestCase):
         mock_run.assert_called_once_with(["--deep-generate-tts", "AI未来三年系列", "AI 为什么会替代搜索？"])
         self.assertEqual(app.latest_result, payload)
         self.assertTrue(any("开始合成深度TTS" in item for item in logs))
+
+    def test_deep_feedback_runs_in_worker_subprocess(self):
+        app = object.__new__(ui.NewsBriefApp)
+        app.latest_result = {}
+        logs = []
+        app.append_log = logs.append
+        app.finish_run = lambda: None
+
+        payload = {
+            "report_path": "deepContent/deep_feedback_report.json",
+            "advice_path": "deepContent/deep_optimization_advice.md",
+        }
+        with patch.object(app, "run_worker_subprocess", return_value=payload) as mock_run:
+            app.run_deep_feedback()
+
+        mock_run.assert_called_once_with(["--deep-feedback"])
+        self.assertEqual(app.latest_result, payload)
+        self.assertTrue(any("数据回流" in item for item in logs))
+        self.assertTrue(any("deep_optimization_advice.md" in item for item in logs))
 
     def test_post_ui_queues_background_thread_callbacks(self):
         class FakeRoot:

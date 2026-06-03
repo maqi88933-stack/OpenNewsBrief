@@ -9,6 +9,7 @@ RESULT_PREFIX = "__RESULT__"
 DEEP_MODE = "--deep"
 DEEP_GENERATE_TTS_MODE = "--deep-generate-tts"
 DEEP_GENERATE_VIDEO_MODE = "--deep-generate-video"
+DEEP_FEEDBACK_MODE = "--deep-feedback"
 
 
 def get_topic(title: str):
@@ -52,6 +53,14 @@ def run_deep_command(mode: str, args: list[str]) -> int:
     return 0
 
 
+def run_deep_feedback_command(args: list[str]) -> int:
+    # 数据回流保留一个可选手工指标路径；不传时由 deep_series 自动抓取 B站创作中心数据。
+    metrics_path = args[0] if args else None
+    result = deep_series.generate_deep_feedback_advice(metrics_path=metrics_path)
+    print_result(result)
+    return 0
+
+
 def main_cli(argv: list[str] = None):
     # 这里允许注入 argv，主要是为了让测试直接传参，不必依赖真实的 sys.argv。
     # 这样子进程入口依然很薄，但测试覆盖会稳定很多。
@@ -69,6 +78,9 @@ def main_cli(argv: list[str] = None):
 
     if mode == DEEP_GENERATE_VIDEO_MODE:
         return run_deep_command(DEEP_GENERATE_VIDEO_MODE, argv[1:])
+
+    if mode == DEEP_FEEDBACK_MODE:
+        return run_deep_feedback_command(argv[1:])
 
     topic = get_topic(mode)
     result = main.run_topic_pipeline(topic)
