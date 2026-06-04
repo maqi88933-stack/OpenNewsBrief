@@ -1,0 +1,856 @@
+{
+  "summary": {
+    "video_count": 28,
+    "metric_count": 50,
+    "blocked_count": 8,
+    "low_click_count": 0,
+    "low_retention_count": 0
+  },
+  "videos": [
+    {
+      "series": "AI未来三年系列",
+      "episode": "AI 为什么会替代搜索？",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "AI 为什么会替代搜索？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：AI为什么会替代搜索？从律师被AI“判刑”到阿里谷歌的入口之战，深度解析搜索的终极命运",
+        "publish_title": "AI未来三年系列：AI为什么会替代搜索？从律师被AI“判刑”到阿里谷歌的入口之战，深度解析搜索的终极命运",
+        "video_path": "",
+        "views": 340,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 6,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "为什么 Agent 会重构软件？",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "为什么 Agent 会重构软件？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {},
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "AI 为什么需要记忆？",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "AI 为什么需要记忆？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：AI为什么需要记忆？未来三年，没有记忆的AI将被淘汰！从一次性工具到持续性伙伴，揭秘记忆如何让AI真正懂你",
+        "publish_title": "AI未来三年系列：AI为什么需要记忆？未来三年，没有记忆的AI将被淘汰！从一次性工具到持续性伙伴，揭秘记忆如何让AI真正懂你",
+        "video_path": "",
+        "views": 99,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 2,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "为什么 MCP 很关键？",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "为什么 MCP 很关键？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {},
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "私有化 AI 为什么会爆发？",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "私有化 AI 为什么会爆发？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：私有化AI为什么会爆发？数据主权、成本优势与开源模型如何重塑企业AI格局？",
+        "publish_title": "AI未来三年系列：私有化AI为什么会爆发？数据主权、成本优势与开源模型如何重塑企业AI格局？",
+        "video_path": "",
+        "views": 9,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "AI 内容工厂会出现吗？",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "AI 内容工厂会出现吗？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {},
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "AI Agent——从聊天到替你干活，还有多远？",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "AI Agent——从聊天到替你干活，还有多远？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：AI Agent从聊天到替你干活，还有多远？深度拆解三大瓶颈与未来三年推演",
+        "publish_title": "AI未来三年系列：AI Agent从聊天到替你干活，还有多远？深度拆解三大瓶颈与未来三年推演",
+        "video_path": "",
+        "views": 123,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 3,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "多智能体会成为下一代公司吗？",
+      "publish_title": "先被掏空的是中层",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "多智能体会成为下一代公司吗？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：先被掏空的是中层",
+        "publish_title": "AI未来三年系列：先被掏空的是中层",
+        "video_path": "",
+        "views": 91,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 2,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "个人 AI 操作系统会出现吗？",
+      "publish_title": "AI会抢走入口权",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "个人 AI 操作系统会出现吗？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：AI会抢走入口权",
+        "publish_title": "AI未来三年系列：AI会抢走入口权",
+        "video_path": "",
+        "views": 126,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "AI 生成的内容还会被信任吗？",
+      "publish_title": "信任会变贵",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "AI 生成的内容还会被信任吗？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：信任会变贵",
+        "publish_title": "AI未来三年系列：信任会变贵",
+        "video_path": "",
+        "views": 307,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 7,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI未来三年系列",
+      "episode": "具身智能会先在哪些行业爆发？",
+      "publish_title": "具身智能先爆发在哪",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI未来三年系列",
+        "episode": "具身智能会先在哪些行业爆发？",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI未来三年系列：具身智能先爆发在哪",
+        "publish_title": "AI未来三年系列：具身智能先爆发在哪",
+        "video_path": "",
+        "views": 303,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI 如何重构企业",
+      "episode": "AI 为什么会吞掉 SaaS",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI 如何重构企业",
+        "episode": "AI 为什么会吞掉 SaaS",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {},
+      "risks": []
+    },
+    {
+      "series": "AI 如何重构企业",
+      "episode": "Agent 为什么是下一代操作系统",
+      "publish_title": "",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI 如何重构企业",
+        "episode": "Agent 为什么是下一代操作系统",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {},
+      "risks": []
+    },
+    {
+      "series": "AI 如何重构企业",
+      "episode": "为什么企业最终会选择私有化 AI",
+      "publish_title": "企业最终买的是AI控制权",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI 如何重构企业",
+        "episode": "为什么企业最终会选择私有化 AI",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI 如何重构企业：企业最终买的是AI控制权",
+        "publish_title": "AI 如何重构企业：企业最终买的是AI控制权",
+        "video_path": "",
+        "views": 115,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI 如何重构企业",
+      "episode": "AI 内容工厂会取代 MCN 吗",
+      "publish_title": "AI工厂会取代MCN吗",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI 如何重构企业",
+        "episode": "AI 内容工厂会取代 MCN 吗",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI 如何重构企业：AI工厂会取代MCN吗",
+        "publish_title": "AI 如何重构企业：AI工厂会取代MCN吗",
+        "video_path": "",
+        "views": 118,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI 如何重构企业",
+      "episode": "未来公司可能只需要 3 个人",
+      "publish_title": "未来公司只需3人？",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI 如何重构企业",
+        "episode": "未来公司可能只需要 3 个人",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI 如何重构企业：未来公司只需3人？",
+        "publish_title": "AI 如何重构企业：未来公司只需3人？",
+        "video_path": "",
+        "views": 106,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 2,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI 如何重构企业",
+      "episode": "AI 员工上岗后，中层管理会消失吗",
+      "publish_title": "中层不会消失，只会重新定价",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI 如何重构企业",
+        "episode": "AI 员工上岗后，中层管理会消失吗",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI 如何重构企业：中层不会消失，只会重新定价",
+        "publish_title": "AI 如何重构企业：中层不会消失，只会重新定价",
+        "video_path": "",
+        "views": 124,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 2,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI 如何重构企业",
+      "episode": "业务部门会自己开发系统吗",
+      "publish_title": "业务自建系统来了",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI 如何重构企业",
+        "episode": "业务部门会自己开发系统吗",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI 如何重构企业：业务自建系统来了",
+        "publish_title": "AI 如何重构企业：业务自建系统来了",
+        "video_path": "",
+        "views": 115,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI时代老树开新花",
+      "episode": "IBM：老蓝巨人为什么又回到 AI 牌桌",
+      "publish_title": "IBM靠什么重回AI牌桌",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI时代老树开新花",
+        "episode": "IBM：老蓝巨人为什么又回到 AI 牌桌",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代老树开新花：IBM靠什么重回AI牌桌",
+        "publish_title": "AI时代老树开新花：IBM靠什么重回AI牌桌",
+        "video_path": "",
+        "views": 97,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 2,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI时代老树开新花",
+      "episode": "Dell：卖电脑的公司为什么吃到 AI 服务器红利",
+      "publish_title": "不造GPU，照样赚AI钱",
+      "actual_seconds": 218.8,
+      "estimated_seconds": 179.5,
+      "source_count": 0,
+      "quality_block_reason": "三轮检索后仍资料不足，已启用保守写稿",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代老树开新花",
+        "episode": "Dell：卖电脑的公司为什么吃到 AI 服务器红利",
+        "reasons": [
+          "视频实际219秒，超过150秒"
+        ],
+        "warnings": [
+          "质量提醒：三轮检索后仍资料不足，已启用保守写稿"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代老树开新花：不造GPU，照样赚AI钱",
+        "publish_title": "AI时代老树开新花：不造GPU，照样赚AI钱",
+        "video_path": "",
+        "views": 83,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 0,
+        "comments": 2,
+        "shares": 0
+      },
+      "risks": [
+        "视频实际219秒，超过150秒",
+        "使用保守写稿，可能缺少差异化信息"
+      ]
+    },
+    {
+      "series": "AI时代的隐形地基",
+      "episode": "TOTO：马桶公司为什么卡在芯片制造环节",
+      "publish_title": "马桶巨头的芯片底座",
+      "actual_seconds": 0,
+      "estimated_seconds": 0,
+      "source_count": 0,
+      "quality_block_reason": "",
+      "publish_gate": {
+        "blocked": false,
+        "series": "AI时代的隐形地基",
+        "episode": "TOTO：马桶公司为什么卡在芯片制造环节",
+        "reasons": [],
+        "warnings": []
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代的隐形地基：马桶巨头的芯片底座",
+        "publish_title": "AI时代的隐形地基：马桶巨头的芯片底座",
+        "video_path": "",
+        "views": 122,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": []
+    },
+    {
+      "series": "AI时代的隐形地基",
+      "episode": "味之素：味精公司为什么成了高端芯片底座",
+      "publish_title": "味精厂卡位AI芯片",
+      "actual_seconds": 181.8,
+      "estimated_seconds": 194.4,
+      "source_count": 10,
+      "quality_block_reason": "脚本预计 194 秒，超过 180 秒",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代的隐形地基",
+        "episode": "味之素：味精公司为什么成了高端芯片底座",
+        "reasons": [
+          "视频实际182秒，超过150秒"
+        ],
+        "warnings": [
+          "脚本预计 194 秒，超过 180 秒"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代的隐形地基：味精厂卡位AI芯片",
+        "publish_title": "AI时代的隐形地基：味精厂卡位AI芯片",
+        "video_path": "",
+        "views": 358,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": [
+        "视频实际182秒，超过150秒"
+      ]
+    },
+    {
+      "series": "AI时代的隐形地基",
+      "episode": "大金：空调公司为什么站在 AI 基建背后",
+      "publish_title": "空调巨头的AI底牌",
+      "actual_seconds": 181.2,
+      "estimated_seconds": 195.5,
+      "source_count": 3,
+      "quality_block_reason": "脚本预计 196 秒，超过 180 秒",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代的隐形地基",
+        "episode": "大金：空调公司为什么站在 AI 基建背后",
+        "reasons": [
+          "视频实际181秒，超过150秒"
+        ],
+        "warnings": [
+          "脚本预计 196 秒，超过 180 秒"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代的隐形地基：空调巨头的AI底牌",
+        "publish_title": "AI时代的隐形地基：空调巨头的AI底牌",
+        "video_path": "",
+        "views": 78,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 4,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": [
+        "视频实际181秒，超过150秒"
+      ]
+    },
+    {
+      "series": "AI时代的隐形地基",
+      "episode": "HOYA：眼镜公司为什么掌握光刻入口",
+      "publish_title": "卖眼镜的HOYA，卡在AI芯片光刻前一步？",
+      "actual_seconds": 205.4,
+      "estimated_seconds": 205.5,
+      "source_count": 2,
+      "quality_block_reason": "音频实际 205 秒，超过 180 秒",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代的隐形地基",
+        "episode": "HOYA：眼镜公司为什么掌握光刻入口",
+        "reasons": [
+          "视频实际205秒，超过150秒",
+          "有效来源不足：2/3"
+        ],
+        "warnings": [
+          "音频实际 205 秒，超过 180 秒"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "HOYA站上光刻入口",
+        "publish_title": "HOYA站上光刻入口",
+        "video_path": "",
+        "views": 48,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 5,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": [
+        "视频实际205秒，超过150秒",
+        "有效来源不足：2/3",
+        "使用保守写稿，可能缺少差异化信息"
+      ]
+    },
+    {
+      "series": "AI时代的隐形地基",
+      "episode": "日东电工：胶带公司为什么离 AI 芯片很近",
+      "publish_title": "AI芯片怕残胶",
+      "actual_seconds": 183.9,
+      "estimated_seconds": 203.9,
+      "source_count": 0,
+      "quality_block_reason": "脚本预计 204 秒，超过 180 秒",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代的隐形地基",
+        "episode": "日东电工：胶带公司为什么离 AI 芯片很近",
+        "reasons": [
+          "视频实际184秒，超过150秒"
+        ],
+        "warnings": [
+          "脚本预计 204 秒，超过 180 秒"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代的隐形地基：AI芯片怕残胶",
+        "publish_title": "AI时代的隐形地基：AI芯片怕残胶",
+        "video_path": "",
+        "views": 333,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": [
+        "视频实际184秒，超过150秒",
+        "使用保守写稿，可能缺少差异化信息"
+      ]
+    },
+    {
+      "series": "AI时代的隐形地基",
+      "episode": "3M：便利贴公司为什么卡住芯片抛光良率",
+      "publish_title": "3M凭什么卡住芯片良率？",
+      "actual_seconds": 161.7,
+      "estimated_seconds": 161.5,
+      "source_count": 0,
+      "quality_block_reason": "脚本预计 162 秒，超过 150 秒",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代的隐形地基",
+        "episode": "3M：便利贴公司为什么卡住芯片抛光良率",
+        "reasons": [
+          "视频实际162秒，超过150秒"
+        ],
+        "warnings": [
+          "脚本预计 162 秒，超过 150 秒",
+          "封面/画面标签含英文残片：CMP抛光、CMP抛光"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "3M凭什么卡住芯片良率？",
+        "publish_title": "3M凭什么卡住芯片良率？",
+        "video_path": "",
+        "views": 13,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 0,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": [
+        "视频实际162秒，超过150秒",
+        "使用保守写稿，可能缺少差异化信息"
+      ]
+    },
+    {
+      "series": "AI时代最缺的不是芯片",
+      "episode": "AI 最缺的可能是能把系统跑稳的人",
+      "publish_title": "AI最缺的可能是能把系统跑稳的人",
+      "actual_seconds": 232.0,
+      "estimated_seconds": 222.0,
+      "source_count": 0,
+      "quality_block_reason": "音频实际 232 秒，超过 180 秒",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代最缺的不是芯片",
+        "episode": "AI 最缺的可能是能把系统跑稳的人",
+        "reasons": [
+          "视频实际232秒，超过150秒",
+          "有效来源不足：0/3"
+        ],
+        "warnings": [
+          "音频实际 232 秒，超过 180 秒"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代最缺的不是芯片：AI最缺的可能是能把系统跑稳的人",
+        "publish_title": "AI时代最缺的不是芯片：AI最缺的可能是能把系统跑稳的人",
+        "video_path": "",
+        "views": 135,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 3,
+        "comments": 0,
+        "shares": 0
+      },
+      "risks": [
+        "视频实际232秒，超过150秒",
+        "有效来源不足：0/3",
+        "使用保守写稿，可能缺少差异化信息"
+      ]
+    },
+    {
+      "series": "AI时代，机器人先学会打工",
+      "episode": "机器人不是来当管家的，是先来打工的",
+      "publish_title": "别急着让机器人当管家",
+      "actual_seconds": 246.3,
+      "estimated_seconds": 201.1,
+      "source_count": 0,
+      "quality_block_reason": "脚本预计 201 秒，超过 180 秒",
+      "publish_gate": {
+        "blocked": true,
+        "series": "AI时代，机器人先学会打工",
+        "episode": "机器人不是来当管家的，是先来打工的",
+        "reasons": [
+          "视频实际246秒，超过150秒"
+        ],
+        "warnings": [
+          "脚本预计 201 秒，超过 180 秒"
+        ]
+      },
+      "metrics": {
+        "series": "",
+        "episode": "AI时代，机器人先学会打工：别急着让机器人当管家",
+        "publish_title": "AI时代，机器人先学会打工：别急着让机器人当管家",
+        "video_path": "",
+        "views": 120,
+        "avg_view_seconds": 0.0,
+        "completion_rate": 0.0,
+        "click_rate": 0.0,
+        "likes": 1,
+        "comments": 0,
+        "shares": 1
+      },
+      "risks": [
+        "视频实际246秒，超过150秒",
+        "使用保守写稿，可能缺少差异化信息"
+      ]
+    }
+  ],
+  "metrics_collection": {
+    "metrics_path": "deepContent\\deep_feedback_metrics.json",
+    "metric_count": 50,
+    "metrics_source": "manual_file",
+    "metrics_error": ""
+  }
+}

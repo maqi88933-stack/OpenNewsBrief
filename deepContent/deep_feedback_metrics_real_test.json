@@ -1,0 +1,106 @@
+{
+  "source": "bilibili_detail_page",
+  "url": "https://member.bilibili.com/platform/upload-manager/article",
+  "mid": "1274586220",
+  "fetched_at": "2026-06-04T21:50:13",
+  "videos": [
+    {
+      "source": "bilibili_detail_page",
+      "aid": 116690805395778,
+      "bvid": "BV19i7f6eELy",
+      "episode": "3M凭什么卡住芯片良率？",
+      "publish_title": "3M凭什么卡住芯片良率？",
+      "views": 93,
+      "followers": 0,
+      "unfollows": 0,
+      "likes": 1,
+      "danmaku": 0,
+      "comments": 0,
+      "shares": 0,
+      "favorites": 0,
+      "coins": 0,
+      "click_rate": 57,
+      "interaction_rate": 0,
+      "metric_sections": [
+        "data_overview",
+        "play_analysis"
+      ]
+    },
+    {
+      "source": "bilibili_detail_page",
+      "aid": 116685134694463,
+      "bvid": "BV12GVm62Ec5",
+      "episode": "HOYA站上光刻入口",
+      "publish_title": "HOYA站上光刻入口",
+      "views": 48,
+      "likes": 5,
+      "click_rate": 240,
+      "three_second_exit_rate": 3043,
+      "interaction_rate": 1041,
+      "play_follower_rate": 0,
+      "avg_view_seconds": 0,
+      "completion_rate": 4887,
+      "metric_sections": [
+        "data_overview",
+        "play_analysis"
+      ]
+    },
+    {
+      "source": "bilibili_detail_page",
+      "aid": 116679245896348,
+      "bvid": "BV1HSVz6JE9J",
+      "episode": "AI时代最缺的不是芯片：AI最缺的可能是能把系统跑稳的人",
+      "publish_title": "AI时代最缺的不是芯片：AI最缺的可能是能把系统跑稳的人",
+      "views": 135,
+      "likes": 3,
+      "click_rate": 19,
+      "three_second_exit_rate": 5208,
+      "interaction_rate": 222,
+      "play_follower_rate": 0,
+      "avg_view_seconds": 0,
+      "completion_rate": 1815,
+      "metric_sections": [
+        "data_overview",
+        "play_analysis"
+      ]
+    },
+    {
+      "source": "bilibili_detail_page",
+      "aid": 116677819766120,
+      "bvid": "BV1ZQVv6hEFA",
+      "episode": "AI时代最缺的不是芯片：卡住AI的电",
+      "publish_title": "AI时代最缺的不是芯片：卡住AI的电",
+      "views": 95,
+      "likes": 3,
+      "click_rate": 185,
+      "three_second_exit_rate": 4444,
+      "interaction_rate": 315,
+      "play_follower_rate": 0,
+      "avg_view_seconds": 0,
+      "completion_rate": 2809,
+      "metric_sections": [
+        "data_overview",
+        "play_analysis"
+      ]
+    },
+    {
+      "source": "bilibili_detail_page",
+      "aid": 116672719491506,
+      "bvid": "BV144V96hEu6",
+      "episode": "AI时代，机器人先学会打工：别急着让机器人当管家",
+      "publish_title": "AI时代，机器人先学会打工：别急着让机器人当管家",
+      "views": 120,
+      "likes": 1,
+      "click_rate": 93,
+      "three_second_exit_rate": 4961,
+      "interaction_rate": 166,
+      "play_follower_rate": 0,
+      "avg_view_seconds": 0,
+      "completion_rate": 1945,
+      "metric_sections": [
+        "data_overview",
+        "play_analysis"
+      ]
+    }
+  ]
+}

@@ -885,7 +885,8 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn(asset_paths["bridge"], used_paths)
         self.assertIn(asset_paths["background"], used_paths)
         foreground_call = [call for call in mock_paste.call_args_list if call.args[1] == asset_paths["bridge"]][0]
-        self.assertTrue(foreground_call.kwargs["include_text"])
+        # 视频里 SVG 只当图形纹理使用，文字统一交给 iOS 卡片层，避免模型文字错位。
+        self.assertFalse(foreground_call.kwargs["include_text"])
 
     def test_create_text_card_uses_background_svg_as_full_canvas_background(self):
         # 深度系列每张视频卡都应该先铺满本期 background.svg，再叠加 iOS 内容层。
@@ -973,6 +974,12 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("更吸引眼球", prompt)
         self.assertIn("不要强制套用系列名前缀", prompt)
         self.assertIn("实体词或反差点尽量前置", prompt)
+        # 标题生成要主动偏向轻标题党，避免自动生成成平铺直叙的说明句。
+        self.assertIn("轻标题党", prompt)
+        self.assertIn("反差", prompt)
+        self.assertIn("悬念", prompt)
+        self.assertIn("疑问句", prompt)
+        self.assertIn("不能编造事实", prompt)
         self.assertIn("封面只保留一个核心反差词", prompt)
         self.assertIn("标题", prompt)
         self.assertIn("封面文案", prompt)
@@ -1016,6 +1023,9 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(assets["publish_review"]["attempts"], 2)
         review_prompt = mock_llm.call_args_list[1].args[0]
         self.assertIn("标题党式点击欲", review_prompt)
+        # 审校阶段不能只指出标题弱还放行，否则后续仍会生成点击欲不足的平标题。
+        self.assertIn("点击欲不足", review_prompt)
+        self.assertIn("必须判为不通过", review_prompt)
         self.assertIn("搜索关键词", review_prompt)
 
     @patch("deep_series.create_deep_cover_options", return_value=["cover1.png", "cover2.png", "cover3.png"])
@@ -1080,6 +1090,39 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("竞争风险图谱", svg)
         self.assertIn("客户议价", svg)
         self.assertNotIn("视觉元素", svg)
+
+    def test_build_visual_design_only_calls_llm_for_design_not_svg_assets(self):
+        # 视频生成阶段只让大模型做一次视觉规划，SVG 文件走本地简洁兜底，避免每张图反复调模型。
+        script_path = os.path.join(self.tmpdir, "script.md")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：AI 基础设施不是只买 GPU，还要看整机交付。")
+        result = {"script_path": script_path}
+        raw_design = {
+            "cover_title": "AI 基建",
+            "subtitle": "整机交付",
+            "style": "iOS 简洁科技风",
+            "composition": "system_diagram",
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["GPU", "服务器", "存储网络"],
+            "svg_prompts": {
+                "hero": "生成 GPU 与服务器的简洁科技 SVG。",
+                "bridge": "生成整机交付链路 SVG。",
+                "background": "生成浅色科技网格 SVG。",
+            },
+            "scene_cards": [{"keyword": "GPU", "asset": "hero", "label": "GPU 系统"}],
+        }
+
+        with patch("deep_series.call_llm", return_value=json.dumps(raw_design, ensure_ascii=False)) as mock_llm:
+            design = deep_series.build_visual_design(
+                {"title": "AI时代的隐形地基"},
+                {"title": "GPU 不只是显卡"},
+                result,
+                use_llm=True,
+            )
+
+        self.assertEqual(mock_llm.call_count, 1)
+        self.assertIn("hero", design["asset_paths"])
+        self.assertTrue(os.path.exists(design["asset_paths"]["hero"]))
 
     def test_generate_visual_svg_asset_uses_chinese_topic_fallback_without_llm(self):
         # 离线或禁用 LLM 时，英文资产 key 也要生成可读中文主题图，而不是把 data_center_cooling 画到页面上。
@@ -1670,8 +1713,8 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIs(captured_designs[0][0], visual_design)
         self.assertEqual(captured_designs[0][1]["label"], "ABF薄膜")
 
-    def test_create_text_card_shows_one_foreground_svg_with_text(self):
-        # 左侧视觉舞台只贴一张前景 SVG，并保留 SVG 内文字，避免主图被二次贴图遮盖。
+    def test_create_text_card_shows_one_foreground_svg_without_svg_text(self):
+        # 左侧视觉舞台只贴一张前景 SVG，但隐藏 SVG 内文字，避免错位文本压到视频画面里。
         hero_path = os.path.join(self.tmpdir, "hero.svg")
         bridge_path = os.path.join(self.tmpdir, "bridge.svg")
         background_path = os.path.join(self.tmpdir, "background.svg")
@@ -1704,7 +1747,7 @@ class TestDeepSeries(unittest.TestCase):
         foreground_calls = [item for item in calls if item[0] in ("hero.svg", "bridge.svg")]
         self.assertEqual(len(foreground_calls), 1)
         self.assertEqual(foreground_calls[0][0], "bridge.svg")
-        self.assertTrue(foreground_calls[0][2])
+        self.assertFalse(foreground_calls[0][2])
 
     @patch("deep_series.step_video", return_value="demo.mp4")
     @patch("deep_series.create_deep_slide_images", return_value=["cover.png", "section.png"])
@@ -2056,6 +2099,65 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("播放量", prompt)
         self.assertIn("完播率", prompt)
 
+    def test_build_deep_feedback_report_matches_metrics_by_publish_title_without_series(self):
+        metrics_path = os.path.join(self.tmpdir, "metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"videos": [{"episode": "HOYA站上光刻入口", "publish_title": "HOYA站上光刻入口", "views": 48}]},
+                f,
+                ensure_ascii=False,
+            )
+        config = {
+            "series": [
+                {
+                    "title": "AI时代的隐形地基",
+                    "episodes": [
+                        {
+                            "title": "HOYA：眼镜公司为什么掌握光刻入口",
+                            "publish_title": "HOYA站上光刻入口",
+                            "generated": True,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        report = deep_series.build_deep_feedback_report(config, metrics_path=metrics_path)
+
+        # B站接口不会返回本地系列名，所以要允许按发布标题匹配，否则真实播放数进不了回流报告。
+        self.assertEqual(report["videos"][0]["metrics"]["views"], 48)
+
+    def test_build_deep_feedback_report_matches_prefixed_and_rewritten_bilibili_titles(self):
+        metrics_path = os.path.join(self.tmpdir, "metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "videos": [
+                        {"publish_title": "AI时代的隐形地基：空调巨头的AI底牌", "views": 95},
+                        {"publish_title": "HOYA站上光刻入口", "views": 48},
+                    ]
+                },
+                f,
+                ensure_ascii=False,
+            )
+        config = {
+            "series": [
+                {
+                    "title": "AI时代的隐形地基",
+                    "episodes": [
+                        {"title": "大金：空调公司为什么站在 AI 基建背后", "publish_title": "空调巨头的AI底牌", "generated": True},
+                        {"title": "HOYA：眼镜公司为什么掌握光刻入口", "publish_title": "卖眼镜的HOYA，卡在AI芯片光刻前一步？", "generated": True},
+                    ],
+                }
+            ]
+        }
+
+        report = deep_series.build_deep_feedback_report(config, metrics_path=metrics_path)
+
+        # B站标题常带系列名前缀或发布后改写，回流报告要尽量把这些真实指标匹配回来。
+        self.assertEqual(report["videos"][0]["metrics"]["views"], 95)
+        self.assertEqual(report["videos"][1]["metrics"]["views"], 48)
+
     def test_generate_deep_feedback_advice_auto_scrapes_bilibili_metrics(self):
         metrics_path = os.path.join(self.tmpdir, "deep_feedback_metrics.json")
         with open(metrics_path, "w", encoding="utf-8") as f:
@@ -2074,7 +2176,7 @@ class TestDeepSeries(unittest.TestCase):
                 patch("crawler.bilibili_feedback.scrape_bilibili_article_metrics", return_value={
                     "metrics_path": metrics_path,
                     "metric_count": 1,
-                    "source": "bilibili_article_manager",
+                    "source": "bilibili_detail_page",
                     "error": "",
                 }) as mock_scrape:
             result = deep_series.generate_deep_feedback_advice(output_dir=self.tmpdir)
@@ -2082,13 +2184,13 @@ class TestDeepSeries(unittest.TestCase):
         mock_scrape.assert_called_once()
         self.assertEqual(result["metrics_path"], metrics_path)
         self.assertEqual(result["metric_count"], 1)
-        self.assertEqual(result["metrics_source"], "bilibili_article_manager")
+        self.assertEqual(result["metrics_source"], "bilibili_detail_page")
         self.assertEqual(result["metrics_error"], "")
         with open(result["report_path"], "r", encoding="utf-8") as f:
             report = json.load(f)
         self.assertEqual(report["summary"]["metric_count"], 1)
 
-    def test_generate_deep_feedback_advice_keeps_fallback_when_bilibili_scrape_fails(self):
+    def test_generate_deep_feedback_advice_stops_when_bilibili_scrape_fails(self):
         config = {
             "series": [
                 {
@@ -2100,15 +2202,72 @@ class TestDeepSeries(unittest.TestCase):
 
         with patch("deep_series.load_config", return_value=config), \
                 patch("crawler.bilibili_feedback.scrape_bilibili_article_metrics", side_effect=RuntimeError("Chrome 用户目录被占用")), \
-                patch("deep_series.call_llm", side_effect=RuntimeError("skip ai")):
-            result = deep_series.generate_deep_feedback_advice(output_dir=self.tmpdir)
+                patch("deep_series.call_llm", side_effect=RuntimeError("skip ai")) as mock_llm:
+            # 数据抓取失败时不能继续用本地质量兜底生成建议，否则会把错误数据伪装成有效判断。
+            with self.assertRaises(RuntimeError) as ctx:
+                deep_series.generate_deep_feedback_advice(output_dir=self.tmpdir)
 
-        self.assertIn("Chrome 用户目录被占用", result["metrics_error"])
-        self.assertEqual(result["metric_count"], 0)
-        with open(result["advice_path"], "r", encoding="utf-8") as f:
-            advice = f.read()
-        self.assertIn("B站自动抓取失败", advice)
-        self.assertIn("不要在待发布或上传阶段拦截", advice)
+        self.assertIn("Chrome 用户目录被占用", str(ctx.exception))
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, deep_series.DEEP_FEEDBACK_REPORT_FILE)))
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, deep_series.DEEP_FEEDBACK_ADVICE_FILE)))
+        mock_llm.assert_not_called()
+
+    def test_generate_deep_feedback_advice_stops_when_bilibili_scrape_returns_empty_metrics(self):
+        metrics_path = os.path.join(self.tmpdir, "deep_feedback_metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({"source": "bilibili_article_manager", "videos": []}, f, ensure_ascii=False)
+
+        with patch("crawler.bilibili_feedback.scrape_bilibili_article_metrics", return_value={
+            "metrics_path": metrics_path,
+            "metric_count": 0,
+            "source": "bilibili_article_manager",
+            "error": "未从 B站创作中心页面捕获到稿件指标",
+        }), patch("deep_series.call_llm", return_value="## 错误兜底建议") as mock_llm:
+            # 抓到了页面但没有任何指标，同样属于不可判断的数据，不允许进入建议生成。
+            with self.assertRaises(RuntimeError) as ctx:
+                deep_series.generate_deep_feedback_advice(output_dir=self.tmpdir)
+
+        self.assertIn("未从 B站创作中心页面捕获到稿件指标", str(ctx.exception))
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, deep_series.DEEP_FEEDBACK_REPORT_FILE)))
+        mock_llm.assert_not_called()
+
+    def test_collect_deep_feedback_metrics_rejects_old_bilibili_list_metrics(self):
+        metrics_path = os.path.join(self.tmpdir, "old_list_metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"source": "bilibili_member_archives", "videos": [{"publish_title": "旧列表指标", "views": 48}]},
+                f,
+                ensure_ascii=False,
+            )
+
+        # 旧列表接口只有列表统计，不是点击“数据”后的详情页数据，不能继续进入分析。
+        with self.assertRaises(RuntimeError) as ctx:
+            deep_series.collect_deep_feedback_metrics(metrics_path=metrics_path)
+
+        self.assertIn("详情页", str(ctx.exception))
+
+    def test_generate_deep_feedback_advice_stops_when_ai_advice_fails(self):
+        metrics_path = os.path.join(self.tmpdir, "metrics.json")
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({"videos": [{"episode": "HOYA站上光刻入口", "views": 320}]}, f, ensure_ascii=False)
+        config = {
+            "series": [
+                {
+                    "title": "AI时代的隐形地基",
+                    "episodes": [{"title": "HOYA站上光刻入口", "generated": True}],
+                }
+            ]
+        }
+
+        with patch("deep_series.load_config", return_value=config), \
+                patch("deep_series.call_llm", side_effect=RuntimeError("AI 不可用")):
+            # 数据是真实的但 AI 建议失败时，也不能改用规则兜底产出看似完成的建议文件。
+            with self.assertRaises(RuntimeError) as ctx:
+                deep_series.generate_deep_feedback_advice(metrics_path=metrics_path, output_dir=self.tmpdir)
+
+        self.assertIn("AI 不可用", str(ctx.exception))
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, deep_series.DEEP_FEEDBACK_REPORT_FILE)))
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, deep_series.DEEP_FEEDBACK_ADVICE_FILE)))
 
     def test_feedback_ai_prompt_prioritizes_metric_and_risk_rows(self):
         videos = [
@@ -2127,6 +2286,44 @@ class TestDeepSeries(unittest.TestCase):
 
         self.assertIn("高风险主题", prompt)
         self.assertNotIn("旧主题24", prompt)
+
+    def test_normalize_feedback_metric_row_does_not_create_missing_detail_metrics(self):
+        row = deep_series.normalize_feedback_metric_row({
+            "source": "bilibili_detail_page",
+            "publish_title": "3M凭什么卡住芯片良率？",
+            "views": 93,
+            "likes": 1,
+            "metric_sections": ["data_overview"],
+        })
+
+        # 详情页没有返回的播放分析字段不能补 0，否则后续会把不存在的数据当成真实低指标分析。
+        self.assertEqual(row["views"], 93)
+        self.assertEqual(row["likes"], 1)
+        self.assertEqual(row["metric_sections"], ["data_overview"])
+        self.assertNotIn("avg_view_seconds", row)
+        self.assertNotIn("completion_rate", row)
+        self.assertNotIn("click_rate", row)
+
+    def test_feedback_ai_prompt_omits_missing_detail_metric_fields(self):
+        videos = [{
+            "series": "AI时代的隐形地基",
+            "episode": "3M凭什么卡住芯片良率？",
+            "publish_title": "3M凭什么卡住芯片良率？",
+            "actual_seconds": 120,
+            "source_count": 3,
+            "metrics": {"views": 93, "likes": 1, "metric_sections": ["data_overview"]},
+            "risks": [],
+        }]
+
+        prompt = deep_series.build_deep_feedback_ai_prompt({"summary": {}, "videos": videos})
+        prompt_rows = json.loads(prompt.split("视频数据：", 1)[1])
+
+        # AI 只能看到详情页真实存在的字段；不存在的完播率、点击率、平均观看不进入视频数据。
+        self.assertEqual(prompt_rows[0]["播放量"], 93)
+        self.assertEqual(prompt_rows[0]["点赞"], 1)
+        self.assertNotIn("平均观看秒数", prompt_rows[0])
+        self.assertNotIn("完播率", prompt_rows[0])
+        self.assertNotIn("点击率", prompt_rows[0])
 
     def test_create_deep_slide_images_keeps_dialogue_segments_and_writes_durations(self):
         script_path = os.path.join(self.tmpdir, "script.md")

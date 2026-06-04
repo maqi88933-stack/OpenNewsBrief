@@ -686,7 +686,7 @@
             "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\HOYA：眼镜公司为什么掌握光刻入口\\2026-06-03\\cover_option_2.png",
             "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\HOYA：眼镜公司为什么掌握光刻入口\\2026-06-03\\cover_option_3.png"
           ],
-          "publish_title": "HOYA站上光刻入口",
+          "publish_title": "卖眼镜的HOYA，卡在AI芯片光刻前一步？",
           "publish_desc": "一家做眼镜镜片出名的公司，为什么会出现在AI芯片制造链里？答案不是GPU，也不是封装，而是光掩模空白基板：芯片设计进入晶圆制造前的关键材料入口。\n\n互动问题：你觉得AI芯片供应链里，最容易被忽略的关键环节是哪一个？\n\n关键词：AI、时代的隐形地基、HOYA、眼镜公司为什么掌握光刻入、为什么会出现在、芯片制造链里、重点探讨光掩模和、mask",
           "publish_tags": "HOYA,AI芯片,光刻,光掩模,EUV,半导体供应链,隐形地基",
           "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\HOYA：眼镜公司为什么掌握光刻入口\\2026-06-03\\visual_design.json",
@@ -765,6 +765,106 @@
           "published": false,
           "published_at": "",
           "review_ready": true
+        },
+        {
+          "title": "3M：便利贴公司为什么卡住芯片抛光良率",
+          "question": "3M 为什么不只是便利贴和胶带公司？重点探讨 CMP 抛光垫、研磨液和半导体工艺耗材，AI 芯片越先进，越怕纳米级划痕、污染和良率损失。",
+          "generated": true,
+          "generated_at": "2026-06-04 16:05:48",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\agent_interaction.log",
+          "estimated_seconds": 161.5,
+          "quality_block_reason": "脚本预计 162 秒，超过 150 秒",
+          "fallback_used": true,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\3M：便利贴公司为什么卡住芯片抛光良率_2026-06-04.mp4",
+          "published": true,
+          "published_at": "2026-06-04 16:07:30",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-04 15:39:54",
+          "actual_seconds": 161.7,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\cover_option_3.png"
+          ],
+          "publish_title": "3M凭什么卡住芯片良率？",
+          "publish_desc": "便利贴公司3M，真正厉害的不是便利贴，而是精密研磨、过滤、洁净保护等材料能力。AI芯片越先进，越怕颗粒、残留和微划痕，良率背后藏着这些不起眼的耗材环节。\n\n互动问题：你觉得芯片制造里最容易被低估的环节是什么？\n\n关键词：AI、时代的隐形地基、3M、便利贴公司为什么卡住芯片、抛光良率、为什么不只是便利贴和胶带、重点探讨、CMP",
+          "publish_tags": "3M,AI芯片,半导体,CMP抛光,芯片制造,良率,材料科学,隐形冠军",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": [
+              "封面/画面标签含英文残片：CMP抛光、CMP抛光"
+            ]
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI时代的隐形地基",
+            "episode": "3M：便利贴公司为什么卡住芯片抛光良率",
+            "reasons": [
+              "视频实际162秒，超过150秒",
+              "有效来源不足：0/3"
+            ],
+            "warnings": [
+              "脚本预计 162 秒，超过 150 秒",
+              "封面/画面标签含英文残片：CMP抛光、CMP抛光"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\background.svg",
+            "defect_zoom": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\defect_zoom.svg",
+            "material_stack": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\material_stack.svg",
+            "cmp_wafer_polishing.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\cmp_wafer_polishing.svg.svg",
+            "cmp_polishing_pad_texture.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\cmp_polishing_pad_texture.svg.svg",
+            "cmp_slurry_particles.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\cmp_slurry_particles.svg.svg",
+            "diamond_pad_conditioner.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\diamond_pad_conditioner.svg.svg",
+            "ultraclean_filter_membrane.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\ultraclean_filter_membrane.svg.svg",
+            "wafer_protection_film.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\wafer_protection_film.svg.svg",
+            "particle_contamination_control": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\particle_contamination_control.svg",
+            "wafer_defect_yield_map.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\3M：便利贴公司为什么卡住芯片抛光良率\\2026-06-04\\visual_assets\\wafer_defect_yield_map.svg.svg"
+          }
+        },
+        {
+          "title": "康宁：玻璃公司为什么成了 AI 数据中心的血管",
+          "question": "康宁为什么不只是手机玻璃和锅具品牌？重点探讨光纤、玻璃基材料和数据中心高速互连，AI 集群越大，越离不开低损耗、高密度的光通信通道。",
+          "generated": false
+        },
+        {
+          "title": "杜邦：化工老公司为什么藏在芯片制造里",
+          "question": "杜邦为什么会藏在 AI 芯片制造流程里？重点探讨光刻、清洗、CMP 和先进封装材料，芯片不是只靠设备，也靠一整套高纯、稳定、可量产的化学材料。",
+          "generated": false
+        },
+        {
+          "title": "林德：卖气的公司为什么能让芯片厂停不下来",
+          "question": "林德为什么不是普通工业气体公司？重点探讨高纯氮气、氢气、氦气和特种电子气体，芯片厂一旦缺气，光刻、刻蚀、沉积和清洗都会被卡住。",
+          "generated": false
+        },
+        {
+          "title": "佳能：相机公司为什么还在造光刻机",
+          "question": "佳能为什么不只是相机和打印机公司？重点探讨半导体光刻机、纳米压印和先进封装曝光设备，AI 芯片制造背后也有老牌光学公司的技术积累。",
+          "generated": false
+        },
+        {
+          "title": "施耐德电气：开关公司为什么站到 AI 电力中枢",
+          "question": "施耐德电气为什么会成为 AI 数据中心绕不开的公司？重点探讨配电、UPS、机柜、液冷和能源管理，AI 算力扩张最后会回到电力系统能不能稳定交付。",
+          "generated": false
+        },
+        {
+          "title": "约翰迪尔：拖拉机公司为什么比机器人公司更像机器人公司",
+          "question": "约翰迪尔为什么不只是农机公司？重点探讨自动驾驶拖拉机、视觉识别、精准农业和工业场景落地，机器人真正先赚钱的地方可能不是家庭，而是农田和工地。",
+          "generated": false
         }
       ]
     },

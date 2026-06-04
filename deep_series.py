@@ -2,6 +2,7 @@
 import asyncio
 import csv
 import datetime
+import difflib
 import json
 import math
 import os
@@ -1949,11 +1950,11 @@ def create_text_card(
     draw.line((246, 754, 246, 808, 692, 808, 692, 754), fill="#D1D1D6", width=4)
     scene_label = visual_display_label(scene.get("label", "")) if isinstance(scene, dict) else ""
     if visual_design and scene:
-        # 左侧舞台只贴一张前景 SVG，并保留 SVG 内文字，避免多张图互相遮盖导致主题看不完整。
+        # 左侧舞台只贴一张前景 SVG，并隐藏 SVG 内文字；文字统一由卡片层绘制，避免模型文本错位。
         scene_asset_path = asset_paths.get(scene.get("asset", ""))
         foreground_path = scene_asset_path or asset_paths.get("hero", "")
         if foreground_path:
-            paste_svg_asset(image, foreground_path, (210, 318, 746, 650), include_text=True)
+            paste_svg_asset(image, foreground_path, (210, 318, 746, 650), include_text=False)
         label = scene.get("label", "")
         if label:
             label_font = _font(30, True)
@@ -2325,7 +2326,7 @@ def generate_video_from_audio(series: Dict, episode: Dict, result: Dict) -> Dict
         print("[深度视频] 音频时长提醒：" + reason + "，将继续合成完整视频", flush=True)
         result["quality_block_reason"] = reason
     output_dir = os.path.dirname(audio_path)
-    print("[深度视频] 开始生成视觉设计和 SVG 元素", flush=True)
+    print("[深度视频] 开始生成视觉设计和本地 SVG 元素", flush=True)
     visual_design = result.get("visual_design") or load_visual_design(result.get("visual_design_path", ""))
     if not visual_design:
         visual_design = build_visual_design(series, episode, result, use_llm=True)
@@ -2601,8 +2602,8 @@ def generate_visual_svg_asset(name: str, prompt: str, design: Dict, output_dir: 
     return path
 
 
-def ensure_scene_card_svg_assets(design: Dict, output_dir: str, use_llm: bool = True) -> Dict:
-    # 场景卡片必须有真实 SVG 文件，否则视频页会反复回退 hero，看起来像图片没有变化。
+def ensure_scene_card_svg_assets(design: Dict, output_dir: str, use_llm: bool = False) -> Dict:
+    # 场景卡片必须有真实 SVG 文件；默认用本地兜底图，避免视频阶段为每张 SVG 反复调大模型。
     if not isinstance(design, dict):
         return {}
     asset_dir = os.path.join(output_dir, "visual_assets")
@@ -2661,9 +2662,10 @@ def build_visual_design(series: Dict, episode: Dict, result: Dict, use_llm: bool
     asset_dir = os.path.join(output_dir, "visual_assets")
     asset_paths = {}
     for name, asset_prompt in list(design.get("svg_prompts", {}).items())[:6]:
-        asset_paths[name] = generate_visual_svg_asset(name, str(asset_prompt), design, asset_dir, use_llm=use_llm)
+        # SVG 只作为视频里的简洁图形素材，本地生成更稳定，也能减少多张图逐一调模型。
+        asset_paths[name] = generate_visual_svg_asset(name, str(asset_prompt), design, asset_dir, use_llm=False)
     design["asset_paths"] = asset_paths
-    design = ensure_scene_card_svg_assets(design, output_dir, use_llm=use_llm)
+    design = ensure_scene_card_svg_assets(design, output_dir, use_llm=False)
     asset_paths = design["asset_paths"]
 
     design_path = os.path.join(output_dir, "visual_design.json")
@@ -2813,7 +2815,7 @@ def normalize_publish_assets_payload(series: Dict, episode: Dict, assets: Dict) 
 
 
 def review_publish_assets(series: Dict, episode: Dict, assets: Dict, script_text: str, research_text: str) -> Dict:
-    # 发布审校重点看点击欲和搜索命中，不负责重写正文事实。
+    # 发布审校重点看点击欲和搜索命中，平标题要拦下来，但不负责重写正文事实。
     prompt = (
         "你是 B 站深度视频发布审校智能体。\n"
         f"系列：{series.get('title', '')}\n"
@@ -2824,7 +2826,8 @@ def review_publish_assets(series: Dict, episode: Dict, assets: Dict, script_text
         "1. 标题要有悬念、反差或冲突，让人想点开，但不能虚假夸大。\n"
         "2. 简介必须包含主题公司、技术名词、产业链关键词，方便搜索到。\n"
         "3. 标题、简介和视频前几秒承诺必须一致，不能标题党骗点。\n"
-        "4. tags 要覆盖核心关键词。\n"
+        "4. 如果标题平铺直叙、没有明确反差/悬念/冲突/疑问句，或你判断点击欲不足，必须判为不通过，score 不超过 6.5。\n"
+        "5. tags 要覆盖核心关键词。\n"
     )
     raw = call_llm(
         prompt,
@@ -3121,6 +3124,7 @@ def assess_publish_gate(series: Dict, episode: Dict) -> Dict:
 def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
     # 发布信息只生成一次，后面发视频和发文案都直接复用。
     # title 直接作为 B 站标题使用，系列名留在简介和合集里，避免信息流里显得程式化。
+    # B站信息流标题要先争取点击，但所有夸张点都必须来自脚本事实，避免骗点。
     script_text = read_text_if_exists(result.get("script_path", ""))
     research_text = read_text_if_exists(result.get("research_path", ""), limit=3000)
     prompt = (
@@ -3140,6 +3144,7 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
         "}\n"
         "要求：标题短一些，封面文案控制在 6 到 10 个字，评论问题适合互动。\n"
         "原始主题标题只是参考，title 不需要完全照抄原始标题，可以根据脚本和研究报告改写成更吸引眼球的主题名称。\n"
+        "标题允许有轻标题党味道，优先写成反常识主体 + 被忽略位置/后果/疑问的短句；至少带一个反差、悬念、痛点或疑问句钩子，但不能编造事实。\n"
         "B站最终标题直接使用 title，不要强制套用系列名前缀；实体词或反差点尽量前置，让标题像真人写的短句。\n"
         "title_options 也按同样规则给 3 个自然标题备选，不要带系列名称前缀。\n"
         "封面只保留一个核心反差词或短问句，不要堆多个解释词，也不要写成长句。\n"
@@ -3339,25 +3344,76 @@ def _first_metric_value(row: Dict, keys: List[str], default=""):
     return default
 
 
+def _find_metric_value(row: Dict, keys: List[str]):
+    # 详情页没有返回的字段必须保持缺失状态，不能用 0 伪装成真实指标。
+    for key in keys:
+        if key in row and row.get(key) not in (None, "", "-", "--", "暂无", "暂未更新"):
+            return True, row.get(key)
+    return False, None
+
+
+def _metric_float_or_none(value):
+    # 只在确实能解析成数字时才返回数值，像“2星”这类详情页展示值需要原样保留。
+    parsed = _metric_float(value, None)
+    return parsed
+
+
+def _normalize_count_metric(value) -> int:
+    # 数据总览中的播放、互动计数统一转成整数，便于报告汇总和比较。
+    return int(_metric_float(value, 0))
+
+
+def _normalize_optional_numeric_metric(value):
+    # 播放分析中可能既有百分比，也有“2星”等等级；数字转数值，非数字保留原文。
+    parsed = _metric_float_or_none(value)
+    return parsed if parsed is not None else value
+
+
 def normalize_feedback_metric_row(row: Dict) -> Dict:
-    # 同时兼容手写 JSON 和 B站数据表的中文列名，避免用户每次都手工改字段名。
-    return {
+    # 同时兼容手写 JSON 和 B站数据表的中文列名；详情页缺失的字段保持缺失，不做 0 兜底。
+    normalized = {
         "series": str(_first_metric_value(row, ["series", "系列"], "")).strip(),
         "episode": str(_first_metric_value(row, ["episode", "主题", "标题", "title"], "")).strip(),
         "publish_title": str(_first_metric_value(row, ["publish_title", "发布标题", "稿件标题"], "")).strip(),
         "video_path": str(_first_metric_value(row, ["video_path", "视频路径"], "")).strip(),
-        "views": int(_metric_float(_first_metric_value(row, ["views", "播放量", "播放"], 0))),
-        "avg_view_seconds": _metric_float(_first_metric_value(row, ["avg_view_seconds", "平均观看秒数", "平均观看时长"], 0)),
-        "completion_rate": _metric_float(_first_metric_value(row, ["completion_rate", "完播率"], 0)),
-        "click_rate": _metric_float(_first_metric_value(row, ["click_rate", "点击率", "封面点击率"], 0)),
-        "likes": int(_metric_float(_first_metric_value(row, ["likes", "点赞"], 0))),
-        "comments": int(_metric_float(_first_metric_value(row, ["comments", "评论"], 0))),
-        "shares": int(_metric_float(_first_metric_value(row, ["shares", "分享"], 0))),
     }
+    for key in ("source", "aid", "bvid", "metric_sections"):
+        if key in row and row.get(key) not in (None, ""):
+            normalized[key] = row.get(key)
+
+    count_fields = [
+        ("views", ["views", "播放量", "播放"]),
+        ("likes", ["likes", "点赞"]),
+        ("danmaku", ["danmaku", "弹幕"]),
+        ("comments", ["comments", "评论"]),
+        ("shares", ["shares", "分享"]),
+        ("favorites", ["favorites", "收藏"]),
+        ("coins", ["coins", "投币"]),
+        ("followers", ["followers", "涨粉", "新增粉丝"]),
+        ("unfollows", ["unfollows", "取关", "取消关注"]),
+    ]
+    for field, aliases in count_fields:
+        found, value = _find_metric_value(row, aliases)
+        if found:
+            normalized[field] = _normalize_count_metric(value)
+
+    analysis_fields = [
+        ("avg_view_seconds", ["avg_view_seconds", "平均观看秒数", "平均观看时长"]),
+        ("completion_rate", ["completion_rate", "完播率"]),
+        ("click_rate", ["click_rate", "点击率", "封面点击率", "封标点击率"]),
+        ("three_second_exit_rate", ["three_second_exit_rate", "3秒跳出率", "三秒跳出率"]),
+        ("interaction_rate", ["interaction_rate", "互动率"]),
+        ("play_follower_rate", ["play_follower_rate", "播转粉率", "播放转粉率"]),
+    ]
+    for field, aliases in analysis_fields:
+        found, value = _find_metric_value(row, aliases)
+        if found:
+            normalized[field] = _normalize_optional_numeric_metric(value)
+    return normalized
 
 
 def load_feedback_metrics(metrics_path: str = None) -> List[Dict]:
-    # 指标文件不存在时返回空列表，系统仍能基于本地生成质量给出优化建议。
+    # 这里只负责读取和规整指标；是否允许空数据由调用方按业务场景决定。
     path = metrics_path or DEEP_FEEDBACK_METRICS_FILE
     if not path or not os.path.exists(path):
         return []
@@ -3372,44 +3428,75 @@ def load_feedback_metrics(metrics_path: str = None) -> List[Dict]:
     return [normalize_feedback_metric_row(row) for row in rows if isinstance(row, dict)]
 
 
+def _feedback_metrics_source(metrics_path: str = None) -> str:
+    # B站自动回流文件需要识别来源，旧的列表指标不能继续冒充详情页指标。
+    path = metrics_path or DEEP_FEEDBACK_METRICS_FILE
+    if not path or not os.path.exists(path) or path.lower().endswith(".csv"):
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return ""
+    return str(data.get("source") or "").strip() if isinstance(data, dict) else ""
+
+
+def _assert_feedback_metrics_detail_source(metrics_path: str = None):
+    # 只拦截明确标记为 B站旧来源的文件；手工文件没有 source 时仍按手工指标处理。
+    source = _feedback_metrics_source(metrics_path)
+    if source.startswith("bilibili_") and source != "bilibili_detail_page":
+        raise RuntimeError(f"指标文件不是 B站详情页数据，拒绝分析：{source}，请重新点击“数据”采集详情页")
+
+
 def collect_deep_feedback_metrics(metrics_path: str = None, auto_scrape: bool = True, output_dir: str = None) -> Dict:
-    # 自动回流入口：没有手工指标文件时，直接从已登录 Chrome 的 B站创作中心抓取稿件数据。
+    # 自动回流入口必须拿到真实指标；失败或 0 条都直接报错，避免后续用空数据做错误判断。
     if metrics_path:
-        metric_count = len(load_feedback_metrics(metrics_path)) if os.path.exists(metrics_path) else 0
-        error = "" if os.path.exists(metrics_path) else f"指标文件不存在：{metrics_path}"
+        if not os.path.exists(metrics_path):
+            raise RuntimeError(f"指标文件不存在：{metrics_path}")
+        _assert_feedback_metrics_detail_source(metrics_path)
+        metric_count = len(load_feedback_metrics(metrics_path))
+        if metric_count <= 0:
+            raise RuntimeError(f"指标文件没有有效数据：{metrics_path}")
         return {
             "metrics_path": metrics_path,
             "metric_count": metric_count,
             "metrics_source": "manual_file",
-            "metrics_error": error,
+            "metrics_error": "",
         }
 
     output_dir = output_dir or os.path.dirname(DEEP_FEEDBACK_METRICS_FILE)
     output_path = os.path.join(output_dir, os.path.basename(DEEP_FEEDBACK_METRICS_FILE))
     if not auto_scrape:
+        _assert_feedback_metrics_detail_source(output_path)
+        metric_count = len(load_feedback_metrics(output_path))
+        if metric_count <= 0:
+            raise RuntimeError(f"本地指标文件没有有效数据：{output_path}")
         return {
             "metrics_path": output_path,
-            "metric_count": len(load_feedback_metrics(output_path)),
+            "metric_count": metric_count,
             "metrics_source": "local_file",
             "metrics_error": "",
         }
 
-    try:
-        from crawler.bilibili_feedback import scrape_bilibili_article_metrics
-        result = scrape_bilibili_article_metrics(output_path=output_path)
-        return {
-            "metrics_path": result.get("metrics_path") or output_path,
-            "metric_count": int(result.get("metric_count") or 0),
-            "metrics_source": result.get("source") or "bilibili_article_manager",
-            "metrics_error": result.get("error") or "",
-        }
-    except Exception as exc:
-        return {
-            "metrics_path": output_path,
-            "metric_count": 0,
-            "metrics_source": "bilibili_article_manager",
-            "metrics_error": str(exc),
-        }
+    from crawler.bilibili_feedback import scrape_bilibili_article_metrics
+    result = scrape_bilibili_article_metrics(output_path=output_path)
+    metrics_path = result.get("metrics_path") or output_path
+    metric_count = int(result.get("metric_count") or 0)
+    error = str(result.get("error") or "").strip()
+    if error or metric_count <= 0:
+        raise RuntimeError(error or f"B站自动抓取未获得有效指标：{metrics_path}")
+    if not os.path.exists(metrics_path):
+        raise RuntimeError(f"B站自动抓取没有生成指标文件：{metrics_path}")
+    _assert_feedback_metrics_detail_source(metrics_path)
+    file_metric_count = len(load_feedback_metrics(metrics_path))
+    if file_metric_count <= 0:
+        raise RuntimeError(f"B站自动抓取结果文件没有有效数据：{metrics_path}")
+    return {
+        "metrics_path": metrics_path,
+        "metric_count": file_metric_count,
+        "metrics_source": result.get("source") or "bilibili_article_manager",
+        "metrics_error": "",
+    }
 
 
 def _feedback_metric_key(row: Dict) -> tuple:
@@ -3419,19 +3506,41 @@ def _feedback_metric_key(row: Dict) -> tuple:
     )
 
 
+def _normalize_feedback_title(text: str) -> str:
+    # 标题匹配只保留中英文和数字，忽略空格、冒号、问号等发布侧常见差异。
+    return re.sub(r"[^0-9A-Za-z\u4e00-\u9fff]+", "", str(text or "")).lower()
+
+
+def _find_feedback_metric_by_title(candidates: List[str], title_pairs: List[tuple[str, Dict]]) -> Dict:
+    normalized_candidates = [_normalize_feedback_title(item) for item in candidates if item]
+    for candidate in normalized_candidates:
+        for metric_title, row in title_pairs:
+            if candidate and metric_title and (candidate in metric_title or metric_title in candidate):
+                return row
+    best_score = 0.0
+    best_row: Dict = {}
+    for candidate in normalized_candidates:
+        for metric_title, row in title_pairs:
+            score = difflib.SequenceMatcher(None, candidate, metric_title).ratio()
+            if score > best_score:
+                best_score = score
+                best_row = row
+    return best_row if best_score >= 0.55 else {}
+
+
 def _episode_feedback_risks(episode: Dict, metrics: Dict, gate: Dict) -> List[str]:
     risks: List[str] = []
     if gate.get("blocked"):
         risks.extend(gate.get("reasons", []))
     actual_seconds = _metric_float(episode.get("actual_seconds"), 0)
-    avg_view_seconds = _metric_float(metrics.get("avg_view_seconds"), 0)
-    completion_rate = _metric_float(metrics.get("completion_rate"), 0)
-    click_rate = _metric_float(metrics.get("click_rate"), 0)
-    if actual_seconds and avg_view_seconds and avg_view_seconds / actual_seconds < 0.35:
+    avg_view_seconds = _metric_float_or_none(metrics.get("avg_view_seconds")) if "avg_view_seconds" in metrics else None
+    completion_rate = _metric_float_or_none(metrics.get("completion_rate")) if "completion_rate" in metrics else None
+    click_rate = _metric_float_or_none(metrics.get("click_rate")) if "click_rate" in metrics else None
+    if actual_seconds and avg_view_seconds is not None and avg_view_seconds / actual_seconds < 0.35:
         risks.append("平均观看时长低于总时长35%")
-    if completion_rate and completion_rate < 0.35:
+    if completion_rate is not None and completion_rate < 0.35:
         risks.append("完播率偏低")
-    if click_rate and click_rate < 0.025:
+    if click_rate is not None and click_rate < 0.025:
         risks.append("点击率偏低")
     if episode.get("fallback_used"):
         risks.append("使用保守写稿，可能缺少差异化信息")
@@ -3442,11 +3551,29 @@ def build_deep_feedback_report(config: Dict, metrics_path: str = None) -> Dict:
     # 把平台指标和本地生成质量合并成一份机器可读报告，后续 AI 只消费这一份上下文。
     metrics_rows = load_feedback_metrics(metrics_path)
     metrics_by_key = {_feedback_metric_key(row): row for row in metrics_rows}
+    metrics_by_title: Dict[str, Dict] = {}
+    for row in metrics_rows:
+        # B站接口只返回发布标题，不知道本地系列名；这里额外建标题索引，避免真实指标无法匹配回本地主题。
+        for title in (row.get("publish_title"), row.get("episode")):
+            title = str(title or "").strip()
+            if title:
+                metrics_by_title[title] = row
+    normalized_title_pairs = [
+        (_normalize_feedback_title(title), row)
+        for title, row in metrics_by_title.items()
+        if _normalize_feedback_title(title)
+    ]
     videos: List[Dict] = []
     for series in config.get("series", []):
         for episode in series.get("episodes", []):
-            metric = metrics_by_key.get((series.get("title", ""), episode.get("title", ""))) or \
-                metrics_by_key.get((series.get("title", ""), episode.get("publish_title", ""))) or {}
+            episode_title = str(episode.get("title", "")).strip()
+            publish_title = str(episode.get("publish_title", "")).strip()
+            series_title = str(series.get("title", "")).strip()
+            metric = metrics_by_key.get((series_title, episode_title)) or \
+                metrics_by_key.get((series_title, publish_title)) or \
+                metrics_by_title.get(publish_title) or \
+                metrics_by_title.get(episode_title) or \
+                _find_feedback_metric_by_title([publish_title, episode_title], normalized_title_pairs) or {}
             if not (episode.get("generated") or episode.get("published") or episode.get("video_path") or metric):
                 continue
             gate = assess_publish_gate(series, episode)
@@ -3488,24 +3615,43 @@ def build_deep_feedback_ai_prompt(report: Dict) -> str:
     )
     for item in prompt_items[:20]:
         metrics = item.get("metrics", {})
-        compact_rows.append({
+        compact_row = {
             "系列": item.get("series", ""),
             "主题": item.get("episode", ""),
             "发布标题": item.get("publish_title", ""),
             "时长": item.get("actual_seconds") or item.get("estimated_seconds"),
             "来源数": item.get("source_count"),
-            "播放量": metrics.get("views", 0),
-            "平均观看秒数": metrics.get("avg_view_seconds", 0),
-            "完播率": metrics.get("completion_rate", 0),
-            "点击率": metrics.get("click_rate", 0),
-            "风险": item.get("risks", []),
-        })
+        }
+        # 这里只写入 B站详情页实际返回的指标；缺失字段不传给 AI，避免被当成 0 分析。
+        metric_labels = [
+            ("views", "播放量"),
+            ("followers", "涨粉"),
+            ("unfollows", "取关"),
+            ("likes", "点赞"),
+            ("danmaku", "弹幕"),
+            ("comments", "评论"),
+            ("shares", "分享"),
+            ("favorites", "收藏"),
+            ("coins", "投币"),
+            ("avg_view_seconds", "平均观看秒数"),
+            ("completion_rate", "完播率"),
+            ("click_rate", "点击率"),
+            ("three_second_exit_rate", "3秒跳出率"),
+            ("interaction_rate", "互动率"),
+            ("play_follower_rate", "播转粉率"),
+            ("metric_sections", "指标区块"),
+        ]
+        for field, label in metric_labels:
+            if field in metrics:
+                compact_row[label] = metrics[field]
+        compact_row["风险"] = item.get("risks", [])
+        compact_rows.append(compact_row)
     return (
         "你是 OpenNewsBrief 深度系列增长和工程优化顾问。\n"
         "请根据下面的数据回流报告，生成一份可以直接复制给 Codex 执行的优化建议。\n"
         "要求：\n"
         "1. 优先给代码层面的闭环任务，不要只写运营口号。\n"
-        "2. 分清点击率问题、完播率问题、资料质量问题和发布质量风险问题。\n"
+        "2. 只分析视频数据里实际出现的字段；缺失的点击率、完播率、平均观看时长不要按 0 解读。\n"
         "3. 每条建议都要说明应修改的模块或函数。\n"
         "4. 输出中文 Markdown。\n\n"
         f"汇总：{json.dumps(report.get('summary', {}), ensure_ascii=False)}\n"
@@ -3537,13 +3683,15 @@ def generate_deep_feedback_advice(
         output_dir: str = None,
         use_llm: bool = True,
         auto_scrape: bool = True) -> Dict:
-    # 一键闭环入口：读取指标、合并本地质量、让 AI 生成建议，并落成可复制给 Codex 的 Markdown。
+    # 一键闭环入口只接受真实指标；采集失败时让异常直接暴露给 UI，不写误导性的兜底报告。
     output_dir = output_dir or os.path.join(main.ROOT_DIR, "deepContent")
     os.makedirs(output_dir, exist_ok=True)
     metrics_result = collect_deep_feedback_metrics(metrics_path=metrics_path, auto_scrape=auto_scrape, output_dir=output_dir)
     actual_metrics_path = metrics_result.get("metrics_path") or metrics_path
-    if actual_metrics_path and not os.path.exists(actual_metrics_path):
-        actual_metrics_path = metrics_path
+    if not actual_metrics_path or not os.path.exists(actual_metrics_path):
+        raise RuntimeError(f"指标文件不存在：{actual_metrics_path or metrics_path}")
+    if len(load_feedback_metrics(actual_metrics_path)) <= 0:
+        raise RuntimeError(f"指标文件没有有效数据：{actual_metrics_path}")
     report = build_deep_feedback_report(load_config(), metrics_path=actual_metrics_path)
     report["metrics_collection"] = metrics_result
     report_path = os.path.join(output_dir, DEEP_FEEDBACK_REPORT_FILE)
@@ -3551,19 +3699,13 @@ def generate_deep_feedback_advice(
         json.dump(report, f, ensure_ascii=False, indent=2)
 
     prompt = build_deep_feedback_ai_prompt(report)
-    ai_advice = ""
-    if use_llm:
-        try:
-            ai_advice = call_llm(prompt)
-        except Exception as exc:
-            ai_advice = fallback_deep_feedback_advice(report) + f"\n\n> AI 建议生成失败，已使用规则兜底：{exc}"
-    else:
-        ai_advice = fallback_deep_feedback_advice(report)
-
-    if metrics_result.get("metrics_error"):
-        # 抓取失败时仍然产出建议文件，但把失败原因写在最前面，方便下一轮直接修数据链路。
-        prefix = "B站自动抓取失败" if metrics_result.get("metrics_source") == "bilibili_article_manager" else "指标文件读取提醒"
-        ai_advice = f"> {prefix}，已基于本地质量兜底：{metrics_result.get('metrics_error')}\n\n" + ai_advice
+    if not use_llm:
+        raise RuntimeError("数据回流建议已禁止规则兜底，请保持 use_llm=True 并使用真实 AI 分析")
+    try:
+        ai_advice = call_llm(prompt)
+    except Exception as exc:
+        # 报告已经基于真实指标写出；建议生成失败时直接报错，不再用规则建议伪装成完整判断。
+        raise RuntimeError(f"AI 数据回流建议生成失败：{exc}") from exc
 
     codex_prompt = (
         "请在 `D:\\myself\\AIContentfactory\\bg\\OpenNewsBrief` 中继续优化深度系列视频生成闭环。\n"
