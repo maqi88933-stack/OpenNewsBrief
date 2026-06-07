@@ -89,6 +89,20 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("Ajinomoto Build-up Film", joined)
         self.assertLess(max(len(item) for item in keywords[:4]), 60)
 
+    def test_build_search_keywords_adds_generic_robot_research_terms_without_abf_noise(self):
+        keywords = deep_series.build_search_keywords(
+            {"title": "AI时代，机器人先学会打工"},
+            {
+                "title": "最难的不是会聊天，是会拿起一个杯子",
+                "question": "为什么让机器人稳定抓取、行走和操作物体，比让 AI 写一段话更难？",
+            },
+        )
+
+        joined = "\n".join(keywords)
+        self.assertIn("机器人 抓取 操作 物体 难点", joined)
+        self.assertIn("robot grasping manipulation real world reliability", joined)
+        self.assertNotIn("杯子 ABF", joined)
+
     def test_retry_search_uses_audit_gaps_and_keeps_previous_sources(self):
         episode = {
             "title": "味之素：味精公司为什么成了高端芯片底座",
@@ -154,6 +168,9 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("核心问题", prompt)
         self.assertIn("背景", prompt)
         self.assertIn("争议", prompt)
+        self.assertIn("[S1]", mock_llm.call_args.args[1])
+        self.assertIn("来源编号", prompt)
+        self.assertIn("[S1]", prompt)
 
     def test_call_llm_accepts_responses_api_content_blocks(self):
         fake_llm = types.SimpleNamespace(
@@ -264,6 +281,10 @@ class TestDeepSeries(unittest.TestCase):
         self.assertNotIn("每句不超过22个字", prompt)
         self.assertIn("每次发言", prompt)
         self.assertIn("2 到 4 句", prompt)
+        self.assertIn("单一主线", prompt)
+        self.assertIn("上一段", prompt)
+        self.assertIn("所以这一段", prompt)
+        self.assertIn("不要把中段写成并列清单", prompt)
         self.assertIn("不要连续输出同一个主持人的多行发言", prompt)
         self.assertIn("不要使用“你有没有想过”", prompt)
         self.assertIn("不要使用“想象一下”", prompt)
@@ -412,6 +433,30 @@ class TestDeepSeries(unittest.TestCase):
         self.assertFalse(report["retention_review"]["blocked"])
         self.assertIn("整体留存", mock_llm.call_args.args[0])
         self.assertIn("用户是否愿意听完", mock_llm.call_args.args[0])
+        self.assertIn("观点连贯性", mock_llm.call_args.args[0])
+        self.assertIn("观点跳跃", mock_llm.call_args.args[0])
+        self.assertIn("资料清单", mock_llm.call_args.args[0])
+
+    def test_review_script_retention_blocks_unparseable_json(self):
+        malformed_review = (
+            '{"passed":true,"score":8,"reasons":["中段节奏略平均"],'
+            '"suggestions":["结尾要回扣“拿杯子”。]}'
+        )
+
+        with patch("deep_series.call_llm", return_value=malformed_review):
+            review = deep_series.review_script_retention(
+                {"title": "AI时代，机器人先学会打工"},
+                {"title": "最难的不是会聊天，是会拿起一个杯子"},
+                "女：抓杯子之后突然跳到走路。\n男：为什么？",
+                "研究报告",
+                "审校意见",
+            )
+
+        self.assertTrue(review["blocked"])
+        self.assertFalse(review["passed"])
+        self.assertIn("JSON解析失败", "；".join(review["reasons"]))
+        self.assertIn("观点承接", "；".join(review["suggestions"]))
+        self.assertEqual(review["raw"], malformed_review)
 
     def test_generate_dialogue_script_rewrites_when_retention_review_fails(self):
         weak_script = "女：今天我们来讲一个产业知识。\n男：好，继续。"
@@ -856,6 +901,24 @@ class TestDeepSeries(unittest.TestCase):
         self.assertNotEqual(image.getpixel((190, 876)), (199, 154, 168))
         self.assertNotEqual(image.getpixel((1700, 390)), (199, 154, 168))
 
+    def test_create_text_card_uses_single_outer_content_board(self):
+        # 视频卡片保留一层内容底板提供结构，但不能再出现内层描边框和套娃大边距。
+        from PIL import Image
+
+        image_path = os.path.join(self.tmpdir, "single_board_slide.png")
+        deep_series.create_text_card(
+            "标题",
+            "观点 · 系列 · 女主持",
+            "正文内容",
+            image_path,
+            accent="#C79AA8",
+            current_speaker="female",
+        )
+
+        image = Image.open(image_path).convert("RGB")
+        self.assertEqual(image.getpixel((140, 90)), (255, 255, 255))
+        self.assertNotEqual(image.getpixel((104, 150)), (229, 229, 234))
+
     def test_create_text_card_uses_background_and_one_foreground_svg(self):
         image_path = os.path.join(self.tmpdir, "multi_svg_slide.png")
         asset_paths = {
@@ -908,6 +971,59 @@ class TestDeepSeries(unittest.TestCase):
 
         image = Image.open(image_path).convert("RGB")
         self.assertEqual(image.getpixel((8, 8)), (255, 149, 0))
+
+    def test_create_text_card_highlights_current_female_host_avatar(self):
+        # 当前说话人是女主持时，只高亮小头像外圈，避免大面积 UI 面板显得像后台界面。
+        from PIL import Image
+
+        image_path = os.path.join(self.tmpdir, "female_host_slide.png")
+        deep_series.create_text_card(
+            "标题",
+            "观点 · 系列 · 女主持",
+            "这是一段用于检查主持人高亮的正文。",
+            image_path,
+            accent="#C79AA8",
+            current_speaker="female",
+        )
+
+        image = Image.open(image_path).convert("RGB")
+        self.assertEqual(image.getpixel((988, 918)), (199, 154, 168))
+        self.assertNotEqual(image.getpixel((1160, 920)), (199, 154, 168))
+        self.assertNotEqual(image.getpixel((1350, 918)), (199, 154, 168))
+
+    def test_create_text_card_removes_template_brand_text_area(self):
+        # 视频图卡不再显示 OpenNewsBrief 这类模板品牌文字，顶部旧胶囊区域应该保持干净白底。
+        from PIL import Image
+
+        image_path = os.path.join(self.tmpdir, "no_brand_slide.png")
+        deep_series.create_text_card(
+            "标题",
+            "观点 · 系列 · 女主持",
+            "正文内容",
+            image_path,
+            accent="#C79AA8",
+            current_speaker="female",
+        )
+
+        image = Image.open(image_path).convert("RGB")
+        self.assertNotEqual(image.getpixel((170, 160)), (199, 154, 168))
+
+    def test_create_text_card_keeps_host_avatar_outside_svg_stage(self):
+        # 主持人形象不能压到左侧 SVG 舞台区域，避免和本期视觉元素重叠。
+        from PIL import Image
+
+        image_path = os.path.join(self.tmpdir, "host_outside_stage_slide.png")
+        deep_series.create_text_card(
+            "标题",
+            "观点 · 系列 · 女主持",
+            "正文内容",
+            image_path,
+            accent="#C79AA8",
+            current_speaker="female",
+        )
+
+        image = Image.open(image_path).convert("RGB")
+        self.assertNotEqual(image.getpixel((210, 908)), (199, 154, 168))
 
     def test_step_video_disables_transition_clicks_for_deep_series(self):
         audio_path = os.path.join(self.tmpdir, "dialogue.mp3")
@@ -1176,6 +1292,52 @@ class TestDeepSeries(unittest.TestCase):
         second_shapes = re.sub(r"<text[\s\S]*?</text>", "", second_svg)
         self.assertNotEqual(first_shapes, second_shapes)
 
+    def test_generate_visual_svg_asset_robot_scenes_use_different_shapes(self):
+        # 最近机器人主题的场景资产不能都退回三方块流程图；视频会隐藏 SVG 文字，所以图形本身必须有场景差异。
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["仓库搬运", "外卖配送", "商用清洁", "酒店送物"],
+        }
+
+        warehouse_path = deep_series.generate_visual_svg_asset(
+            "isometric warehouse aisle with",
+            "生成仓库搬运的短视频场景 SVG，突出关键词：warehouse_robot。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+        delivery_path = deep_series.generate_visual_svg_asset(
+            "sidewalk or campus delivery ro",
+            "生成外卖配送的短视频场景 SVG，突出关键词：delivery_robot。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+        cleaning_path = deep_series.generate_visual_svg_asset(
+            "autonomous floor scrubber clea",
+            "生成商用清洁的短视频场景 SVG，突出关键词：commercial_cleaning。",
+            design,
+            self.tmpdir,
+            use_llm=False,
+        )
+
+        with open(warehouse_path, "r", encoding="utf-8") as f:
+            warehouse_svg = f.read()
+        with open(delivery_path, "r", encoding="utf-8") as f:
+            delivery_svg = f.read()
+        with open(cleaning_path, "r", encoding="utf-8") as f:
+            cleaning_svg = f.read()
+
+        warehouse_shapes = re.sub(r"<text[\s\S]*?</text>", "", warehouse_svg)
+        delivery_shapes = re.sub(r"<text[\s\S]*?</text>", "", delivery_svg)
+        cleaning_shapes = re.sub(r"<text[\s\S]*?</text>", "", cleaning_svg)
+        self.assertIn("仓库搬运", warehouse_svg)
+        self.assertIn("外卖配送", delivery_svg)
+        self.assertIn("商用清洁", cleaning_svg)
+        self.assertNotEqual(warehouse_shapes, delivery_shapes)
+        self.assertNotEqual(warehouse_shapes, cleaning_shapes)
+        self.assertNotEqual(delivery_shapes, cleaning_shapes)
+
     def test_generate_visual_svg_asset_fallback_keeps_detail_text_contrast(self):
         # 详情文字不能再用白字压在白色面板上，Dell 场景 SVG 会因此看不清。
         design = {
@@ -1351,6 +1513,76 @@ class TestDeepSeries(unittest.TestCase):
         self.assertTrue(os.path.exists(design["asset_paths"]["ai_infrastructure_stack"]))
         self.assertEqual(result["visual_asset_paths"]["ai_infrastructure_stack"], design["asset_paths"]["ai_infrastructure_stack"])
 
+    def test_ensure_scene_card_svg_assets_refreshes_stale_generic_bridge_svg(self):
+        # 旧机器人产物里已经落盘的三方块流程图要能被刷新，否则重渲染仍然复用错误 SVG。
+        asset_dir = os.path.join(self.tmpdir, "visual_assets")
+        os.makedirs(asset_dir, exist_ok=True)
+        stale_path = os.path.join(asset_dir, "isometric_warehouse_aisle_with.svg")
+        with open(stale_path, "w", encoding="utf-8") as f:
+            f.write(
+                '<svg width="420" height="260" viewBox="0 0 420 260" xmlns="http://www.w3.org/2000/svg">'
+                '<rect x="46" y="116" width="96" height="72" rx="18" fill="#007AFF"/>'
+                '<rect x="162" y="116" width="96" height="72" rx="18" fill="#FF9500"/>'
+                '<rect x="278" y="116" width="96" height="72" rx="18" fill="#FFFFFF" stroke="#007AFF" stroke-width="5"/>'
+                '<polyline points="64,214 142,202 210,214 286,196 356,210" fill="transparent" stroke="#007AFF" stroke-width="5"/>'
+                '</svg>'
+            )
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["仓库搬运", "外卖配送", "商用清洁"],
+            "asset_paths": {"isometric warehouse aisle with": stale_path},
+            "scene_cards": [
+                {
+                    "keyword": "warehouse_robot",
+                    "asset": "isometric warehouse aisle with",
+                    "label": "仓库搬运",
+                }
+            ],
+            "svg_prompts": {
+                "isometric warehouse aisle with": "生成仓库搬运的短视频场景 SVG，突出关键词：warehouse_robot。"
+            },
+        }
+
+        updated = deep_series.ensure_scene_card_svg_assets(design, self.tmpdir, use_llm=False)
+
+        with open(updated["asset_paths"]["isometric warehouse aisle with"], "r", encoding="utf-8") as f:
+            refreshed_svg = f.read()
+        self.assertIn("仓库搬运", refreshed_svg)
+        self.assertIn('x="58" y="92"', refreshed_svg)
+        self.assertNotIn('points="64,214 142,202 210,214 286,196 356,210"', refreshed_svg)
+
+    def test_ensure_scene_card_svg_assets_refreshes_stale_top_level_hero_svg(self):
+        # 本期大量图卡会回退到 hero；旧 hero.svg 如果还是三方块流程图，重渲染后左侧仍然看不出变化。
+        asset_dir = os.path.join(self.tmpdir, "visual_assets")
+        os.makedirs(asset_dir, exist_ok=True)
+        hero_path = os.path.join(asset_dir, "hero.svg")
+        with open(hero_path, "w", encoding="utf-8") as f:
+            f.write(
+                '<svg width="420" height="260" viewBox="0 0 420 260" xmlns="http://www.w3.org/2000/svg">'
+                '<rect x="46" y="116" width="96" height="72" rx="18" fill="#007AFF"/>'
+                '<rect x="162" y="116" width="96" height="72" rx="18" fill="#FF9500"/>'
+                '<rect x="278" y="116" width="96" height="72" rx="18" fill="#FFFFFF" stroke="#007AFF" stroke-width="5"/>'
+                '<polyline points="64,214 142,202 210,214 286,196 356,210" fill="transparent" stroke="#007AFF" stroke-width="5"/>'
+                '</svg>'
+            )
+        design = {
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
+            "main_elements": ["仓库搬运", "外卖配送", "商用清洁"],
+            "asset_paths": {"hero": hero_path},
+            "scene_cards": [],
+            "svg_prompts": {
+                "hero": "生成服务机器人在商用运营场景工作的主题 SVG，包含仓库、外卖配送和商用清洁。"
+            },
+        }
+
+        updated = deep_series.ensure_scene_card_svg_assets(design, self.tmpdir, use_llm=False)
+
+        with open(updated["asset_paths"]["hero"], "r", encoding="utf-8") as f:
+            refreshed_svg = f.read()
+        self.assertIn("机器人作业", refreshed_svg)
+        self.assertIn('points="250,132 292,146 252,162"', refreshed_svg)
+        self.assertNotIn('points="64,214 142,202 210,214 286,196 356,210"', refreshed_svg)
+
     def test_build_visual_design_always_generates_background_svg(self):
         # 即使模型返回很多其它 SVG prompt，也必须为深度视频生成整页背景 background.svg。
         series = {"title": "AI时代老树开新花"}
@@ -1459,6 +1691,36 @@ class TestDeepSeries(unittest.TestCase):
         dark_pixels = sum(1 for r, g, b in upper_title_crop.getdata() if r < 80 and g < 80 and b < 80)
         # 信息流封面要让反差钩子尽早进入视野，不能把大标题压到画面中部。
         self.assertGreater(dark_pixels, 40)
+
+    def test_create_deep_cover_image_removes_template_brand_text(self):
+        # 封面也不再绘制 OpenNewsBrief 固定字样，避免生成物继续带模板品牌感。
+        from PIL import Image
+
+        assets = {
+            "title": "味精厂卡位AI芯片",
+            "cover_text": "味精厂造芯底",
+            "visual_design": {
+                "cover_title": "味精厂造芯片？",
+                "subtitle": "味之素 · ABF薄膜 · AI芯片封装",
+                "style": "科技财经、强反差、iOS干净排版",
+                "composition": "single_subject",
+                "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+                "main_elements": ["味之素", "ABF薄膜", "GPU封装"],
+                "asset_paths": {},
+            },
+        }
+
+        cover_path = deep_series.create_deep_cover_image(
+            {"title": "AI时代的隐形地基"},
+            {"title": "味之素：味精公司为什么成了高端芯片底座"},
+            assets,
+            self.tmpdir,
+        )
+
+        image = Image.open(cover_path).convert("RGB")
+        brand_crop = image.crop((100, 105, 360, 155))
+        blue_pixels = sum(1 for r, g, b in brand_crop.getdata() if b > 160 and r < 120 and g < 170)
+        self.assertEqual(blue_pixels, 0)
 
     def test_create_deep_cover_image_does_not_paste_background_outside_card(self):
         from PIL import Image
@@ -1646,6 +1908,45 @@ class TestDeepSeries(unittest.TestCase):
             "storage_data_pipeline",
         )
 
+    def test_match_visual_scene_uses_robot_work_scene_aliases(self):
+        # 机器人脚本里的自然台词不会写 warehouse_robot，必须靠中文场景词命中不同 SVG 资产。
+        visual_design = {
+            "main_elements": ["仓库搬运", "外卖配送", "商用清洁", "酒店送物"],
+            "scene_cards": [
+                {"keyword": "warehouse_robot", "asset": "isometric warehouse aisle with", "label": "仓库搬运"},
+                {"keyword": "delivery_robot", "asset": "sidewalk or campus delivery ro", "label": "外卖配送"},
+                {"keyword": "commercial_cleaning", "asset": "autonomous floor scrubber clea", "label": "商用清洁"},
+                {"keyword": "hotel_service", "asset": "hotel service robot delivering", "label": "酒店送物"},
+                {"keyword": "labor_cost", "asset": "dashboard comparing staff shif", "label": "用工成本"},
+                {"keyword": "bounded_scene", "asset": "warehouse map with marked rout", "label": "场景边界"},
+            ],
+        }
+
+        self.assertEqual(
+            deep_series.match_visual_scene("仓库机器人把货从A点送到B点。", visual_design)["asset"],
+            "isometric warehouse aisle with",
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("园区配送可以设置固定交接点。", visual_design)["asset"],
+            "sidewalk or campus delivery ro",
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("清洁机器人闭店后沿固定路线打扫。", visual_design)["asset"],
+            "autonomous floor scrubber clea",
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("酒店机器人按房号送水送外卖。", visual_design)["asset"],
+            "hotel service robot delivering",
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("少跑多少腿、少排多少班，都能进成本表。", visual_design)["asset"],
+            "dashboard comparing staff shif",
+        )
+        self.assertEqual(
+            deep_series.match_visual_scene("路线、货架、充电点和交接点都可以被管理。", visual_design)["asset"],
+            "warehouse map with marked rout",
+        )
+
     def test_render_svg_to_image_can_hide_model_text_labels(self):
         svg_path = os.path.join(self.tmpdir, "labelled.svg")
         with open(svg_path, "w", encoding="utf-8") as f:
@@ -1694,7 +1995,7 @@ class TestDeepSeries(unittest.TestCase):
         }
         captured_designs = []
 
-        def fake_create_card(title, subtitle, body, output_path, accent="#007AFF", slide_index=None, slide_total=None, visual_design=None, scene=None):
+        def fake_create_card(title, subtitle, body, output_path, accent="#007AFF", slide_index=None, slide_total=None, visual_design=None, scene=None, **_kwargs):
             captured_designs.append((visual_design, scene))
             with open(output_path, "wb") as f:
                 f.write(b"png")
@@ -1780,13 +2081,64 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(result["video_path"], "")
         self.assertEqual(result["audio_path"], "")
         self.assertTrue(result["script_path"].endswith("script.md"))
+        self.assertTrue(result["research_plan_path"].endswith("research_plan.md"))
+        self.assertTrue(result["research_trace_path"].endswith("research_trace.json"))
         self.assertTrue(os.path.exists(result["research_path"]))
+        self.assertTrue(os.path.exists(result["research_plan_path"]))
+        self.assertTrue(os.path.exists(result["research_trace_path"]))
         self.assertTrue(os.path.exists(result["script_notes_path"]))
         self.assertTrue(os.path.exists(result["documentary_package_path"]))
         self.assertTrue(os.path.exists(result["agent_log_path"]))
+        with open(result["research_trace_path"], "r", encoding="utf-8") as f:
+            trace = json.load(f)
+        self.assertEqual(trace["plan"]["series"], "AI 未来三年系列")
+        self.assertEqual(trace["attempts"][0]["source_count"], 3)
+        self.assertIn("AI 为什么会替代搜索？", trace["attempts"][0]["keywords"])
         _audio.assert_not_called()
         _slides.assert_not_called()
         _video.assert_not_called()
+
+    def test_run_episode_pipeline_writes_and_logs_plan_before_search(self):
+        episode = {"title": "AI 为什么会替代搜索？", "question": "AI 为什么会替代搜索？"}
+        series = {"title": "AI 未来三年系列", "description": "测试说明"}
+        events = []
+
+        def fake_print(*args, **_kwargs):
+            text = " ".join(str(arg) for arg in args)
+            if "开始生成研究计划" in text:
+                events.append("plan_log")
+            if "第 1/3 轮检索资料" in text:
+                events.append("search_log")
+
+        def fake_collect(*_args, **_kwargs):
+            # 检索一开始就应该已经能看到研究计划文件，方便长调研时先人工检查方向。
+            plan_paths = []
+            for root, _dirs, files in os.walk(self.tmpdir):
+                if "research_plan.md" in files:
+                    plan_paths.append(os.path.join(root, "research_plan.md"))
+            self.assertTrue(plan_paths)
+            with open(plan_paths[0], "r", encoding="utf-8") as f:
+                plan_text = f.read()
+            self.assertIn("# 研究计划", plan_text)
+            self.assertIn("首轮检索词", plan_text)
+            events.append("collect")
+            return [
+                {"title": "Source 1", "link": "https://example.com/1", "content": "AI search source"},
+                {"title": "Source 2", "link": "https://example.com/2", "content": "AI search source"},
+                {"title": "Source 3", "link": "https://example.com/3", "content": "AI search source"},
+            ]
+
+        with patch("builtins.print", side_effect=fake_print), \
+                patch("deep_series.collect_research_sources", side_effect=fake_collect), \
+                patch("deep_series.generate_research_report", return_value="研究报告"), \
+                patch("deep_series.audit_research", return_value="事实审校通过"), \
+                patch("deep_series.generate_dialogue_script_with_duration_guard", return_value=("女：计划先写。", {"blocked": False, "estimated_seconds": 30.0, "attempts": 1})), \
+                patch("deep_series.generate_script_notes", return_value="脚本备注"), \
+                patch("deep_series.generate_documentary_package", return_value="纪录片包"):
+            deep_series.run_episode_pipeline(series, episode, base_dir=self.tmpdir)
+
+        self.assertLess(events.index("plan_log"), events.index("search_log"))
+        self.assertLess(events.index("search_log"), events.index("collect"))
 
     def test_run_episode_pipeline_retries_three_times_then_uses_safe_fallback(self):
         episode = {"title": "AI 为什么会替代搜索？", "question": "AI 为什么会替代搜索？"}
@@ -2381,6 +2733,36 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("#8FA8C1", captured)
         self.assertNotIn("#FF2D55", captured)
         self.assertNotIn("#007AFF", captured)
+
+    def test_create_deep_slide_images_passes_current_speaker_to_cards(self):
+        script_path = os.path.join(self.tmpdir, "speaker_avatar_script.md")
+        audio_path = os.path.join(self.tmpdir, "speaker_avatar_audio.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：搜索入口正在变化。\n男：对话会变成新的软件入口。")
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            f.write(
+                '{"segments":[{"role":"female","slide_index":0,"duration":4.0,"text":"搜索入口正在变化。"},{"role":"male","slide_index":1,"duration":4.0,"text":"对话会变成新的软件入口。"}]}'
+            )
+
+        captured = []
+
+        def fake_create_text_card(title, subtitle, body, output_path, **kwargs):
+            # 图卡层要知道当前说话人，才能在视频里高亮对应的固定主持人形象。
+            captured.append(kwargs.get("current_speaker"))
+            with open(output_path, "wb") as f:
+                f.write(b"png")
+            return output_path
+
+        with patch("deep_series.create_text_card", side_effect=fake_create_text_card), \
+                patch.object(deep_series, "write_deep_slide_durations", return_value="slide_durations.json"):
+            deep_series.create_deep_slide_images(
+                {"title": "AI未来三年系列"},
+                {"title": "AI 为什么会替代搜索？"},
+                script_path,
+                audio_path,
+            )
+
+        self.assertEqual(captured, ["female", "male"])
 
     def test_classify_deep_visual_card_adds_information_labels(self):
         self.assertEqual(deep_series.classify_deep_visual_card("它在供应链里处于设备材料环节。"), "产业链位置")

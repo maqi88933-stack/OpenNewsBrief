@@ -213,13 +213,12 @@ def build_focused_search_terms(series: Dict, episode: Dict) -> List[str]:
     # 深度选题的 question 往往是一整段自然语言，新闻搜索先用短词更容易命中。
     title = str(episode.get("title") or "")
     question = _episode_question(episode)
-    company = re.split(r"[:：]", title, maxsplit=1)[0].strip()
-    if not company:
-        match = re.match(r"([\u4e00-\u9fffA-Za-z0-9&.\-]{2,24})", question)
-        company = match.group(1).strip() if match else ""
+    topic_text = f"{series.get('title', '')} {title} {question}"
+    company = re.split(r"[:：]", title, maxsplit=1)[0].strip() if re.search(r"[:：]", title) else ""
 
     terms: List[str] = []
     if company:
+        # 带“公司：问题”格式的选题先查公司和产业关键词，避免长问题命中率太低。
         terms.extend([
             f"{company} ABF",
             f"{company} 半导体 材料",
@@ -232,7 +231,21 @@ def build_focused_search_terms(series: Dict, episode: Dict) -> List[str]:
             "Ajinomoto Build-up Film",
             "Ajinomoto semiconductor materials",
         ])
-    return [term for term in terms if term.strip()]
+    if re.search(r"机器人|具身智能|机械臂|抓取|行走|操作物体|拿起|杯子", topic_text):
+        # 通用机器人选题没有公司名，直接补技术难点和英文研究词，避免误搜成 ABF 半导体材料。
+        terms.extend([
+            "机器人 抓取 操作 物体 难点",
+            "具身智能 机器人 操作 物理世界 可靠性",
+            "robot grasping manipulation real world reliability",
+            "embodied AI robot manipulation report",
+        ])
+
+    deduped: List[str] = []
+    for term in terms:
+        clean = term.strip()
+        if clean and clean not in deduped:
+            deduped.append(clean)
+    return deduped
 
 
 def build_retry_gap_search_terms(series: Dict, episode: Dict, audit_report: str = "", quality: Dict | None = None) -> List[str]:
@@ -390,12 +403,39 @@ def sources_to_markdown(sources: List[Dict]) -> str:
     for index, source in enumerate(sources, 1):
         content = re.sub(r"\s+", " ", source.get("content", "")).strip()
         lines.append(
-            f"### {index}. {source.get('title', '')}\n"
+            f"### [S{index}] {source.get('title', '')}\n"
             f"- 链接：{source.get('link', '')}\n"
             f"- 时间：{source.get('date', '')}\n"
             f"- 摘要：{content[:1200]}"
         )
     return "\n\n".join(lines)
+
+
+def build_research_plan(series: Dict, episode: Dict) -> str:
+    # 对齐 Deep Research 的第一步：先把研究问题、来源类型和首轮检索词写清楚。
+    keywords = build_search_keywords(series, episode)[:10]
+    lines = [
+        "# 研究计划",
+        "",
+        f"- 系列：{series.get('title', '')}",
+        f"- 主题：{episode.get('title', '')}",
+        f"- 核心问题：{_episode_question(episode)}",
+        "",
+        "## 子问题",
+        "1. 这个选题真正要解释的反常识或冲突是什么？",
+        "2. 哪些事实、案例或数据可以支撑主线？",
+        "3. 是否存在反方观点、失败案例或容易夸大的地方？",
+        "4. 结论如何转成 120-150 秒的双主持人口播？",
+        "",
+        "## 优先来源类型",
+        "- 官方资料、产品页、投资者关系、年报或白皮书。",
+        "- 行业报告、研究机构、技术博客或论文摘要。",
+        "- 反方观点、失败案例、监管风险或商业化复盘。",
+        "",
+        "## 首轮检索词",
+    ]
+    lines.extend(f"- {keyword}" for keyword in keywords)
+    return "\n".join(lines).strip() + "\n"
 
 
 def generate_research_report(series: Dict, episode: Dict, sources: List[Dict]) -> str:
@@ -410,6 +450,7 @@ def generate_research_report(series: Dict, episode: Dict, sources: List[Dict]) -
         "2. 归纳背景、数据、争议、商业视角和技术视角。\n"
         "3. 给出后续脚本可直接使用的事实和结论。\n"
         "4. 保持中文、简洁、可读。\n"
+        "5. 涉及具体事实、数据、案例或公司判断时，句末必须标注来源编号，例如 [S1] 或 [S1][S2]；不要引用资料外的信息。\n"
     )
     return call_llm(prompt, sources_to_markdown(sources))
 
@@ -479,9 +520,11 @@ def assess_research_quality(sources: List[Dict], audit_report: str) -> Dict:
     }
 
 
-def run_research_review_loop(series: Dict, episode: Dict) -> Dict:
+def run_research_review_loop(series: Dict, episode: Dict, research_plan: str = "") -> Dict:
     # 调研不过关时最多重搜三次，每轮都重新生成研究稿并重新审核。
     attempts = []
+    trace_attempts = []
+    plan = research_plan or build_research_plan(series, episode)
     latest_sources: List[Dict] = []
     latest_research = ""
     latest_audit = ""
@@ -490,6 +533,7 @@ def run_research_review_loop(series: Dict, episode: Dict) -> Dict:
     previous_quality: Dict = {}
     for attempt in range(1, DEEP_RESEARCH_MAX_ATTEMPTS + 1):
         print(f"[深度系列] 第 {attempt}/{DEEP_RESEARCH_MAX_ATTEMPTS} 轮检索资料", flush=True)
+        keywords = build_search_keywords(series, episode, attempt=attempt, audit_report=previous_audit, quality=previous_quality)
         new_sources = collect_research_sources(
             series,
             episode,
@@ -508,6 +552,17 @@ def run_research_review_loop(series: Dict, episode: Dict) -> Dict:
         latest_quality = assess_research_quality(latest_sources, latest_audit)
         latest_quality["attempt"] = attempt
         attempts.append(latest_quality)
+        trace_attempts.append(
+            {
+                "attempt": attempt,
+                "keywords": keywords,
+                "new_source_count": count_valid_sources(new_sources),
+                "source_count": latest_quality.get("source_count", 0),
+                "blocked": bool(latest_quality.get("blocked")),
+                "reasons": latest_quality.get("reasons", []),
+                "warnings": latest_quality.get("warnings", []),
+            }
+        )
         if not latest_quality["blocked"]:
             break
         print("[深度系列] 审核未通过：" + "；".join(latest_quality["reasons"]), flush=True)
@@ -515,6 +570,8 @@ def run_research_review_loop(series: Dict, episode: Dict) -> Dict:
         previous_quality = latest_quality
 
     return {
+        "plan": plan,
+        "trace": trace_attempts,
         "sources": latest_sources,
         "research": latest_research,
         "audit": latest_audit,
@@ -555,16 +612,17 @@ def generate_dialogue_script(series: Dict, episode: Dict, research_report: str, 
         "要求：\n"
         "1. 只有女主持和男主持两个人对话，不要加入第三个发声角色，也不要写成 PPT 纯文字。\n"
         f"2. 全片目标 {DEEP_TARGET_MIN_SECONDS}-{DEEP_TARGET_MAX_SECONDS}秒；除前4句钩子外，每次发言尽量写完整，用 2 到 4 句承接一个观点，不要只写碎片短句。\n"
-        "3. 前3秒第一句优先使用尖锐疑问句或反常识结论；疑问句必须包含冲突、代价或反直觉信息，不要铺垫，不要使用“你有没有想过”，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
-        "4. 前15秒必须完成三件事：前3秒给反常识结论，3-8秒给观众反问，8-15秒给核心答案。\n"
-        "5. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
-        "6. 前4句要有短视频钩子的冲突感和损失感，但不要写成 4 个口号式短句；前两轮发言要像自然对话，每次 35 到 60 个汉字，用 2 句完整口语表达。\n"
-        "7. 男主持的前两次发问必须像观众刷到视频时的反问，不要温和捧哏。\n"
-        "8. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
-        "9. 每隔一段留一个悬念，方便观众继续看下去。\n"
-        "10. 中段可以加入一句克制互动埋点，但要像自然口播，不要写“把绝了打在弹幕上”这类破坏质感的弹幕口号。\n"
-        "11. 结尾要落到一个站得住的问题。\n"
-        "12. 每一行只使用“女：/男：”这种格式；不要连续输出同一个主持人的多行发言，同一主持人的连续表达必须合并到同一行。\n"
+        "3. 整集必须有单一主线：开头先抛出核心判断，中段每一段都要说明“上一段推出了什么，所以这一段要讲什么”，不要把中段写成并列清单或资料点名。\n"
+        "4. 前3秒第一句优先使用尖锐疑问句或反常识结论；疑问句必须包含冲突、代价或反直觉信息，不要铺垫，不要使用“你有没有想过”，不要使用“想象一下”，不要使用“今天我们探讨”。\n"
+        "5. 前15秒必须完成三件事：前3秒给反常识结论，3-8秒给观众反问，8-15秒给核心答案。\n"
+        "6. 前30秒必须交付核心答案框架：先说结论，再说为什么重要，再给出后面要展开的 2 到 3 个答案点。\n"
+        "7. 前4句要有短视频钩子的冲突感和损失感，但不要写成 4 个口号式短句；前两轮发言要像自然对话，每次 35 到 60 个汉字，用 2 句完整口语表达。\n"
+        "8. 男主持的前两次发问必须像观众刷到视频时的反问，不要温和捧哏。\n"
+        "9. 开头可以尖锐，但不能编造事实，也不要为了劲爆写成谣言式标题党。\n"
+        "10. 每隔一段留一个悬念，方便观众继续看下去。\n"
+        "11. 中段可以加入一句克制互动埋点，但要像自然口播，不要写“把绝了打在弹幕上”这类破坏质感的弹幕口号。\n"
+        "12. 结尾要落到一个站得住的问题。\n"
+        "13. 每一行只使用“女：/男：”这种格式；不要连续输出同一个主持人的多行发言，同一主持人的连续表达必须合并到同一行。\n"
     )
     raw = call_llm(prompt, f"研究报告：\n{research_report}\n\n审校意见：\n{audit_report}")
     return clean_script_output(raw)
@@ -766,6 +824,7 @@ def review_script_retention(series: Dict, episode: Dict, script: str, research_r
         "2. 中段是否每隔一段都有新信息、反转、案例或追问，不能像资料罗列。\n"
         "3. 结尾是否有回扣和余味，让用户觉得听完有收获。\n"
         "4. 信息必须可信，不能为了吸引人编造事实或夸大结论。\n"
+        "5. 观点连贯性是否足够：每段要从上一段自然推进，不能突然换能力点、公司点或资料点；出现观点跳跃、机械问答、资料清单式平铺时判为不通过。\n"
     )
     raw = call_llm(
         prompt,
@@ -773,7 +832,15 @@ def review_script_retention(series: Dict, episode: Dict, script: str, research_r
     )
     data = parse_json_object(raw)
     if not data:
-        return {"blocked": False, "passed": True, "score": 0, "reasons": [], "suggestions": [], "raw": raw}
+        # 审校结果解析失败时不能静默放行，否则模型已经发现的观点跳跃会被吞掉。
+        return {
+            "blocked": True,
+            "passed": False,
+            "score": 0,
+            "reasons": ["留存审校 JSON解析失败，按保守策略重写脚本"],
+            "suggestions": ["补足观点承接、过渡句和具体场景，避免中段像资料清单或并列清单"],
+            "raw": raw,
+        }
 
     score = data.get("score", 0)
     try:
@@ -804,6 +871,7 @@ def rewrite_script_for_retention(series: Dict, episode: Dict, script: str, revie
         "2. 前几秒继续保留强钩子，中段每 2 到 3 轮对话给出新信息或追问。\n"
         "3. 标出真实代价、反差、产业链位置或风险，不要写成资料清单。\n"
         "4. 不新增缺少来源支撑的具体数据、市场份额、客户名单或绝对化判断。\n"
+        "5. 重写时必须补上观点承接：每段先接住上一段的结论，再推进下一层原因或例子，不要写成并列清单。\n"
         f"审校问题：{'；'.join(review.get('reasons', []))}\n"
         f"修改建议：{'；'.join(review.get('suggestions', []))}\n"
         "只输出重写后的脚本。\n"
@@ -1282,6 +1350,26 @@ def _fallback_svg_labels(name: str, prompt: str = "", design: Dict = None) -> tu
     }
     if key in presets:
         return presets[key]
+    combined = f"{key} {str(prompt or '').lower()}"
+    if key in ("hero", "bridge") and any(token in combined for token in ("机器人", "robot", "具身智能")):
+        # 顶层主视觉如果是机器人主题，不能被“仓库/配送”等子场景抢走，先生成通用机器人作业图。
+        return "机器人作业", ["机械臂", "传感器", "任务闭环"]
+    # LLM 有时会把 scene asset 写成英文短语或截断短语，这里先按场景词映射回中文视觉主题。
+    keyword_presets = [
+        (("warehouse", "picking", "仓库", "搬运"), ("仓库搬运", ["货架", "拣选车", "标准路线"])),
+        (("delivery", "locker", "campus", "外卖", "配送"), ("外卖配送", ["配送路线", "取餐柜", "到达节点"])),
+        (("cleaning", "scrubber", "清洁", "洗地"), ("商用清洁", ["洗地机", "清洁路径", "夜间巡航"])),
+        (("hotel", "room_service", "酒店", "送物"), ("酒店送物", ["客房门", "送物车", "电梯路线"])),
+        (("home", "apartment", "drawer", "clothes", "cables", "家庭", "公寓", "抽屉", "衣服", "线缆"), ("家庭复杂度", ["多样房间", "杂物线缆", "售后成本"])),
+        (("labor", "staff", "roi", "用工", "成本"), ("用工成本", ["人力班次", "替代成本", "多点复制"])),
+        (("route", "bounded", "standard", "场景边界", "标准路线"), ("场景边界", ["固定路线", "充电点", "任务闭环"])),
+        (("repetitive", "loop", "重复"), ("重复劳动", ["高频任务", "固定动作", "批量复制"])),
+        (("remote", "control_room", "monitor", "运维", "监控"), ("远程运维", ["监控面板", "故障告警", "批量升级"])),
+        (("robot", "grasp", "机器人", "具身智能"), ("机器人作业", ["机械臂", "传感器", "任务闭环"])),
+    ]
+    for tokens, labels in keyword_presets:
+        if any(token in combined for token in tokens):
+            return labels
     prompt_labels = _extract_prompt_labels(prompt, 4)
     main_elements = []
     if isinstance(design, dict) and isinstance(design.get("main_elements"), list):
@@ -1308,7 +1396,79 @@ def _fallback_svg(label: str, palette: List[str] = None, detail_labels: List[str
     while len(details) < 3:
         details.append(["主题对象", "关键环节", "产业影响"][len(details)])
     variant_source = f"{safe_label}{''.join(details)}"
-    if any(token in variant_source for token in ("工程团队", "稳定运行", "集群调度", "网络排障", "安全治理", "系统跑稳", "运维", "故障")):
+    if any(token in variant_source for token in ("仓库搬运", "货架", "拣选", "仓库")):
+        # 仓库机器人场景画货架、拣选车和固定路线，隐藏文字后也能和普通流程图区分。
+        body = (
+            f'<rect x="58" y="92" width="82" height="120" rx="16" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<rect x="72" y="112" width="54" height="14" rx="6" fill="{colors[2]}"/>'
+            f'<rect x="72" y="142" width="54" height="14" rx="6" fill="{colors[3]}"/>'
+            f'<rect x="72" y="172" width="54" height="14" rx="6" fill="{colors[1]}"/>'
+            f'<rect x="190" y="126" width="82" height="54" rx="20" fill="{colors[2]}"/>'
+            f'<circle cx="210" cy="188" r="10" fill="{colors[1]}"/>'
+            f'<circle cx="252" cy="188" r="10" fill="{colors[1]}"/>'
+            f'<rect x="304" y="106" width="54" height="92" rx="18" fill="#FFFFFF" stroke="{colors[3]}" stroke-width="5"/>'
+            f'<polyline points="148,210 188,190 246,210 306,186 360,204" fill="transparent" stroke="{colors[2]}" stroke-width="6"/>'
+        )
+    elif any(token in variant_source for token in ("外卖配送", "配送路线", "取餐柜", "到达节点", "配送")):
+        # 配送场景用路线地图和取餐柜，避免和仓库货架图同构。
+        body = (
+            f'<rect x="58" y="108" width="76" height="92" rx="18" fill="#FFFFFF" stroke="{colors[3]}" stroke-width="5"/>'
+            f'<rect x="74" y="126" width="44" height="14" rx="6" fill="{colors[3]}"/>'
+            f'<rect x="74" y="154" width="44" height="14" rx="6" fill="{colors[2]}"/>'
+            f'<circle cx="96" cy="192" r="9" fill="{colors[1]}"/>'
+            f'<circle cx="208" cy="116" r="28" fill="{colors[2]}"/>'
+            f'<circle cx="324" cy="178" r="28" fill="{colors[3]}"/>'
+            f'<polyline points="96,192 142,160 208,116 268,146 324,178" fill="transparent" stroke="{colors[1]}" stroke-width="7"/>'
+            f'<circle cx="142" cy="160" r="8" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="4"/>'
+            f'<circle cx="268" cy="146" r="8" fill="#FFFFFF" stroke="{colors[3]}" stroke-width="4"/>'
+        )
+    elif any(token in variant_source for token in ("商用清洁", "洗地机", "清洁路径", "夜间巡航", "清洁")):
+        # 商用清洁场景画洗地机和清扫轨迹，保证非文字层也能看出主题。
+        body = (
+            f'<rect x="86" y="132" width="176" height="58" rx="28" fill="{colors[2]}"/>'
+            f'<rect x="130" y="104" width="78" height="42" rx="20" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<circle cx="116" cy="194" r="14" fill="{colors[1]}"/>'
+            f'<circle cx="226" cy="194" r="14" fill="{colors[1]}"/>'
+            f'<ellipse cx="302" cy="176" rx="44" ry="24" fill="#FFFFFF" stroke="{colors[3]}" stroke-width="5"/>'
+            f'<polyline points="72,112 132,92 194,112 254,92 338,116" fill="transparent" stroke="{colors[3]}" stroke-width="6"/>'
+            f'<polyline points="70,218 128,206 190,220 254,206 338,218" fill="transparent" stroke="{colors[2]}" stroke-width="5"/>'
+        )
+    elif any(token in variant_source for token in ("酒店送物", "客房门", "送物车", "电梯路线", "酒店")):
+        # 酒店送物场景用走廊门牌和送物车，不和配送地图混在一起。
+        body = (
+            f'<rect x="64" y="92" width="72" height="116" rx="12" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<circle cx="120" cy="152" r="5" fill="{colors[3]}"/>'
+            f'<rect x="174" y="102" width="72" height="106" rx="12" fill="#FFFFFF" stroke="#D1D1D6" stroke-width="4"/>'
+            f'<circle cx="230" cy="154" r="5" fill="{colors[3]}"/>'
+            f'<rect x="284" y="126" width="66" height="56" rx="20" fill="{colors[3]}"/>'
+            f'<rect x="302" y="96" width="30" height="34" rx="12" fill="#FFFFFF" stroke="{colors[3]}" stroke-width="4"/>'
+            f'<circle cx="302" cy="190" r="10" fill="{colors[1]}"/>'
+            f'<circle cx="338" cy="190" r="10" fill="{colors[1]}"/>'
+            f'<line x1="136" y1="212" x2="354" y2="212" stroke="{colors[2]}" stroke-width="6"/>'
+        )
+    elif any(token in variant_source for token in ("家庭复杂度", "多样房间", "杂物线缆", "售后成本", "家庭")):
+        # 家庭机器人难点用不规则房间和杂物线缆，表达非标准环境。
+        body = (
+            f'<rect x="58" y="88" width="112" height="84" rx="18" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<rect x="196" y="100" width="78" height="104" rx="18" fill="#FFFFFF" stroke="{colors[3]}" stroke-width="5"/>'
+            f'<rect x="298" y="126" width="62" height="60" rx="16" fill="#FFFFFF" stroke="#D1D1D6" stroke-width="4"/>'
+            f'<circle cx="96" cy="142" r="16" fill="{colors[3]}"/>'
+            f'<ellipse cx="234" cy="156" rx="26" ry="14" fill="{colors[2]}"/>'
+            f'<polyline points="72,206 112,186 146,210 198,190 246,214 312,192 360,210" fill="transparent" stroke="{colors[1]}" stroke-width="6"/>'
+            f'<circle cx="340" cy="108" r="12" fill="{colors[3]}"/>'
+        )
+    elif any(token in variant_source for token in ("机器人作业", "机械臂", "传感器", "任务闭环", "重复劳动", "场景边界", "固定路线")):
+        # 通用机器人作业画机械臂、传感器和闭环路线，给新主题一个默认但不空泛的图形。
+        body = (
+            f'<circle cx="104" cy="178" r="30" fill="{colors[2]}"/>'
+            f'<line x1="126" y1="156" x2="184" y2="116" stroke="{colors[1]}" stroke-width="12"/>'
+            f'<line x1="184" y1="116" x2="248" y2="146" stroke="{colors[3]}" stroke-width="12"/>'
+            f'<circle cx="184" cy="116" r="16" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<polygon points="250,132 292,146 252,162" fill="{colors[1]}"/>'
+            f'<rect x="300" y="102" width="54" height="76" rx="18" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
+            f'<polyline points="72,214 138,198 208,216 282,198 358,212" fill="transparent" stroke="{colors[2]}" stroke-width="5"/>'
+        )
+    elif any(token in variant_source for token in ("工程团队", "稳定运行", "集群调度", "网络排障", "安全治理", "系统跑稳", "运维", "故障")):
         # 系统跑稳主题用运行状态面板，表达监控、调度曲线和多节点健康状态，而不是单纯画芯片或机柜。
         body = (
             f'<rect x="58" y="104" width="304" height="92" rx="24" fill="#FFFFFF" stroke="{colors[2]}" stroke-width="5"/>'
@@ -1386,6 +1546,22 @@ def _fallback_svg(label: str, palette: List[str] = None, detail_labels: List[str
         f'{body}'
         f'{detail_chips}'
         f'</svg>'
+    )
+
+
+def _is_stale_generic_bridge_svg(path: str) -> bool:
+    # 旧兜底图的非文字部分是固定三方块流程图；命中后允许重渲染刷新成主题图。
+    if not path or not os.path.exists(path):
+        return False
+    try:
+        svg = read_text_if_exists(path, limit=3000)
+    except OSError:
+        return False
+    return (
+        'x="46" y="116" width="96" height="72"' in svg
+        and 'x="162" y="116" width="96" height="72"' in svg
+        and 'x="278" y="116" width="96" height="72"' in svg
+        and 'points="64,214 142,202 210,214 286,196 356,210"' in svg
     )
 
 
@@ -1766,6 +1942,14 @@ def match_visual_scene(text: str, visual_design: Dict = None) -> Dict:
         "private_ai_datacenter": ["私有ai", "本地数据中心", "数据安全", "本地部署", "合规", "金融", "医疗", "制造", "政府", "自建"],
         "hybrid_cloud_bridge": ["混合ai", "混合云", "本地加云", "本地数据中心和云", "公有云"],
         "storage_data_pipeline": ["存储瓶颈", "数据供不上", "gpu等待", "gpu等", "数据管道", "存储网络"],
+        "isometric warehouse aisle with": ["仓库机器人", "仓库搬运", "仓库", "搬运", "拣选", "货从a点送到b点", "货架通道"],
+        "sidewalk or campus delivery ro": ["外卖配送", "园区配送", "配送", "取餐", "取餐柜", "交接点", "送外卖"],
+        "autonomous floor scrubber clea": ["清洁机器人", "商用清洁", "清洁", "闭店", "打扫", "洗地", "沿固定路线打扫"],
+        "hotel service robot delivering": ["酒店机器人", "酒店送物", "酒店", "房号", "送水", "客房", "电梯"],
+        "dashboard comparing staff shif": ["用工成本", "少跑多少腿", "少排多少班", "成本表", "排班", "吞吐量", "岗位替代"],
+        "loop animation of robot moving": ["重复劳动", "任务重复", "高频任务", "固定动作", "重复", "能上班"],
+        "warehouse map with marked rout": ["场景边界", "标准路线", "固定路线", "路线", "充电点", "交接点", "变量能被管理", "管理"],
+        "control room dashboard monitor": ["远程运维", "监控", "故障告警", "批量升级", "维护", "运营面板"],
     }
     for scene in visual_design.get("scene_cards", []) or []:
         if not isinstance(scene, dict):
@@ -1911,6 +2095,7 @@ def create_text_card(
     slide_total: Optional[int] = None,
     visual_design: Dict = None,
     scene: Dict = None,
+    current_speaker: Optional[str] = None,
 ) -> str:
     from PIL import Image, ImageDraw
 
@@ -1923,15 +2108,10 @@ def create_text_card(
         paste_svg_asset(image, asset_paths.get("background", ""), (0, 0, width, height))
     draw = ImageDraw.Draw(image)
 
-    # 新版视频页改成“视觉舞台 + 正文信息区 + 产业线索”，移除旧版竖条、右侧竖面板和底部进度条。
-    for offset, color in ((0, "#F5F5F7"), (28, "#F0F0F3"), (56, "#FAFAFC")):
-        draw.rounded_rectangle((64 + offset, 62 + offset, 1856 - offset, 1018 - offset), radius=58 - offset // 3, fill=color)
-    draw.rounded_rectangle((64, 62, 1856, 1018), radius=58, fill="#FFFFFF")
-    draw.rounded_rectangle((102, 106, 1818, 974), radius=42, outline="#E5E5EA", width=3)
+    # 视频页只保留一层内容底板：有结构但不再套内层描边框，减少无效边距。
+    draw.rounded_rectangle((64, 72, 1856, 1008), radius=44, fill="#FFFFFF")
 
-    # 顶部只保留轻量导航信息，避免和正文抢层级。
-    draw.rounded_rectangle((132, 132, 386, 184), radius=22, fill="#F2F2F7")
-    draw.text((160, 144), "OpenNewsBrief", font=_font(24, True), fill=accent)
+    # 顶部不再绘制固定品牌文字，避免生成视频里出现模板感很强的 OpenNewsBrief 标识。
     if slide_index is not None and slide_total:
         page_text = f"{slide_index:02d} / {slide_total:02d}"
         page_font = _font(24, True)
@@ -1940,32 +2120,37 @@ def create_text_card(
         draw.text((1600 + int((188 - page_w) / 2), 144), page_text, font=page_font, fill="#6E6E73")
 
     # 左侧视觉舞台承载 SVG 元素，并叠加芯片封装线索；即使台词很短，画面也不会只剩一块空白。
-    stage = (132, 222, 804, 900)
+    stage = (96, 156, 832, 932)
     draw.rounded_rectangle(stage, radius=46, fill="#F2F2F7")
     draw.rounded_rectangle((stage[0] + 26, stage[1] + 26, stage[2] - 26, stage[3] - 26), radius=36, fill="#FFFFFF")
     for x in range(stage[0] + 86, stage[2] - 70, 78):
         for y_dot in range(stage[1] + 88, stage[3] - 110, 78):
             draw.ellipse((x, y_dot, x + 5, y_dot + 5), fill="#D1D1D6")
-    draw.rounded_rectangle((188, 280, 748, 754), radius=30, fill="#F7F7FA", outline="#E5E5EA", width=2)
-    draw.line((246, 754, 246, 808, 692, 808, 692, 754), fill="#D1D1D6", width=4)
+    visual_box = (stage[0] + 58, stage[1] + 58, stage[2] - 58, stage[3] - 156)
+    draw.rounded_rectangle(visual_box, radius=30, fill="#F7F7FA", outline="#E5E5EA", width=2)
+    draw.line(
+        (stage[0] + 126, visual_box[3], stage[0] + 126, visual_box[3] + 54, stage[2] - 126, visual_box[3] + 54, stage[2] - 126, visual_box[3]),
+        fill="#D1D1D6",
+        width=4,
+    )
     scene_label = visual_display_label(scene.get("label", "")) if isinstance(scene, dict) else ""
     if visual_design and scene:
         # 左侧舞台只贴一张前景 SVG，并隐藏 SVG 内文字；文字统一由卡片层绘制，避免模型文本错位。
         scene_asset_path = asset_paths.get(scene.get("asset", ""))
         foreground_path = scene_asset_path or asset_paths.get("hero", "")
         if foreground_path:
-            paste_svg_asset(image, foreground_path, (210, 318, 746, 650), include_text=False)
+            paste_svg_asset(image, foreground_path, (stage[0] + 88, stage[1] + 98, stage[2] - 88, stage[1] + 502), include_text=False)
         label = scene.get("label", "")
         if label:
             label_font = _font(30, True)
             label_w, _ = _measure_text_size(draw, label, label_font)
             chip_left = stage[0] + 58
-            draw.rounded_rectangle((chip_left, 248, chip_left + label_w + 56, 302), radius=24, fill="#1D1D1F")
-            draw.text((chip_left + 28, 261), label, font=label_font, fill="#FFFFFF")
+            draw.rounded_rectangle((chip_left, stage[1] + 32, chip_left + label_w + 56, stage[1] + 86), radius=24, fill="#1D1D1F")
+            draw.text((chip_left + 28, stage[1] + 45), label, font=label_font, fill="#FFFFFF")
     else:
-        draw.rounded_rectangle((242, 380, 490, 520), radius=34, fill=accent)
-        draw.rounded_rectangle((430, 500, 660, 640), radius=34, fill="#1D1D1F")
-        draw.line((490, 520, 430, 500), fill="#8E8E93", width=10)
+        draw.rounded_rectangle((stage[0] + 156, stage[1] + 188, stage[0] + 438, stage[1] + 344), radius=34, fill=accent)
+        draw.rounded_rectangle((stage[0] + 366, stage[1] + 322, stage[0] + 626, stage[1] + 478), radius=34, fill="#1D1D1F")
+        draw.line((stage[0] + 438, stage[1] + 344, stage[0] + 366, stage[1] + 322), fill="#8E8E93", width=10)
     elements = visual_design.get("main_elements", []) if isinstance(visual_design, dict) and isinstance(visual_design.get("main_elements"), list) else []
     # 产业线索只取清洗后的业务标签，避免把模型的构图方位词直接画到视频里。
     clue_words = []
@@ -1981,21 +2166,22 @@ def create_text_card(
     stage_clue_words = [word for word in clue_words if word != scene_label][:3]
     while len(stage_clue_words) < 3:
         stage_clue_words.append(clue_words[len(stage_clue_words) % len(clue_words)])
-    node_x = [210, 412, 612]
+    node_y = stage[3] - 114
+    node_x = [stage[0] + 88, stage[0] + 314, stage[0] + 540]
     for index, word in enumerate(stage_clue_words[:3]):
         x = node_x[index]
         node_font = _font(20, True)
         node_w, _ = _measure_text_size(draw, word, node_font)
         node_width = min(max(node_w + 42, 128), 176)
-        draw.rounded_rectangle((x, 786, x + node_width, 834), radius=22, fill="#F2F2F7")
-        draw.text((x + 20, 798), word, font=node_font, fill="#3A3A3C")
+        draw.rounded_rectangle((x, node_y, x + node_width, node_y + 48), radius=22, fill="#F2F2F7")
+        draw.text((x + 20, node_y + 12), word, font=node_font, fill="#3A3A3C")
         if index < 2:
-            draw.line((x + node_width + 12, 810, node_x[index + 1] - 18, 810), fill=accent, width=5)
-            draw.ellipse((node_x[index + 1] - 24, 804, node_x[index + 1] - 12, 816), fill=accent)
+            draw.line((x + node_width + 12, node_y + 24, node_x[index + 1] - 18, node_y + 24), fill=accent, width=5)
+            draw.ellipse((node_x[index + 1] - 24, node_y + 18, node_x[index + 1] - 12, node_y + 30), fill=accent)
 
     # 右侧正文区域加入轻量信息面板，填补短台词下的留白，同时不再用任何播放进度条。
-    content_left = 872
-    content_right = 1748
+    content_left = 884
+    content_right = 1788
     title_font, title_lines = _fit_text_block(
         draw,
         title,
@@ -2006,7 +2192,7 @@ def create_text_card(
         bold=True,
         max_lines=2,
     )
-    y = 246
+    y = 194
     for line in title_lines:
         draw.text((content_left, y), line, font=title_font, fill="#1D1D1F")
         y += _measure_text_size(draw, line, title_font)[1] + 10
@@ -2046,7 +2232,11 @@ def create_text_card(
         draw.text((content_left, body_y), line, font=body_font, fill="#1D1D1F")
         body_y += body_line_height + 22
 
-    insight_top = min(max(body_y + 34, 704), 786)
+    if current_speaker in ("female", "male"):
+        # 有主持人条时给右侧底部预留独立空间，避免主持人和信息面板互相压住。
+        insight_top = min(max(body_y + 24, 664), 724)
+    else:
+        insight_top = min(max(body_y + 34, 704), 786)
     draw.rounded_rectangle((content_left, insight_top, content_right, insight_top + 118), radius=30, fill="#F7F7FA")
     draw.text((content_left + 30, insight_top + 24), "产业线索", font=_font(24, True), fill="#6E6E73")
     insight_font = _font(24, True)
@@ -2055,12 +2245,35 @@ def create_text_card(
         draw.rounded_rectangle((x, insight_top + 66, x + 224, insight_top + 104), radius=18, fill="#FFFFFF")
         draw.text((x + 20, insight_top + 73), word, font=insight_font, fill="#1D1D1F")
 
-    # 底部保留系列名和节目标识，用离散胶囊而不是连续条形，避免重新变成“进度条”。
-    draw.text((content_left, 900), "Deep Series", font=_font(26, True), fill="#8E8E93")
-    for index, word in enumerate(("Research", "Supply", "AI")):
-        x = 1330 + index * 138
-        draw.rounded_rectangle((x, 884, x + 112, 936), radius=24, fill="#F2F2F7")
-        draw.text((x + 18, 897), word, font=_font(20, True), fill="#6E6E73")
+    if current_speaker in ("female", "male"):
+        # 深度系列视频右侧底部只放轻量主持人头像队列，避免大面板破坏 iOS 图卡质感。
+        host_specs = [
+            ("female", "女主持", "#C79AA8", (1030, 918), 1088),
+            ("male", "男主持", "#8FA8C1", (1392, 918), 1450),
+        ]
+        for role, label, host_accent, avatar_center, label_x in host_specs:
+            is_active = current_speaker == role
+
+            # 头像用更克制的圆形剪影，不画表情和大卡片，避免画面变成卡通后台界面。
+            cx, cy = avatar_center
+            ring_color = host_accent if is_active else "#D1D1D6"
+            draw.ellipse((cx - 42, cy - 42, cx + 42, cy + 42), fill=ring_color)
+            draw.ellipse((cx - 36, cy - 36, cx + 36, cy + 36), fill="#FFFFFF")
+            if role == "female":
+                draw.ellipse((cx - 24, cy - 24, cx + 24, cy + 12), fill="#4A2C3D")
+                draw.ellipse((cx - 18, cy - 10, cx + 18, cy + 24), fill="#E8B8AA")
+            else:
+                draw.rounded_rectangle((cx - 22, cy - 24, cx + 22, cy + 2), radius=10, fill="#2D3A45")
+                draw.ellipse((cx - 18, cy - 12, cx + 18, cy + 24), fill="#E9B997")
+            draw.rounded_rectangle((cx - 26, cy + 22, cx + 26, cy + 52), radius=16, fill=host_accent if is_active else "#C7C7CC")
+
+            label_color = "#1D1D1F" if is_active else "#8E8E93"
+            draw.text((label_x, 894), label, font=_font(24, True), fill=label_color)
+            if is_active:
+                # 用三个小声波点表达“正在发言”，比文字按钮更轻，不抢正文注意力。
+                for dot_index in range(3):
+                    dot_x = label_x + dot_index * 18
+                    draw.ellipse((dot_x, 934, dot_x + 8, 942), fill=host_accent)
 
     image.save(output_path)
     return output_path
@@ -2124,6 +2337,7 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
             slide_total=total,
             visual_design=visual_design,
             scene=scene,
+            current_speaker=segment["speaker"],
         )
         image_paths.append(image_path)
     write_deep_slide_durations(slide_dir, [item["duration"] for item in slide_plan])
@@ -2195,7 +2409,9 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
     result = {
         "series": series.get("title", ""),
         "episode": episode.get("title", ""),
+        "research_plan_path": os.path.join(output_dir, "research_plan.md"),
         "research_path": os.path.join(output_dir, "research.md"),
+        "research_trace_path": os.path.join(output_dir, "research_trace.json"),
         "audit_path": os.path.join(output_dir, "audit.md"),
         "script_path": os.path.join(output_dir, "script.md"),
         "script_notes_path": os.path.join(output_dir, "script_notes.md"),
@@ -2207,16 +2423,36 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
         "review_blocked": False,
     }
 
-    review = run_research_review_loop(series, episode)
+    print("[深度系列] 开始生成研究计划", flush=True)
+    research_plan = build_research_plan(series, episode)
+    print("\n========== 研究计划 ==========\n", flush=True)
+    print(research_plan, flush=True)
+    with open(result["research_plan_path"], "w", encoding="utf-8") as f:
+        # 研究计划先于检索落盘，长调研时也能先检查方向和关键词。
+        f.write(research_plan)
+
+    review = run_research_review_loop(series, episode, research_plan=research_plan)
     sources = review["sources"]
     research = review["research"]
     audit = review["audit"]
+    research_trace = {
+        # trace 用机器可读结构保存每轮检索和审校结果，方便回看为什么需要重搜或兜底。
+        "plan": {
+            "series": series.get("title", ""),
+            "episode": episode.get("title", ""),
+            "question": _episode_question(episode),
+        },
+        "attempts": review.get("trace", []),
+        "final_quality": review["quality"],
+    }
     quality_payload = {
         "research_attempts": review["attempts"],
         "research_quality": review["quality"],
         "script_quality": {},
     }
     result["source_count"] = review["quality"].get("source_count", 0)
+    with open(result["research_trace_path"], "w", encoding="utf-8") as f:
+        json.dump(research_trace, f, ensure_ascii=False, indent=2)
 
     if review["blocked"]:
         fallback = build_safe_research_fallback(review)
@@ -2242,6 +2478,7 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
         with open(log_path, "w", encoding="utf-8") as f:
             f.write("深度系列调研日志\n")
             f.write("=" * 56 + "\n")
+            f.write("[研究计划]\n" + research_plan + "\n\n")
             f.write("[审核阻断]\n" + reason + "\n\n")
             f.write("[研究报告]\n" + research + "\n\n")
             f.write("[审校结果]\n" + audit + "\n")
@@ -2282,6 +2519,7 @@ def run_episode_pipeline(series: Dict, episode: Dict, base_dir: str = None) -> D
     with open(log_path, "w", encoding="utf-8") as f:
         f.write("深度系列调研日志\n")
         f.write("=" * 56 + "\n")
+        f.write("[研究计划]\n" + research_plan + "\n\n")
         f.write("[研究报告]\n" + research + "\n\n")
         f.write("[审校结果]\n" + audit + "\n\n")
         f.write("[脚本备注]\n" + script_notes + "\n\n")
@@ -2367,7 +2605,9 @@ def mark_episode_tts_generated(config: Dict, series_title: str, episode_title: s
     episode["published"] = False
     episode["published_at"] = ""
     for key in (
+        "research_plan_path",
         "research_path",
+        "research_trace_path",
         "audit_path",
         "script_path",
         "script_notes_path",
@@ -2409,7 +2649,9 @@ def mark_episode_generated(config: Dict, series_title: str, episode_title: str, 
     episode["published"] = False
     episode["published_at"] = ""
     for key in (
+        "research_plan_path",
         "research_path",
+        "research_trace_path",
         "audit_path",
         "script_path",
         "script_notes_path",
@@ -2615,6 +2857,13 @@ def ensure_scene_card_svg_assets(design: Dict, output_dir: str, use_llm: bool = 
     if not background_path or not os.path.exists(background_check_path):
         # 所有深度主题都必须有 background.svg，视频卡片会把它铺满整张 1920x1080 画布。
         asset_paths["background"] = generate_visual_svg_asset("background", str(svg_prompts["background"]), design, asset_dir, use_llm=use_llm)
+    for asset_name in ("hero", "bridge"):
+        current_path = str(asset_paths.get(asset_name) or "").strip()
+        check_path = current_path if os.path.isabs(current_path) else os.path.join(os.getcwd(), current_path)
+        if current_path and os.path.exists(check_path) and _is_stale_generic_bridge_svg(check_path):
+            # 旧版本会把主视觉也写成通用三方块图；这些资产存在时也要刷新，否则多数图卡仍会回退旧图。
+            prompt = str(svg_prompts.get(asset_name) or f"生成{asset_name}主题 SVG。")
+            asset_paths[asset_name] = generate_visual_svg_asset(asset_name, prompt, design, asset_dir, use_llm=use_llm)
     for scene in (design.get("scene_cards") or [])[:8]:
         if not isinstance(scene, dict):
             continue
@@ -2623,7 +2872,7 @@ def ensure_scene_card_svg_assets(design: Dict, output_dir: str, use_llm: bool = 
             continue
         current_path = asset_paths.get(asset_name, "")
         check_path = current_path if os.path.isabs(current_path) else os.path.join(os.getcwd(), current_path)
-        if current_path and os.path.exists(check_path):
+        if current_path and os.path.exists(check_path) and not _is_stale_generic_bridge_svg(check_path):
             continue
         label = visual_display_label(scene.get("label") or scene.get("keyword") or asset_name, asset_name)
         keyword = visual_element_label(scene.get("keyword") or label, label)
@@ -2943,7 +3192,7 @@ def create_deep_cover_image(
         draw.ellipse((x, 902, x + 4, 906), fill="#D1D1D6")
     # 模型背景只作为卡片内部纹理，不能铺满整张封面破坏 iOS 留白。
     paste_svg_asset(image, asset_paths.get("background", ""), (604, 150, 974, 760))
-    draw.text((112, 118), "OpenNewsBrief", font=_font(28, True), fill=colors[2])
+    # 封面不再绘制固定品牌字样，避免生成物带模板感。
     # 系列名降级到底部浅灰，避免封面第一眼先看到栏目名。
     draw.text((112, 928), series.get("title", "Deep Series")[:22], font=_font(22, True), fill="#C7C7CC")
 
@@ -3213,7 +3462,9 @@ def run_episode_by_titles(series_title: str, episode_title: str) -> Dict:
     episode["generated"] = False
     episode["generated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for key in (
+        "research_plan_path",
         "research_path",
+        "research_trace_path",
         "audit_path",
         "script_path",
         "script_notes_path",
@@ -3245,7 +3496,9 @@ def build_episode_media_result(series: Dict, episode: Dict) -> Dict:
     return {
         "series": series.get("title", ""),
         "episode": episode.get("title", ""),
+        "research_plan_path": episode.get("research_plan_path", ""),
         "research_path": episode.get("research_path", ""),
+        "research_trace_path": episode.get("research_trace_path", ""),
         "audit_path": episode.get("audit_path", ""),
         "script_path": episode.get("script_path", ""),
         "script_notes_path": episode.get("script_notes_path", ""),

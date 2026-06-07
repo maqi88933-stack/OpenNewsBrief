@@ -995,7 +995,71 @@
         },
         {
           "title": "最难的不是会聊天，是会拿起一个杯子",
-          "question": "为什么让机器人稳定抓取、行走和操作物体，比让 AI 写一段话更难？重点探讨身体智能、力控、平衡、避障和真实世界泛化这些机器人核心难题。"
+          "question": "为什么让机器人稳定抓取、行走和操作物体，比让 AI 写一段话更难？重点探讨身体智能、力控、平衡、避障和真实世界泛化这些机器人核心难题。",
+          "generated": true,
+          "generated_at": "2026-06-06 11:53:21",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\agent_interaction.log",
+          "estimated_seconds": 186.3,
+          "quality_block_reason": "音频实际 193 秒，超过 180 秒",
+          "fallback_used": true,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\最难的不是会聊天，是会拿起一个杯子_2026-06-06.mp4",
+          "published": true,
+          "published_at": "2026-06-06 11:54:13",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-06 11:50:41",
+          "actual_seconds": 192.9,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\cover_option_3.png"
+          ],
+          "publish_title": "AI会写代码，却拿不稳杯子？",
+          "publish_desc": "为什么会聊天、会写代码的AI，到了真实世界连拿杯子都可能翻车？本期聊清楚：机器人真正难的不是“看见杯子”，而是机器人抓取、力控、平衡、避障、运动控制和稳定泛化。\n\n从特斯拉Optimus、Figure AI，到波士顿动力、宇树机器人代表的人形机器人热潮，大家都在追问：大模型能不能让机器人真正上岗？但机器人要稳定打工，离不开机械臂、夹爪、力传感器、视觉传感器、伺服电机、执行器、控制系统、机器人本体等产业链能力。\n\n互动问题：你觉得机器人上岗前，最该先学会“更聪明”还是“更可靠”？\n\n关键词：具身智能、AI机器人、机器人抓取、力控、运动控制、避障、稳定泛化、人形机器人、机器人产业链、机械臂、夹爪、伺服电机、执行器、控制系统。",
+          "publish_tags": "AI机器人,具身智能,机器人抓取,力控,运动控制,人形机器人,机器人产业链,科技科普",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": []
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI时代，机器人先学会打工",
+            "episode": "最难的不是会聊天，是会拿起一个杯子",
+            "reasons": [
+              "视频实际193秒，超过150秒",
+              "有效来源不足：0/3"
+            ],
+            "warnings": [
+              "音频实际 193 秒，超过 180 秒"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\background.svg",
+            "force_control": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\force_control.svg",
+            "walking_balance": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\walking_balance.svg",
+            "obstacle_avoidance": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\obstacle_avoidance.svg",
+            "robot_hand_cup_pressure": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\robot_hand_cup_pressure.svg",
+            "gripper_force_feedback": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\gripper_force_feedback.svg",
+            "deformable_bag_cable": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\deformable_bag_cable.svg",
+            "humanoid_balance_control": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\humanoid_balance_control.svg",
+            "center_of_mass_sensor_overlay": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\center_of_mass_sensor_overlay.svg",
+            "warehouse_dynamic_path_plannin": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\warehouse_dynamic_path_plannin.svg",
+            "human_robot_safety_zone": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\human_robot_safety_zone.svg",
+            "language_instruction_to_action": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\最难的不是会聊天，是会拿起一个杯子\\2026-06-06\\visual_assets\\language_instruction_to_action.svg"
+          }
         },
         {
           "title": "工厂会最先变成机器人的训练场",
@@ -1003,7 +1067,72 @@
         },
         {
           "title": "仓库、外卖和清洁：机器人最现实的战场",
-          "question": "为什么物流仓储、配送、商用清洁和酒店服务，比家庭机器人更接近商业闭环？重点探讨重复劳动、用工成本、场景边界和规模化部署。"
+          "question": "为什么物流仓储、配送、商用清洁和酒店服务，比家庭机器人更接近商业闭环？重点探讨重复劳动、用工成本、场景边界和规模化部署。",
+          "generated": true,
+          "generated_at": "2026-06-07 12:08:10",
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\research_plan.md",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\research.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\research_trace.json",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\agent_interaction.log",
+          "source_count": 4,
+          "estimated_seconds": 167.9,
+          "quality_block_reason": "脚本预计 168 秒，超过 150 秒",
+          "fallback_used": false,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\仓库、外卖和清洁：机器人最现实的战场_2026-06-07.mp4",
+          "published": false,
+          "published_at": "",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-07 11:29:37",
+          "actual_seconds": 172.8,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\cover_option_3.png"
+          ],
+          "publish_title": "仓库、外卖和清洁：机器人最现实的战场",
+          "publish_desc": "AI时代，机器人先学会打工 / 仓库、外卖和清洁：机器人最现实的战场 的深度内容发布文案。\n\n互动问题：你更赞同A还是B？为什么\n\n关键词：AI、时代、机器人先学会打工、仓库、外卖和清洁、机器人最现实的战场、为什么物流仓储、配送",
+          "publish_tags": "AI,深度内容,纪录片,口播",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": []
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI时代，机器人先学会打工",
+            "episode": "仓库、外卖和清洁：机器人最现实的战场",
+            "reasons": [
+              "视频实际173秒，超过150秒"
+            ],
+            "warnings": [
+              "脚本预计 168 秒，超过 150 秒"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\background.svg",
+            "roi_panel": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\roi_panel.svg",
+            "home_complexity": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\home_complexity.svg",
+            "isometric warehouse aisle with": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\isometric_warehouse_aisle_with.svg",
+            "sidewalk or campus delivery ro": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\sidewalk_or_campus_delivery_ro.svg",
+            "autonomous floor scrubber clea": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\autonomous_floor_scrubber_clea.svg",
+            "hotel service robot delivering": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\hotel_service_robot_delivering.svg",
+            "dashboard comparing staff shif": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\dashboard_comparing_staff_shif.svg",
+            "loop animation of robot moving": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\loop_animation_of_robot_moving.svg",
+            "warehouse map with marked rout": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\warehouse_map_with_marked_rout.svg",
+            "control room dashboard monitor": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\visual_assets\\control_room_dashboard_monitor.svg"
+          }
         },
         {
           "title": "机器人时代最缺的，可能不是机器人公司",
