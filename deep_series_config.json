@@ -387,19 +387,74 @@
         {
           "title": "企业买软件会变成买结果吗",
           "question": "企业买软件会变成买结果吗",
-          "generated": false,
-          "generated_at": "2026-05-26 10:50:21",
-          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-05-26\\research.md",
-          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-05-26\\audit.md",
-          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-05-26\\script.md",
-          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-05-26\\script_notes.md",
-          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-05-26\\documentary_package.md",
-          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-05-26\\agent_interaction.log",
-          "audio_path": "",
-          "video_path": "",
-          "published": false,
-          "published_at": "",
-          "review_ready": true
+          "generated": true,
+          "generated_at": "2026-06-08 11:20:38",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\research.md",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\documentary_package.md",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\agent_interaction.log",
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\企业买软件会变成买结果吗_2026-06-08.mp4",
+          "published": true,
+          "published_at": "2026-06-08 11:21:24",
+          "review_ready": true,
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\research_plan.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\research_trace.json",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\quality_report.json",
+          "source_count": 5,
+          "estimated_seconds": 202.0,
+          "quality_block_reason": "音频实际 203 秒，超过 180 秒",
+          "fallback_used": false,
+          "review_blocked": false,
+          "audio_generated_at": "2026-06-08 11:16:59",
+          "actual_seconds": 203.1,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\cover_option_3.png"
+          ],
+          "publish_title": "AI办砸了谁买单",
+          "publish_desc": "企业买软件，正在从买账号、买调用量，变成买一个可验收的结果。AI Agent 进入企业软件和 SaaS 之后，采购方最关心的问题不再只是 token 贵不贵，而是：结果怎么定义、怎么审计、失败谁负责。\n\n典型案例是 Intercom 的 AI客服机器人 Fin：它按 resolution 收费，每解决一个客户问题收 0.99 美元，没解决不收费。Stripe 也在建设 Agent 支付、实时计量和机器支付基础设施，为未来的按结果付费、Outcome-based pricing 做准备。\n\n但结果付费不是万能解药。客服、工单、内容处理、数据清洗可能先发生；销售、法务、财务、ERP 这类复杂场景，真正难的是验收、归因和责任划分。\n\n互动问题：如果你负责采购AI软件，你更愿意按账号付费，还是按结果付费？为什么？\n\n关键词：AI、AI Agent、如何重构企业、企业买软件会变成买结果吗、企业软件、SaaS、企业SaaS、结果付费、按结果付费、Outcome Pricing、Outcome-based pricing、Intercom、Fin、Stripe、AI客服机器人、Agent支付",
+          "publish_tags": "AI Agent,企业软件,SaaS,企业SaaS,结果付费,按结果付费,Outcome Pricing,Outcome-based pricing,企业采购,AI客服,AI客服机器人,Intercom,Fin,Stripe,Agent支付",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": [
+              "封面/画面标签含英文残片：SaaS订阅、AI任务、AI客服"
+            ]
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI 如何重构企业",
+            "episode": "企业买软件会变成买结果吗",
+            "reasons": [
+              "视频实际203秒，超过150秒"
+            ],
+            "warnings": [
+              "音频实际 203 秒，超过 180 秒",
+              "封面/画面标签含英文残片：SaaS订阅、AI任务、AI客服"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\background.svg",
+            "pricing_units": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\pricing_units.svg",
+            "audit_layer": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\audit_layer.svg",
+            "account_seats_dashboard": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\account_seats_dashboard.svg",
+            "api_token_meter": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\api_token_meter.svg",
+            "task_completed_invoice": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\task_completed_invoice.svg",
+            "customer_ticket_resolution": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\customer_ticket_resolution.svg",
+            "resolved_case_payment": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\resolved_case_payment.svg",
+            "contract_acceptance_checklist": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\contract_acceptance_checklist.svg",
+            "liability_clause_document": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\liability_clause_document.svg",
+            "subscription_usage_outcome_sta": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI_如何重构企业\\企业买软件会变成买结果吗\\2026-06-08\\visual_assets\\subscription_usage_outcome_sta.svg"
+          }
         }
       ]
     },
@@ -839,12 +894,136 @@
         {
           "title": "康宁：玻璃公司为什么成了 AI 数据中心的血管",
           "question": "康宁为什么不只是手机玻璃和锅具品牌？重点探讨光纤、玻璃基材料和数据中心高速互连，AI 集群越大，越离不开低损耗、高密度的光通信通道。",
-          "generated": false
+          "generated": true,
+          "generated_at": "2026-06-09 10:54:04",
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\research_plan.md",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\research.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\research_trace.json",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\agent_interaction.log",
+          "source_count": 4,
+          "estimated_seconds": 375.3,
+          "quality_block_reason": "音频实际 391 秒，超过 180 秒",
+          "fallback_used": false,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\康宁：玻璃公司为什么成了_AI_数据中心的血管_2026-06-09.mp4",
+          "published": true,
+          "published_at": "2026-06-09 18:01:26",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-09 10:24:46",
+          "actual_seconds": 391.0,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\cover_option_3.png"
+          ],
+          "publish_title": "GPU抢完，卡在玻璃上？",
+          "publish_desc": "AI数据中心的瓶颈不只在GPU。康宁这类材料公司，可能站在光纤互连和玻璃基板的上游，影响数据能不能更快、更稳、更低损耗地流动。\n\n互动问题：你觉得AI数据中心下一个最容易被卡住的环节，是GPU、光纤，还是先进封装？\n\n关键词：AI、时代的隐形地基、康宁、玻璃公司为什么成了、数据中心的血管、康宁为什么不只是手机玻璃、和锅具品牌、重点探讨光纤",
+          "publish_tags": "AI数据中心,康宁,玻璃基板,先进封装,光纤互连,算力基建,半导体材料",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": [
+              "封面/画面标签含英文残片：AI集群、GPU互连、AI集群"
+            ]
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI时代的隐形地基",
+            "episode": "康宁：玻璃公司为什么成了 AI 数据中心的血管",
+            "reasons": [
+              "视频实际391秒，超过150秒"
+            ],
+            "warnings": [
+              "音频实际 391 秒，超过 180 秒",
+              "封面/画面标签含英文残片：AI集群、GPU互连、AI集群"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\background.svg",
+            "detail_glass_substrate": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\detail_glass_substrate.svg",
+            "detail_fiber_network": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\detail_fiber_network.svg",
+            "risk_card": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\risk_card.svg",
+            "gpu_cluster_data_flow.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\gpu_cluster_data_flow.svg.svg",
+            "data_center_fiber_interconnect": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\data_center_fiber_interconnect.svg",
+            "switch_fiber_topology.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\switch_fiber_topology.svg.svg",
+            "copper_vs_fiber_distance_power": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\copper_vs_fiber_distance_power.svg",
+            "fiber_cable_connector_material": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\fiber_cable_connector_material.svg",
+            "gpu_hbm_package_interconnect.s": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\gpu_hbm_package_interconnect.s.svg",
+            "gpu_hbm_bandwidth_path.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\gpu_hbm_bandwidth_path.svg.svg",
+            "advanced_package_stack.svg": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\康宁：玻璃公司为什么成了_AI_数据中心的血管\\2026-06-09\\visual_assets\\advanced_package_stack.svg.svg"
+          }
         },
         {
           "title": "杜邦：化工老公司为什么藏在芯片制造里",
           "question": "杜邦为什么会藏在 AI 芯片制造流程里？重点探讨光刻、清洗、CMP 和先进封装材料，芯片不是只靠设备，也靠一整套高纯、稳定、可量产的化学材料。",
-          "generated": false
+          "generated": true,
+          "generated_at": "2026-06-10 16:57:53",
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\research_plan.md",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\research.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\research_trace.json",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\agent_interaction.log",
+          "source_count": 1,
+          "estimated_seconds": 448.1,
+          "quality_block_reason": "音频实际 458 秒，超过 180 秒",
+          "fallback_used": true,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\杜邦：化工老公司为什么藏在芯片制造里_2026-06-10.mp4",
+          "published": true,
+          "published_at": "2026-06-10 16:59:17",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-10 16:53:27",
+          "actual_seconds": 458.4,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\cover_option_3.png"
+          ],
+          "publish_title": "杜邦，藏在AI芯片最软命门",
+          "publish_desc": "AI芯片的瓶颈不只在GPU、光刻机和晶圆厂，也可能藏在CMP抛光垫、清洗化学品和先进封装材料里。杜邦这类老化工公司真正卖的，是量产里的稳定性和良率确定性。\n\n互动问题：你觉得AI芯片最容易被忽略的瓶颈，是材料、设备，还是封装？\n\n关键词：AI、时代的隐形地基、杜邦、化工老公司为什么藏在芯片、制造里、杜邦为什么会藏在、芯片制造流程里、重点探讨光刻",
+          "publish_tags": "AI芯片,杜邦,半导体材料,CMP抛光垫,先进封装,芯片制造,供应链",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": [
+              "封面/画面标签含英文残片：AI芯片、CMP抛光垫、CMP抛光垫"
+            ]
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI时代的隐形地基",
+            "episode": "杜邦：化工老公司为什么藏在芯片制造里",
+            "reasons": [
+              "视频实际458秒，超过150秒",
+              "有效来源不足：1/3"
+            ],
+            "warnings": [
+              "音频实际 458 秒，超过 180 秒",
+              "封面/画面标签含英文残片：AI芯片、CMP抛光垫、CMP抛光垫"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\杜邦：化工老公司为什么藏在芯片制造里\\2026-06-10\\visual_assets\\hero.svg"
+          }
         },
         {
           "title": "林德：卖气的公司为什么能让芯片厂停不下来",
@@ -1085,8 +1264,8 @@
           "fallback_used": false,
           "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\dialogue.mp3",
           "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\仓库、外卖和清洁：机器人最现实的战场\\2026-06-07\\仓库、外卖和清洁：机器人最现实的战场_2026-06-07.mp4",
-          "published": false,
-          "published_at": "",
+          "published": true,
+          "published_at": "2026-06-07 13:03:00",
           "review_blocked": false,
           "review_ready": true,
           "audio_generated_at": "2026-06-07 11:29:37",
@@ -1136,7 +1315,70 @@
         },
         {
           "title": "机器人时代最缺的，可能不是机器人公司",
-          "question": "为什么机器人产业真正的机会可能藏在上游？重点探讨电机、减速器、传感器、电池、仿真训练、数据采集和边缘算力这些底层供应链。"
+          "question": "为什么机器人产业真正的机会可能藏在上游？重点探讨电机、减速器、传感器、电池、仿真训练、数据采集和边缘算力这些底层供应链。",
+          "generated": true,
+          "generated_at": "2026-06-08 09:53:21",
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\research_plan.md",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\research.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\research_trace.json",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\agent_interaction.log",
+          "source_count": 12,
+          "estimated_seconds": 174.2,
+          "quality_block_reason": "音频实际 180 秒，超过 180 秒",
+          "fallback_used": false,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\机器人时代最缺的，可能不是机器人公司_2026-06-08.mp4",
+          "published": true,
+          "published_at": "2026-06-08 09:58:33",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-08 09:49:55",
+          "actual_seconds": 180.2,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\cover_option_3.png"
+          ],
+          "publish_title": "会翻跟头的机器人",
+          "publish_desc": "人形机器人会翻跟头，不代表真的能进厂打工。机器人商业化最难的，可能不是外形够不像不像人，而是能不能少停机、少掉件、稳定交付。\n\n这一期聊机器人上游供应链：机器人夹爪、力控、视觉传感器、末端执行器、边缘算力、电机、减速器，为什么会决定具身智能能不能从表演走向真实岗位。我们也会结合灵宝机器人、CASBOT、优艾智合等案例，看看数据、仿真、示教系统和移动操作能力，怎样把机器人送进鞋厂、产线和仓库。\n\n真正的问题不是谁的机器人最像人，而是谁能让机器人稳定、便宜、可复制地干活。\n\n互动问题：你觉得机器人进厂打工最难突破的是哪一环：夹爪力控、视觉传感器、数据训练，还是成本？\n\n关键词：AI、时代、机器人先学会打工、机器人时代最缺的、可能不是机器人公司、为什么机器人产业真正的机、会可能藏在上游、重点探讨电机",
+          "publish_tags": "机器人,具身智能,人形机器人,机器人商业化,机器人夹爪,夹爪,力控,末端执行器,视觉传感器,边缘算力,边缘计算,电机,减速器,工业自动化,机器人上游供应链",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": []
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI时代，机器人先学会打工",
+            "episode": "机器人时代最缺的，可能不是机器人公司",
+            "reasons": [
+              "视频实际180秒，超过150秒"
+            ],
+            "warnings": [
+              "音频实际 180 秒，超过 180 秒"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\hero.svg",
+            "bridge": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\bridge.svg",
+            "background": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\background.svg",
+            "servo_motor_cutaway": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\servo_motor_cutaway.svg",
+            "precision_reducer_module": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\precision_reducer_module.svg",
+            "robot_battery_pack": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\robot_battery_pack.svg",
+            "adaptive_electric_gripper": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\adaptive_electric_gripper.svg",
+            "industrial_vision_camera": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\industrial_vision_camera.svg",
+            "tactile_force_sensor_array": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\tactile_force_sensor_array.svg",
+            "encoder_imu_motion_module": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\encoder_imu_motion_module.svg",
+            "robot_operation_data_recorder": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\机器人时代最缺的，可能不是机器人公司\\2026-06-08\\visual_assets\\robot_operation_data_recorder.svg"
+          }
         },
         {
           "title": "当机器人真的便宜下来，谁的工作会先变？",

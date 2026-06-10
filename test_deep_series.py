@@ -363,6 +363,28 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(report["duration_agent_attempts"], 1)
         self.assertIn("脚本时长优化代理", mock_llm.call_args.args[0])
 
+    def test_duration_guard_rewrites_when_retention_review_makes_script_long(self):
+        initial_script = "女：" + "先给出核心结论。" * 10
+        retention_long_script = "女：" + "留存重写后反而把脚本写得过长。" * 130
+        compressed_script = "女：压缩后保留核心结论。\n男：继续用一个问题承接。"
+
+        with patch("deep_series.generate_dialogue_script", return_value=initial_script), \
+                patch("deep_series.polish_opening_hook_with_review", return_value=(initial_script, {"attempts": 0})), \
+                patch("deep_series.polish_script_with_retention_review", return_value=(retention_long_script, {"blocked": False, "attempts": 1})), \
+                patch("deep_series.optimize_overtime_dialogue_script_with_agent", return_value=compressed_script) as mock_optimize:
+            script, report = deep_series.generate_dialogue_script_with_duration_guard(
+                {"title": "AI时代的隐形地基"},
+                {"title": "杜邦：化工老公司为什么藏在芯片制造里", "question": "杜邦为什么藏在芯片制造里？"},
+                "研究报告",
+                "审校意见",
+            )
+
+        # 留存重写也可能把脚本重新拉长，最终保存前必须再走一次时长优化。
+        self.assertEqual(script, compressed_script)
+        self.assertFalse(report["blocked"])
+        self.assertEqual(report["duration_agent_attempts"], 1)
+        mock_optimize.assert_called_once()
+
     def test_dialogue_duration_estimate_blocks_chattts_three_minute_script(self):
         script = "女：" + "这" * 820
 
@@ -567,8 +589,19 @@ class TestDeepSeries(unittest.TestCase):
             "audio_path": audio_path,
             "visual_design_path": visual_design_path,
         }
+        model_design = json.dumps(
+            {
+                "cover_title": "系统跑稳才是稀缺",
+                "main_elements": ["稳定运行", "集群调度", "供电冷却"],
+                "svg_prompts": {"hero": "生成稳定运行的运维状态 SVG。"},
+                "scene_cards": [{"keyword": "稳定运行", "asset": "hero", "label": "稳定运行"}],
+            },
+            ensure_ascii=False,
+        )
+        model_svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">模型重建</text></svg>'
         with patch("deep_series.create_deep_slide_images", side_effect=fake_create_slides), \
-                patch("deep_series.step_video", return_value=os.path.join(self.tmpdir, "demo.mp4")):
+                patch("deep_series.step_video", return_value=os.path.join(self.tmpdir, "demo.mp4")), \
+                patch("deep_series.call_llm", side_effect=[model_design, model_svg]) as mock_llm:
             deep_series.generate_video_from_audio(
                 {"title": "AI时代最缺的不是芯片"},
                 {
@@ -580,6 +613,8 @@ class TestDeepSeries(unittest.TestCase):
 
         self.assertIn("稳定运行", captured_designs[0]["main_elements"])
         self.assertNotIn("味精颗粒", captured_designs[0]["main_elements"])
+        self.assertEqual(mock_llm.call_count, 2)
+        self.assertEqual(list(captured_designs[0]["asset_paths"].keys()), ["hero"])
 
     def test_generate_tts_from_script_keeps_oversized_audio_for_review(self):
         script_path = os.path.join(self.tmpdir, "script.md")
@@ -1090,12 +1125,16 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("更吸引眼球", prompt)
         self.assertIn("不要强制套用系列名前缀", prompt)
         self.assertIn("实体词或反差点尽量前置", prompt)
-        # 标题生成要主动偏向轻标题党，避免自动生成成平铺直叙的说明句。
-        self.assertIn("轻标题党", prompt)
-        self.assertIn("反差", prompt)
-        self.assertIn("悬念", prompt)
+        # 标题生成要主动偏向更强点击欲，避免自动生成成平铺直叙的说明句。
+        self.assertIn("更夸张一点", prompt)
+        self.assertIn("更有点击欲", prompt)
+        self.assertIn("真正赢家", prompt)
+        self.assertIn("命门", prompt)
+        self.assertIn("强反差", prompt)
+        self.assertIn("强悬念", prompt)
         self.assertIn("疑问句", prompt)
         self.assertIn("不能编造事实", prompt)
+        self.assertIn("普通说明标题", prompt)
         self.assertIn("封面只保留一个核心反差词", prompt)
         self.assertIn("标题", prompt)
         self.assertIn("封面文案", prompt)
@@ -1140,9 +1179,17 @@ class TestDeepSeries(unittest.TestCase):
         review_prompt = mock_llm.call_args_list[1].args[0]
         self.assertIn("标题党式点击欲", review_prompt)
         # 审校阶段不能只指出标题弱还放行，否则后续仍会生成点击欲不足的平标题。
-        self.assertIn("点击欲不足", review_prompt)
+        self.assertIn("更夸张", review_prompt)
+        self.assertIn("点击欲", review_prompt)
+        self.assertIn("普通说明标题", review_prompt)
         self.assertIn("必须判为不通过", review_prompt)
         self.assertIn("搜索关键词", review_prompt)
+        rewrite_prompt = mock_llm.call_args_list[2].args[0]
+        # 二次改写要主动把最有冲突的主体或后果前置，不只是把旧标题稍微换词。
+        self.assertIn("更想让人点开", rewrite_prompt)
+        self.assertIn("强反差", rewrite_prompt)
+        self.assertIn("代价感", rewrite_prompt)
+        self.assertIn("最意外的主体或后果前置", rewrite_prompt)
 
     @patch("deep_series.create_deep_cover_options", return_value=["cover1.png", "cover2.png", "cover3.png"])
     @patch("deep_series.create_deep_cover_image", return_value="cover.png")
@@ -1207,8 +1254,8 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn("客户议价", svg)
         self.assertNotIn("视觉元素", svg)
 
-    def test_build_visual_design_only_calls_llm_for_design_not_svg_assets(self):
-        # 视频生成阶段只让大模型做一次视觉规划，SVG 文件走本地简洁兜底，避免每张图反复调模型。
+    def test_build_visual_design_calls_llm_for_one_key_svg_asset(self):
+        # 深度系列只需要一张关键 SVG：视觉设计可以有多个 prompt，但实际只生成 hero.svg，减少模型调用。
         script_path = os.path.join(self.tmpdir, "script.md")
         with open(script_path, "w", encoding="utf-8") as f:
             f.write("女：AI 基础设施不是只买 GPU，还要看整机交付。")
@@ -1227,8 +1274,9 @@ class TestDeepSeries(unittest.TestCase):
             },
             "scene_cards": [{"keyword": "GPU", "asset": "hero", "label": "GPU 系统"}],
         }
+        model_svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">模型主视觉</text></svg>'
 
-        with patch("deep_series.call_llm", return_value=json.dumps(raw_design, ensure_ascii=False)) as mock_llm:
+        with patch("deep_series.call_llm", side_effect=[json.dumps(raw_design, ensure_ascii=False), model_svg]) as mock_llm:
             design = deep_series.build_visual_design(
                 {"title": "AI时代的隐形地基"},
                 {"title": "GPU 不只是显卡"},
@@ -1236,9 +1284,10 @@ class TestDeepSeries(unittest.TestCase):
                 use_llm=True,
             )
 
-        self.assertEqual(mock_llm.call_count, 1)
-        self.assertIn("hero", design["asset_paths"])
-        self.assertTrue(os.path.exists(design["asset_paths"]["hero"]))
+        self.assertEqual(mock_llm.call_count, 2)
+        self.assertEqual(list(design["asset_paths"].keys()), ["hero"])
+        with open(design["asset_paths"]["hero"], "r", encoding="utf-8") as f:
+            self.assertIn("模型主视觉", f.read())
 
     def test_generate_visual_svg_asset_uses_chinese_topic_fallback_without_llm(self):
         # 离线或禁用 LLM 时，英文资产 key 也要生成可读中文主题图，而不是把 data_center_cooling 画到页面上。
@@ -1463,19 +1512,20 @@ class TestDeepSeries(unittest.TestCase):
         )
         svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">ABF</text></svg>'
 
-        with patch("deep_series.call_llm", side_effect=[design_json, svg, svg, svg]):
+        with patch("deep_series.call_llm", side_effect=[design_json, svg]) as mock_llm:
             design = deep_series.build_visual_design(series, episode, result)
 
         self.assertEqual(design["cover_title"], "味精厂卡进GPU底座")
         self.assertEqual(design["composition"], "center_bridge")
         self.assertIn("ABF薄膜", design["main_elements"])
         self.assertTrue(os.path.exists(result["visual_design_path"]))
-        self.assertGreaterEqual(len(result["visual_asset_paths"]), 3)
-        for path in result["visual_asset_paths"].values():
-            self.assertTrue(os.path.exists(path))
+        self.assertEqual(list(result["visual_asset_paths"].keys()), ["hero"])
+        self.assertEqual(mock_llm.call_count, 2)
+        self.assertTrue(os.path.exists(result["visual_asset_paths"]["hero"]))
+        self.assertEqual({item["asset"] for item in design["scene_cards"]}, {"hero"})
 
-    def test_build_visual_design_generates_missing_scene_card_assets(self):
-        # 场景卡片如果没有自己的 SVG，真实渲染会反复回退 hero，导致 Dell 这类页面看起来没有变化。
+    def test_build_visual_design_collapses_scene_cards_to_one_key_svg(self):
+        # 模型即使返回专属场景资产名，实际也只生成一张 hero.svg，避免一集视频生成过多 SVG。
         series = {"title": "AI时代老树开新花"}
         episode = {
             "title": "Dell：卖电脑的公司为什么吃到 AI 服务器红利",
@@ -1506,15 +1556,17 @@ class TestDeepSeries(unittest.TestCase):
         )
         svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">AI</text></svg>'
 
-        with patch("deep_series.call_llm", side_effect=[design_json, svg, svg, svg, svg]):
+        with patch("deep_series.call_llm", side_effect=[design_json, svg]) as mock_llm:
             design = deep_series.build_visual_design(series, episode, result)
 
-        self.assertIn("ai_infrastructure_stack", design["asset_paths"])
-        self.assertTrue(os.path.exists(design["asset_paths"]["ai_infrastructure_stack"]))
-        self.assertEqual(result["visual_asset_paths"]["ai_infrastructure_stack"], design["asset_paths"]["ai_infrastructure_stack"])
+        self.assertEqual(list(design["asset_paths"].keys()), ["hero"])
+        self.assertTrue(os.path.exists(design["asset_paths"]["hero"]))
+        self.assertEqual(result["visual_asset_paths"], design["asset_paths"])
+        self.assertEqual(design["scene_cards"][0]["asset"], "hero")
+        self.assertEqual(mock_llm.call_count, 2)
 
-    def test_ensure_scene_card_svg_assets_refreshes_stale_generic_bridge_svg(self):
-        # 旧机器人产物里已经落盘的三方块流程图要能被刷新，否则重渲染仍然复用错误 SVG。
+    def test_ensure_scene_card_svg_assets_collapses_old_scene_assets_to_hero(self):
+        # 旧产物里即使有场景专属 SVG，新规则也只保留 hero.svg，避免继续生成或复用多张 SVG。
         asset_dir = os.path.join(self.tmpdir, "visual_assets")
         os.makedirs(asset_dir, exist_ok=True)
         stale_path = os.path.join(asset_dir, "isometric_warehouse_aisle_with.svg")
@@ -1527,10 +1579,13 @@ class TestDeepSeries(unittest.TestCase):
                 '<polyline points="64,214 142,202 210,214 286,196 356,210" fill="transparent" stroke="#007AFF" stroke-width="5"/>'
                 '</svg>'
             )
+        hero_path = os.path.join(asset_dir, "hero.svg")
+        with open(hero_path, "w", encoding="utf-8") as f:
+            f.write('<svg width="420" height="260"><rect x="88" y="104" width="244" height="96" fill="#007AFF"/></svg>')
         design = {
             "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500", "#8E8E93"],
             "main_elements": ["仓库搬运", "外卖配送", "商用清洁"],
-            "asset_paths": {"isometric warehouse aisle with": stale_path},
+            "asset_paths": {"hero": hero_path, "isometric warehouse aisle with": stale_path},
             "scene_cards": [
                 {
                     "keyword": "warehouse_robot",
@@ -1545,11 +1600,10 @@ class TestDeepSeries(unittest.TestCase):
 
         updated = deep_series.ensure_scene_card_svg_assets(design, self.tmpdir, use_llm=False)
 
-        with open(updated["asset_paths"]["isometric warehouse aisle with"], "r", encoding="utf-8") as f:
-            refreshed_svg = f.read()
-        self.assertIn("仓库搬运", refreshed_svg)
-        self.assertIn('x="58" y="92"', refreshed_svg)
-        self.assertNotIn('points="64,214 142,202 210,214 286,196 356,210"', refreshed_svg)
+        self.assertEqual(list(updated["asset_paths"].keys()), ["hero"])
+        self.assertEqual(updated["scene_cards"][0]["asset"], "hero")
+        self.assertTrue(os.path.exists(updated["asset_paths"]["hero"]))
+        self.assertFalse(os.path.exists(stale_path))
 
     def test_ensure_scene_card_svg_assets_refreshes_stale_top_level_hero_svg(self):
         # 本期大量图卡会回退到 hero；旧 hero.svg 如果还是三方块流程图，重渲染后左侧仍然看不出变化。
@@ -1583,8 +1637,8 @@ class TestDeepSeries(unittest.TestCase):
         self.assertIn('points="250,132 292,146 252,162"', refreshed_svg)
         self.assertNotIn('points="64,214 142,202 210,214 286,196 356,210"', refreshed_svg)
 
-    def test_build_visual_design_always_generates_background_svg(self):
-        # 即使模型返回很多其它 SVG prompt，也必须为深度视频生成整页背景 background.svg。
+    def test_build_visual_design_ignores_extra_svg_prompts(self):
+        # 即使模型返回很多其它 SVG prompt，深度视频也只生成一张关键 hero.svg。
         series = {"title": "AI时代老树开新花"}
         episode = {"title": "Dell：卖电脑的公司为什么吃到 AI 服务器红利"}
         result = {
@@ -1611,25 +1665,26 @@ class TestDeepSeries(unittest.TestCase):
         )
         svg = '<svg width="420" height="260"><rect x="0" y="0" width="420" height="260" fill="#007AFF"/></svg>'
 
-        with patch("deep_series.call_llm", side_effect=[design_json, svg, svg, svg, svg, svg, svg, svg, svg]):
+        with patch("deep_series.call_llm", side_effect=[design_json, svg]) as mock_llm:
             design = deep_series.build_visual_design(series, episode, result)
 
-        self.assertIn("background", design["asset_paths"])
-        self.assertTrue(os.path.exists(design["asset_paths"]["background"]))
+        self.assertEqual(list(design["asset_paths"].keys()), ["hero"])
+        self.assertTrue(os.path.exists(design["asset_paths"]["hero"]))
+        self.assertEqual(mock_llm.call_count, 2)
 
-    def test_ensure_scene_card_svg_assets_backfills_missing_background_svg(self):
-        # 旧产物复用视觉设计时，也要补齐 background.svg，避免只有新生成主题才有整页背景。
+    def test_ensure_scene_card_svg_assets_backfills_missing_hero_svg(self):
+        # 旧产物复用视觉设计时，只补齐 hero.svg，不再额外补 background/bridge。
         design = {
             "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
-            "svg_prompts": {"hero": "主视觉"},
+            "svg_prompts": {"hero": "主视觉", "background": "背景"},
             "asset_paths": {},
             "scene_cards": [],
         }
 
         updated = deep_series.ensure_scene_card_svg_assets(design, self.tmpdir, use_llm=False)
 
-        self.assertIn("background", updated["asset_paths"])
-        self.assertTrue(os.path.exists(updated["asset_paths"]["background"]))
+        self.assertEqual(list(updated["asset_paths"].keys()), ["hero"])
+        self.assertTrue(os.path.exists(updated["asset_paths"]["hero"]))
 
     def test_create_deep_cover_image_uses_visual_design_assets(self):
         output_dir = self.tmpdir

@@ -650,13 +650,16 @@ def assess_dialogue_duration(script: str) -> Dict:
 
 def optimize_overtime_dialogue_script_with_agent(series: Dict, episode: Dict, script: str, report: Dict) -> str:
     # 专门的脚本时长优化代理：只处理超时脚本，保留事实边界和双主持结构，不重新发散选题。
+    target_min_chars = int(DEEP_TARGET_MIN_SECONDS / DEEP_SCRIPT_SECONDS_PER_CHAR)
+    target_max_chars = int(DEEP_TARGET_MAX_SECONDS / DEEP_SCRIPT_SECONDS_PER_CHAR)
     prompt = (
         "你是深度系列视频的脚本时长优化代理。\n"
         f"系列：{series.get('title', '')}\n"
         f"主题：{episode.get('title', '')}\n\n"
         f"请把下面脚本压缩到 {DEEP_TARGET_MIN_SECONDS}-{DEEP_TARGET_MAX_SECONDS} 秒。\n"
+        f"按当前 ChatTTS 估算，正文控制在 {target_min_chars}-{target_max_chars} 个非空白字符，绝对不要超过 {target_max_chars} 个。\n"
         "必须保留“女：/男：”双主持格式，前15秒仍然要有反常识结论、观众反问和核心答案。\n"
-        "删掉重复解释、课程式铺垫和不影响结论的细节，只输出可朗读脚本。\n"
+        "删掉重复解释、课程式铺垫和不影响结论的细节，不要为了留存补长，只输出可朗读脚本。\n"
         "压缩原因：" + "；".join(report.get("reasons", [])) + "\n"
     )
     return clean_script_output(call_llm(prompt, script))
@@ -931,12 +934,33 @@ def _finish_dialogue_script_review(series: Dict, episode: Dict, research_report:
     script, hook_report = polish_opening_hook_with_review(series, episode, script, research_report, audit_report)
     script, retention_report = polish_script_with_retention_review(series, episode, script, research_report, audit_report)
     final_report = assess_dialogue_duration(script)
+    duration_agent_attempts = int(report.get("duration_agent_attempts") or 0)
+    duration_agent_initial_seconds = float(report.get("duration_agent_initial_seconds") or 0.0)
+    if not duration_agent_initial_seconds:
+        duration_agent_initial_seconds = float(final_report.get("estimated_seconds") or 0.0)
+
+    while final_report.get("blocked") and duration_agent_attempts < DEEP_RESEARCH_MAX_ATTEMPTS:
+        # 留存重写可能重新把脚本拉长，最终落盘前再交给时长优化代理压一次。
+        previous_seconds = float(final_report.get("estimated_seconds") or 0.0)
+        duration_agent_attempts += 1
+        revised_script = optimize_overtime_dialogue_script_with_agent(series, episode, script, final_report)
+        revised_report = assess_dialogue_duration(revised_script)
+        revised_seconds = float(revised_report.get("estimated_seconds") or 0.0)
+        if not revised_script.strip():
+            final_report.setdefault("reasons", []).append("脚本时长优化返回空内容，保留上一版脚本")
+            break
+        if previous_seconds > 0 and revised_seconds >= previous_seconds:
+            final_report.setdefault("reasons", []).append("脚本时长优化没有变短，保留上一版脚本")
+            break
+        script = revised_script
+        final_report = revised_report
+
     final_report["attempts"] = attempts
     final_report["hook_review"] = hook_report
     final_report["retention_review"] = retention_report
-    final_report["duration_agent_optimized"] = bool(report.get("duration_agent_optimized"))
-    final_report["duration_agent_attempts"] = int(report.get("duration_agent_attempts") or 0)
-    final_report["duration_agent_initial_seconds"] = float(report.get("duration_agent_initial_seconds") or 0.0)
+    final_report["duration_agent_optimized"] = duration_agent_attempts > 0
+    final_report["duration_agent_attempts"] = duration_agent_attempts
+    final_report["duration_agent_initial_seconds"] = duration_agent_initial_seconds
     if retention_report.get("blocked"):
         # 整体留存不足不直接卡死生成，但会进入质量报告，方便人工复查。
         final_report["blocked"] = True
@@ -2564,17 +2588,17 @@ def generate_video_from_audio(series: Dict, episode: Dict, result: Dict) -> Dict
         print("[深度视频] 音频时长提醒：" + reason + "，将继续合成完整视频", flush=True)
         result["quality_block_reason"] = reason
     output_dir = os.path.dirname(audio_path)
-    print("[深度视频] 开始生成视觉设计和本地 SVG 元素", flush=True)
+    print("[深度视频] 开始生成视觉设计和大模型 SVG 元素", flush=True)
     visual_design = result.get("visual_design") or load_visual_design(result.get("visual_design_path", ""))
     if not visual_design:
         visual_design = build_visual_design(series, episode, result, use_llm=True)
     elif should_rebuild_visual_design(series, episode, visual_design, result):
         # 旧版视觉设计如果已经明显偏离主题，重生成视频时直接刷新，避免继续复用错误图片。
         print("[深度视频] 检测到旧视觉设计与系统跑稳主题不匹配，重新生成视觉设计", flush=True)
-        visual_design = build_visual_design(series, episode, result, use_llm=False)
+        visual_design = build_visual_design(series, episode, result, use_llm=True)
     else:
-        # 复用旧视觉设计时也补齐场景 SVG，避免老产物继续缺资产并回退到同一张 hero。
-        visual_design = ensure_scene_card_svg_assets(visual_design, output_dir, use_llm=False)
+        # 复用旧视觉设计时也用大模型补齐缺失 SVG，避免老产物继续缺资产并回退到同一张本地图。
+        visual_design = ensure_scene_card_svg_assets(visual_design, output_dir, use_llm=True)
         result["visual_design"] = visual_design
         result["visual_asset_paths"] = visual_design.get("asset_paths", {})
         visual_design_path = result.get("visual_design_path") or os.path.join(output_dir, "visual_design.json")
@@ -2815,7 +2839,7 @@ def normalize_visual_design(series: Dict, episode: Dict, design: Dict, context_t
 
 
 def generate_visual_svg_asset(name: str, prompt: str, design: Dict, output_dir: str, use_llm: bool = True) -> str:
-    # 每个视觉元素单独生成 SVG，封面和视频卡片都复用同一份资产。
+    # 生成单个关键 SVG；调用方会控制数量，避免一集视频反复向大模型要多张图。
     os.makedirs(output_dir, exist_ok=True)
     path = os.path.join(output_dir, f"{safe_filename(name)}.svg")
     fallback_label, fallback_details = _fallback_svg_labels(name, prompt, design)
@@ -2844,44 +2868,48 @@ def generate_visual_svg_asset(name: str, prompt: str, design: Dict, output_dir: 
     return path
 
 
+def prune_extra_visual_svgs(asset_dir: str, keep_path: str) -> None:
+    # 深度系列现在只保留一张关键 SVG；清掉旧版多场景资产，避免下次人工检查仍看到一堆历史文件。
+    if not asset_dir or not os.path.isdir(asset_dir) or not keep_path:
+        return
+    keep_abs = os.path.abspath(keep_path)
+    for file_name in os.listdir(asset_dir):
+        if not file_name.lower().endswith(".svg"):
+            continue
+        file_path = os.path.abspath(os.path.join(asset_dir, file_name))
+        if file_path == keep_abs:
+            continue
+        try:
+            os.remove(file_path)
+        except OSError:
+            # 清理失败不影响主流程，下一次生成仍会只记录 hero.svg。
+            pass
+
+
 def ensure_scene_card_svg_assets(design: Dict, output_dir: str, use_llm: bool = False) -> Dict:
-    # 场景卡片必须有真实 SVG 文件；默认用本地兜底图，避免视频阶段为每张 SVG 反复调大模型。
+    # 深度系列只保留一张关键 hero.svg；所有场景卡复用它，减少大模型 SVG 调用量。
     if not isinstance(design, dict):
         return {}
     asset_dir = os.path.join(output_dir, "visual_assets")
     asset_paths = dict(design.get("asset_paths") if isinstance(design.get("asset_paths"), dict) else {})
     svg_prompts = design.get("svg_prompts") if isinstance(design.get("svg_prompts"), dict) else {}
-    svg_prompts.setdefault("background", "生成适合作为整张深度视频卡片背景的主题 SVG，使用低对比科技纹理、网格和产业节点，不能喧宾夺主。")
-    background_path = str(asset_paths.get("background") or "").strip()
-    background_check_path = background_path if os.path.isabs(background_path) else os.path.join(os.getcwd(), background_path)
-    if not background_path or not os.path.exists(background_check_path):
-        # 所有深度主题都必须有 background.svg，视频卡片会把它铺满整张 1920x1080 画布。
-        asset_paths["background"] = generate_visual_svg_asset("background", str(svg_prompts["background"]), design, asset_dir, use_llm=use_llm)
-    for asset_name in ("hero", "bridge"):
-        current_path = str(asset_paths.get(asset_name) or "").strip()
-        check_path = current_path if os.path.isabs(current_path) else os.path.join(os.getcwd(), current_path)
-        if current_path and os.path.exists(check_path) and _is_stale_generic_bridge_svg(check_path):
-            # 旧版本会把主视觉也写成通用三方块图；这些资产存在时也要刷新，否则多数图卡仍会回退旧图。
-            prompt = str(svg_prompts.get(asset_name) or f"生成{asset_name}主题 SVG。")
-            asset_paths[asset_name] = generate_visual_svg_asset(asset_name, prompt, design, asset_dir, use_llm=use_llm)
+    hero_prompt = str(svg_prompts.get("hero") or "生成本期最关键的短视频主视觉 SVG，能同时用于封面和所有视频卡片。")
+    current_path = str(asset_paths.get("hero") or "").strip()
+    check_path = current_path if os.path.isabs(current_path) else os.path.join(os.getcwd(), current_path)
+    if not current_path or not os.path.exists(check_path) or _is_stale_generic_bridge_svg(check_path):
+        # 缺失或明显过时的 hero.svg 才刷新；其它辅助 SVG 不再生成。
+        current_path = generate_visual_svg_asset("hero", hero_prompt, design, asset_dir, use_llm=use_llm)
     for scene in (design.get("scene_cards") or [])[:8]:
         if not isinstance(scene, dict):
             continue
-        asset_name = str(scene.get("asset") or "").strip()
-        if not asset_name:
-            continue
-        current_path = asset_paths.get(asset_name, "")
-        check_path = current_path if os.path.isabs(current_path) else os.path.join(os.getcwd(), current_path)
-        if current_path and os.path.exists(check_path) and not _is_stale_generic_bridge_svg(check_path):
-            continue
-        label = visual_display_label(scene.get("label") or scene.get("keyword") or asset_name, asset_name)
+        label = visual_display_label(scene.get("label") or scene.get("keyword") or "本期主视觉", "本期主视觉")
         keyword = visual_element_label(scene.get("keyword") or label, label)
-        # 缺少专属 prompt 时，用场景标签补一个明确任务，让兜底 SVG 也贴合产业线索。
-        prompt = str(svg_prompts.get(asset_name) or f"生成{label}的短视频场景 SVG，突出关键词：{keyword}。")
-        asset_paths[asset_name] = generate_visual_svg_asset(asset_name, prompt, design, asset_dir, use_llm=use_llm)
-        if asset_name not in svg_prompts:
-            svg_prompts[asset_name] = prompt
-    design["asset_paths"] = asset_paths
+        # 保留每张卡的匹配标签，但视觉资产统一指向 hero.svg。
+        scene["asset"] = "hero"
+        scene["keyword"] = keyword
+        scene["label"] = label
+    design["asset_paths"] = {"hero": current_path} if current_path else {}
+    prune_extra_visual_svgs(asset_dir, current_path)
     design["svg_prompts"] = svg_prompts
     return design
 
@@ -2899,7 +2927,7 @@ def build_visual_design(series: Dict, episode: Dict, result: Dict, use_llm: bool
             "不要套固定模板；根据系列、主题、脚本和研究资料选择适合本期的构图。\n"
             "JSON 字段：cover_title、subtitle、style、composition、palette、main_elements、svg_prompts、scene_cards。\n"
             "composition 可用 center_bridge、single_subject、system_diagram、network_map、timeline、contrast_split，但要按内容选择。\n"
-            "svg_prompts 至少包含 hero、bridge、background；scene_cards 每项包含 keyword、asset、label，用于视频卡片匹配。\n"
+            "svg_prompts 只需要包含 hero，用于生成本期唯一关键 SVG；scene_cards 每项包含 keyword、asset、label，asset 统一写 hero。\n"
             "main_elements 和 scene_cards.label 必须是观众能直接理解的产业环节短词，不要写左侧、右侧、中央、老树、根系、桥这类构图或隐喻词。\n"
             f"系列：{series.get('title', '')}\n主题：{episode.get('title', '')}\n问题：{_episode_question(episode)}\n"
         )
@@ -2909,12 +2937,13 @@ def build_visual_design(series: Dict, episode: Dict, result: Dict, use_llm: bool
             raw_design = {}
     design = normalize_visual_design(series, episode, raw_design, context_text)
     asset_dir = os.path.join(output_dir, "visual_assets")
-    asset_paths = {}
-    for name, asset_prompt in list(design.get("svg_prompts", {}).items())[:6]:
-        # SVG 只作为视频里的简洁图形素材，本地生成更稳定，也能减少多张图逐一调模型。
-        asset_paths[name] = generate_visual_svg_asset(name, str(asset_prompt), design, asset_dir, use_llm=False)
-    design["asset_paths"] = asset_paths
-    design = ensure_scene_card_svg_assets(design, output_dir, use_llm=False)
+    svg_prompts = design.get("svg_prompts") if isinstance(design.get("svg_prompts"), dict) else {}
+    hero_prompt = str(svg_prompts.get("hero") or "生成本期最关键的短视频主视觉 SVG，能同时用于封面和所有视频卡片。")
+    # 每集只生成一张关键 hero.svg；其它画面变化交给 iOS 卡片文案、标签和主持人状态承担。
+    design["asset_paths"] = {
+        "hero": generate_visual_svg_asset("hero", hero_prompt, design, asset_dir, use_llm=use_llm)
+    }
+    design = ensure_scene_card_svg_assets(design, output_dir, use_llm=use_llm)
     asset_paths = design["asset_paths"]
 
     design_path = os.path.join(output_dir, "visual_design.json")
@@ -3064,7 +3093,7 @@ def normalize_publish_assets_payload(series: Dict, episode: Dict, assets: Dict) 
 
 
 def review_publish_assets(series: Dict, episode: Dict, assets: Dict, script_text: str, research_text: str) -> Dict:
-    # 发布审校重点看点击欲和搜索命中，平标题要拦下来，但不负责重写正文事实。
+    # 发布审校重点看点击欲和搜索命中，过于平实的标题要拦下来，但不负责重写正文事实。
     prompt = (
         "你是 B 站深度视频发布审校智能体。\n"
         f"系列：{series.get('title', '')}\n"
@@ -3072,10 +3101,10 @@ def review_publish_assets(series: Dict, episode: Dict, assets: Dict, script_text
         "任务：审核发布标题和简介是否有标题党式点击欲、是否包含搜索关键词。\n"
         "请只返回 JSON：{\"passed\":true/false,\"score\":0-10,\"reasons\":[\"问题\"],\"suggestions\":[\"建议\"]}。\n"
         "审核标准：\n"
-        "1. 标题要有悬念、反差或冲突，让人想点开，但不能虚假夸大。\n"
+        "1. 标题要比普通说明标题更夸张、更有点击欲，必须有明确悬念、反差、冲突或代价感，但不能虚假夸大。\n"
         "2. 简介必须包含主题公司、技术名词、产业链关键词，方便搜索到。\n"
         "3. 标题、简介和视频前几秒承诺必须一致，不能标题党骗点。\n"
-        "4. 如果标题平铺直叙、没有明确反差/悬念/冲突/疑问句，或你判断点击欲不足，必须判为不通过，score 不超过 6.5。\n"
+        "4. 如果标题只是介绍/解析/为什么重要这类平铺直叙说法，或没有明确反差/悬念/冲突/疑问句，必须判为不通过，score 不超过 6。\n"
         "5. tags 要覆盖核心关键词。\n"
     )
     raw = call_llm(
@@ -3109,7 +3138,7 @@ def rewrite_publish_assets_with_review(series: Dict, episode: Dict, assets: Dict
         f"系列：{series.get('title', '')}\n"
         f"主题：{episode.get('title', '')}\n\n"
         "请根据审校意见重写发布信息，只返回 JSON，字段保持 title、desc、tags、cover_text、cover_prompt、comment_question、title_options、cover_options。\n"
-        "要求：标题要有标题党式点击欲，优先使用悬念、反差、冲突或疑问；简介必须自然包含搜索关键词；不能虚假夸大。\n"
+        "要求：标题要更夸张、更想让人点开，优先使用强悬念、强反差、冲突、代价感或疑问句，把最意外的主体或后果前置；简介必须自然包含搜索关键词；不能虚假夸大。\n"
         f"审校问题：{'；'.join(review.get('reasons', []))}\n"
         f"修改建议：{'；'.join(review.get('suggestions', []))}\n"
     )
@@ -3373,7 +3402,7 @@ def assess_publish_gate(series: Dict, episode: Dict) -> Dict:
 def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
     # 发布信息只生成一次，后面发视频和发文案都直接复用。
     # title 直接作为 B 站标题使用，系列名留在简介和合集里，避免信息流里显得程式化。
-    # B站信息流标题要先争取点击，但所有夸张点都必须来自脚本事实，避免骗点。
+    # B站信息流标题要先争取点击，夸张表达也必须来自脚本事实，避免骗点。
     script_text = read_text_if_exists(result.get("script_path", ""))
     research_text = read_text_if_exists(result.get("research_path", ""), limit=3000)
     prompt = (
@@ -3393,7 +3422,9 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
         "}\n"
         "要求：标题短一些，封面文案控制在 6 到 10 个字，评论问题适合互动。\n"
         "原始主题标题只是参考，title 不需要完全照抄原始标题，可以根据脚本和研究报告改写成更吸引眼球的主题名称。\n"
-        "标题允许有轻标题党味道，优先写成反常识主体 + 被忽略位置/后果/疑问的短句；至少带一个反差、悬念、痛点或疑问句钩子，但不能编造事实。\n"
+        "标题要更夸张一点、更有点击欲，优先写成意外主体 + 被忽略位置/关键后果/产业代价/反常识疑问的短句。\n"
+        "可以使用“卡住、消失、真正赢家、没人注意、底牌、命门”这类有冲击力的词，但每个夸张点都必须能从脚本或研究报告里找到事实支撑。\n"
+        "至少带一个强反差、强悬念、痛点、代价感或疑问句钩子；不要写成“介绍、解析、为什么重要”这类普通说明标题，也不能编造事实。\n"
         "B站最终标题直接使用 title，不要强制套用系列名前缀；实体词或反差点尽量前置，让标题像真人写的短句。\n"
         "title_options 也按同样规则给 3 个自然标题备选，不要带系列名称前缀。\n"
         "封面只保留一个核心反差词或短问句，不要堆多个解释词，也不要写成长句。\n"
@@ -3437,7 +3468,7 @@ def generate_publish_assets(series: Dict, episode: Dict, result: Dict) -> Dict:
     os.makedirs(output_dir, exist_ok=True)
     visual_design = result.get("visual_design") or load_visual_design(result.get("visual_design_path", ""))
     if not visual_design:
-        visual_design = build_visual_design(series, episode, result, use_llm=False)
+        visual_design = build_visual_design(series, episode, result, use_llm=True)
     assets["visual_design"] = visual_design
     assets["cover_path"] = create_deep_cover_image(series, episode, assets, output_dir)
     assets["cover_option_paths"] = create_deep_cover_options(series, episode, assets, output_dir)
