@@ -7,6 +7,7 @@ import sys
 import tempfile
 import types
 import unittest
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import deep_series
@@ -601,7 +602,7 @@ class TestDeepSeries(unittest.TestCase):
         model_svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">模型重建</text></svg>'
         with patch("deep_series.create_deep_slide_images", side_effect=fake_create_slides), \
                 patch("deep_series.step_video", return_value=os.path.join(self.tmpdir, "demo.mp4")), \
-                patch("deep_series.call_llm", side_effect=[model_design, model_svg]) as mock_llm:
+                patch("deep_series.call_image_llm", side_effect=[model_design, model_svg]) as mock_llm:
             deep_series.generate_video_from_audio(
                 {"title": "AI时代最缺的不是芯片"},
                 {
@@ -1239,7 +1240,7 @@ class TestDeepSeries(unittest.TestCase):
             "main_elements": ["AI服务器", "企业采购", "竞争风险"],
         }
 
-        with patch("deep_series.call_llm", return_value="不是有效 SVG"):
+        with patch("deep_series.call_image_llm", return_value="不是有效 SVG"):
             path = deep_series.generate_visual_svg_asset(
                 "risk_competition",
                 "市场竞争风险图谱：NVIDIA依赖、大客户议价、竞品压力。",
@@ -1276,7 +1277,7 @@ class TestDeepSeries(unittest.TestCase):
         }
         model_svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">模型主视觉</text></svg>'
 
-        with patch("deep_series.call_llm", side_effect=[json.dumps(raw_design, ensure_ascii=False), model_svg]) as mock_llm:
+        with patch("deep_series.call_image_llm", side_effect=[json.dumps(raw_design, ensure_ascii=False), model_svg]) as mock_llm:
             design = deep_series.build_visual_design(
                 {"title": "AI时代的隐形地基"},
                 {"title": "GPU 不只是显卡"},
@@ -1288,6 +1289,38 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(list(design["asset_paths"].keys()), ["hero"])
         with open(design["asset_paths"]["hero"], "r", encoding="utf-8") as f:
             self.assertIn("模型主视觉", f.read())
+
+    def test_build_visual_design_uses_image_llm_entrypoint(self):
+        # 封面视觉方案和 hero.svg 都属于图片资产链路，必须走图片专用模型，避免占用普通文案模型配置。
+        script_path = os.path.join(self.tmpdir, "script.md")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：AI 服务器封面需要一个清晰的主视觉。")
+        result = {"script_path": script_path}
+        raw_design = {
+            "cover_title": "AI服务器红利",
+            "subtitle": "整机交付",
+            "style": "iOS 简洁科技风",
+            "composition": "single_subject",
+            "palette": ["#F5F5F7", "#1D1D1F", "#007AFF", "#FF9500"],
+            "main_elements": ["AI服务器", "机柜", "交付"],
+            "svg_prompts": {"hero": "生成 AI 服务器机柜主视觉 SVG。"},
+            "scene_cards": [{"keyword": "服务器", "asset": "hero", "label": "AI服务器"}],
+        }
+        model_svg = '<svg width="420" height="260"><rect x="40" y="60" width="340" height="150" fill="#007AFF"/></svg>'
+
+        with patch("deep_series.call_image_llm", side_effect=[json.dumps(raw_design, ensure_ascii=False), model_svg]) as mock_image_llm, \
+                patch("deep_series.call_llm", return_value="不应该调用") as mock_normal_llm:
+            design = deep_series.build_visual_design(
+                {"title": "AI时代老树开新花"},
+                {"title": "Dell：卖电脑的公司为什么吃到 AI 服务器红利"},
+                result,
+                use_llm=True,
+            )
+
+        self.assertEqual(mock_image_llm.call_count, 2)
+        mock_normal_llm.assert_not_called()
+        self.assertEqual(list(design["asset_paths"].keys()), ["hero"])
+        self.assertTrue(os.path.exists(design["asset_paths"]["hero"]))
 
     def test_generate_visual_svg_asset_uses_chinese_topic_fallback_without_llm(self):
         # 离线或禁用 LLM 时，英文资产 key 也要生成可读中文主题图，而不是把 data_center_cooling 画到页面上。
@@ -1512,7 +1545,7 @@ class TestDeepSeries(unittest.TestCase):
         )
         svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">ABF</text></svg>'
 
-        with patch("deep_series.call_llm", side_effect=[design_json, svg]) as mock_llm:
+        with patch("deep_series.call_image_llm", side_effect=[design_json, svg]) as mock_llm:
             design = deep_series.build_visual_design(series, episode, result)
 
         self.assertEqual(design["cover_title"], "味精厂卡进GPU底座")
@@ -1556,7 +1589,7 @@ class TestDeepSeries(unittest.TestCase):
         )
         svg = '<svg width="420" height="260"><rect x="20" y="80" width="380" height="80" fill="#007AFF"/><text x="40" y="130">AI</text></svg>'
 
-        with patch("deep_series.call_llm", side_effect=[design_json, svg]) as mock_llm:
+        with patch("deep_series.call_image_llm", side_effect=[design_json, svg]) as mock_llm:
             design = deep_series.build_visual_design(series, episode, result)
 
         self.assertEqual(list(design["asset_paths"].keys()), ["hero"])
@@ -1665,7 +1698,7 @@ class TestDeepSeries(unittest.TestCase):
         )
         svg = '<svg width="420" height="260"><rect x="0" y="0" width="420" height="260" fill="#007AFF"/></svg>'
 
-        with patch("deep_series.call_llm", side_effect=[design_json, svg]) as mock_llm:
+        with patch("deep_series.call_image_llm", side_effect=[design_json, svg]) as mock_llm:
             design = deep_series.build_visual_design(series, episode, result)
 
         self.assertEqual(list(design["asset_paths"].keys()), ["hero"])
@@ -1685,6 +1718,38 @@ class TestDeepSeries(unittest.TestCase):
 
         self.assertEqual(list(updated["asset_paths"].keys()), ["hero"])
         self.assertTrue(os.path.exists(updated["asset_paths"]["hero"]))
+
+    def test_create_deep_cover_image_writes_openai_image_bytes(self):
+        # 主封面优先使用图片模型返回的 PNG bytes；模型不可用时才回退到本地 iOS 兜底封面。
+        from PIL import Image
+
+        buffer = BytesIO()
+        Image.new("RGB", (4, 4), "#34C759").save(buffer, format="PNG")
+        png_bytes = buffer.getvalue()
+        fake_factory = MagicMock()
+        fake_factory.return_value.get_openai_image_model_image.return_value = png_bytes
+        assets = {
+            "title": "AI服务器红利",
+            "cover_text": "服务器红利",
+            "visual_design": {
+                "cover_title": "服务器红利",
+                "subtitle": "整机交付",
+                "style": "科技财经",
+                "main_elements": ["AI服务器", "机柜", "交付"],
+            },
+        }
+
+        with patch("util.llm.LLmFactory", fake_factory):
+            cover_path = deep_series.create_deep_cover_image(
+                {"title": "AI时代老树开新花"},
+                {"title": "Dell：卖电脑的公司为什么吃到 AI 服务器红利"},
+                assets,
+                self.tmpdir,
+            )
+
+        with open(cover_path, "rb") as f:
+            self.assertEqual(f.read(), png_bytes)
+        fake_factory.return_value.get_openai_image_model_image.assert_called_once()
 
     def test_create_deep_cover_image_uses_visual_design_assets(self):
         output_dir = self.tmpdir
@@ -1712,6 +1777,7 @@ class TestDeepSeries(unittest.TestCase):
             {"title": "味之素：味精公司为什么成了高端芯片底座"},
             assets,
             output_dir,
+            use_model_image=False,
         )
 
         self.assertTrue(os.path.exists(cover_path))
@@ -1739,6 +1805,7 @@ class TestDeepSeries(unittest.TestCase):
             {"title": "味之素：味精公司为什么成了高端芯片底座"},
             assets,
             self.tmpdir,
+            use_model_image=False,
         )
 
         image = Image.open(cover_path).convert("RGB")
@@ -1770,6 +1837,7 @@ class TestDeepSeries(unittest.TestCase):
             {"title": "味之素：味精公司为什么成了高端芯片底座"},
             assets,
             self.tmpdir,
+            use_model_image=False,
         )
 
         image = Image.open(cover_path).convert("RGB")
@@ -1805,6 +1873,7 @@ class TestDeepSeries(unittest.TestCase):
             {"title": "味之素：味精公司为什么成了高端芯片底座"},
             assets,
             output_dir,
+            use_model_image=False,
         )
 
         image = Image.open(cover_path).convert("RGB")
@@ -2056,7 +2125,8 @@ class TestDeepSeries(unittest.TestCase):
                 f.write(b"png")
             return output_path
 
-        with patch("deep_series.create_text_card", side_effect=fake_create_card):
+        with patch("deep_series.create_text_card", side_effect=fake_create_card), \
+                patch.object(deep_series, "try_write_model_video_background", return_value=False):
             image_paths = deep_series.create_deep_slide_images(
                 {"title": "AI时代的隐形地基"},
                 {"title": "味之素：味精公司为什么成了高端芯片底座"},
@@ -2104,6 +2174,34 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(len(foreground_calls), 1)
         self.assertEqual(foreground_calls[0][0], "bridge.svg")
         self.assertFalse(foreground_calls[0][2])
+
+    def test_create_text_card_overlays_text_on_model_background(self):
+        # 传入模型底图时，图卡要保留全屏底图，只叠加半透明文字层。
+        from PIL import Image
+
+        background_path = os.path.join(self.tmpdir, "model_background.png")
+        output_path = os.path.join(self.tmpdir, "model_slide.png")
+        Image.new("RGB", (1536, 1024), "#0A8F80").save(background_path)
+
+        deep_series.create_text_card(
+            "佳能为什么还在造光刻机",
+            "产业链位置 · AI时代的隐形地基 · 女主持",
+            "相机公司的光学系统，正在被重新放进芯片制造的故事里。",
+            output_path,
+            accent="#8FA8C1",
+            slide_index=1,
+            slide_total=3,
+            visual_design={"main_elements": ["佳能", "光刻机", "光学系统"]},
+            current_speaker="female",
+            background_image_path=background_path,
+        )
+
+        image = Image.open(output_path).convert("RGB")
+        self.assertEqual(image.size, (1920, 1080))
+        # 右上角不在文字面板内，应该还能看到被压暗后的模型底图颜色。
+        corner_pixel = image.getpixel((1850, 220))
+        self.assertLess(corner_pixel[0], 40)
+        self.assertGreater(corner_pixel[1], 70)
 
     @patch("deep_series.step_video", return_value="demo.mp4")
     @patch("deep_series.create_deep_slide_images", return_value=["cover.png", "section.png"])
@@ -2742,12 +2840,13 @@ class TestDeepSeries(unittest.TestCase):
                 '{"segments":[{"role":"female","slide_index":0,"duration":4.0,"text":"搜索正在变成答案入口。"},{"role":"male","slide_index":1,"duration":6.0,"text":"未来的软件入口会从搜索框变成对话。"}]}'
             )
 
-        image_paths = deep_series.create_deep_slide_images(
-            {"title": "AI未来三年系列"},
-            {"title": "AI 为什么会替代搜索？"},
-            script_path,
-            audio_path,
-        )
+        with patch.object(deep_series, "try_write_model_video_background", return_value=False):
+            image_paths = deep_series.create_deep_slide_images(
+                {"title": "AI未来三年系列"},
+                {"title": "AI 为什么会替代搜索？"},
+                script_path,
+                audio_path,
+            )
 
         # 6 秒段会被拆成两张短卡，避免单张画面停留过久。
         self.assertEqual(len(image_paths), 3)
@@ -2755,6 +2854,47 @@ class TestDeepSeries(unittest.TestCase):
         self.assertEqual(durations, [4.0, 3.0, 3.0])
         self.assertAlmostEqual(sum(durations), 10.0)
         self.assertTrue(os.path.exists(os.path.join(os.path.dirname(image_paths[0]), "slide_durations.json")))
+
+    def test_create_deep_slide_images_uses_model_background_for_video_cards(self):
+        # 视频卡片需要先生成一张大模型底图，再把每段口播文字叠加上去，避免继续使用简单本地图形。
+        script_path = os.path.join(self.tmpdir, "model_bg_script.md")
+        audio_path = os.path.join(self.tmpdir, "model_bg_audio.mp3")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("女：相机公司为什么还在造光刻机？\n男：关键在光学系统和精密制造。")
+        with open(audio_path + ".timing.json", "w", encoding="utf-8") as f:
+            f.write(
+                '{"segments":[{"role":"female","slide_index":0,"duration":4.0,"text":"相机公司为什么还在造光刻机？"},{"role":"male","slide_index":1,"duration":4.0,"text":"关键在光学系统和精密制造。"}]}'
+            )
+
+        captured_backgrounds = []
+
+        def fake_write_background(_series, _episode, _visual_design, output_path):
+            with open(output_path, "wb") as f:
+                f.write(b"model-background")
+            return True
+
+        def fake_create_text_card(title, subtitle, body, output_path, background_image_path=None, **_kwargs):
+            # 这里只记录底图传参，实际绘制逻辑由 create_text_card 自己的测试覆盖。
+            captured_backgrounds.append(background_image_path)
+            with open(output_path, "wb") as f:
+                f.write(b"png")
+            return output_path
+
+        expected_background_path = os.path.join(self.tmpdir, "deep_slides", "model_background.png")
+        with patch.object(deep_series, "try_write_model_video_background", side_effect=fake_write_background, create=True) as mock_background, \
+                patch("deep_series.create_text_card", side_effect=fake_create_text_card), \
+                patch.object(deep_series, "write_deep_slide_durations", return_value="slide_durations.json"):
+            deep_series.create_deep_slide_images(
+                {"title": "AI时代的隐形地基"},
+                {"title": "佳能：相机公司为什么还在造光刻机"},
+                script_path,
+                audio_path,
+                visual_design={"main_elements": ["佳能", "光刻机", "光学系统"]},
+            )
+
+        mock_background.assert_called_once()
+        self.assertTrue(os.path.exists(expected_background_path))
+        self.assertEqual(set(captured_backgrounds), {expected_background_path})
 
     def test_create_deep_slide_images_uses_soft_theme_colors(self):
         script_path = os.path.join(self.tmpdir, "soft_theme_script.md")
@@ -2776,6 +2916,7 @@ class TestDeepSeries(unittest.TestCase):
             return output_path
 
         with patch("deep_series.create_text_card", side_effect=fake_create_text_card), \
+                patch.object(deep_series, "try_write_model_video_background", return_value=False), \
                 patch.object(deep_series, "write_deep_slide_durations", return_value="slide_durations.json"):
             deep_series.create_deep_slide_images(
                 {"title": "AI未来三年系列"},
@@ -2809,6 +2950,7 @@ class TestDeepSeries(unittest.TestCase):
             return output_path
 
         with patch("deep_series.create_text_card", side_effect=fake_create_text_card), \
+                patch.object(deep_series, "try_write_model_video_background", return_value=False), \
                 patch.object(deep_series, "write_deep_slide_durations", return_value="slide_durations.json"):
             deep_series.create_deep_slide_images(
                 {"title": "AI未来三年系列"},

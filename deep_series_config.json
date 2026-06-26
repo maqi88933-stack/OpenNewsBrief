@@ -1033,12 +1033,118 @@
         {
           "title": "佳能：相机公司为什么还在造光刻机",
           "question": "佳能为什么不只是相机和打印机公司？重点探讨半导体光刻机、纳米压印和先进封装曝光设备，AI 芯片制造背后也有老牌光学公司的技术积累。",
-          "generated": false
+          "generated": true,
+          "generated_at": "2026-06-11 15:16:27",
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\research_plan.md",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\research.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\research_trace.json",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\agent_interaction.log",
+          "estimated_seconds": 124.7,
+          "quality_block_reason": "整体留存节奏较好，开头用“佳能不是卖相机的吗，怎么跑到AI芯片光刻环节”制造认知反差，能吸引用户继续听。；中段推进基本连贯，从传统光刻设备到纳米压印，再到先进封装，逻辑链清楚，不是简单资料罗列。；每一段都有追问和边界修正，尤其“是不是绕开EUV”后的反转，能避免过度营销，留存设计较成熟。；主要问题是事实支撑不足。当前提供的研究报告并没有给出带来源的事实材料，脚本中关于佳能公开销售半导体光刻系统、2023年发布纳米压印设备、先进封装曝光机会等说法都需要来源支撑。；结尾有回扣，但余味略偏概念化，停留在“不要只盯舞台中央”，缺少一个更有记忆点的总结或具体判断。；部分表达略重复，例如开头女声“对，核心答案是……对。”显得口播不够干净。；脚本整体可信语气比较克制，没有明显夸大成“佳能挑战ASML”，但因为资料源缺失，仍不建议直接通过。",
+          "fallback_used": true,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\佳能：相机公司为什么还在造光刻机_2026-06-11.mp4",
+          "published": true,
+          "published_at": "2026-06-11 15:20:05",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-11 10:17:55",
+          "actual_seconds": 129.8,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\cover_option_3.png"
+          ],
+          "publish_title": "佳能的隐藏底牌，卡在AI芯片背后",
+          "publish_desc": "佳能不只是相机公司。它真正的老本行，是光学、成像、对准和精密机械；在AI芯片产业链里，它靠传统光刻、纳米压印和先进封装曝光设备，站在了一个很容易被忽略的位置。\n\n互动问题：你觉得佳能这种老牌光学公司，未来会在AI芯片链里变得更重要吗？\n\n关键词：AI、时代的隐形地基、佳能、相机公司为什么还在造光刻、佳能为什么不只是相机和打、印机公司、重点探讨半导体光刻机、纳米压印和先进封装曝光设",
+          "publish_tags": "佳能,光刻机,AI芯片,先进封装,纳米压印,半导体设备,隐形地基",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": [
+              "封面/画面标签含英文残片：AI芯片制造"
+            ]
+          },
+          "publish_gate": {
+            "blocked": true,
+            "series": "AI时代的隐形地基",
+            "episode": "佳能：相机公司为什么还在造光刻机",
+            "reasons": [
+              "有效来源不足：0/3"
+            ],
+            "warnings": [
+              "质量提醒：整体留存节奏较好，开头用“佳能不是卖相机的吗，怎么跑到AI芯片光刻环节”制造认知反差，能吸引用户继续听。；中段推进基本连贯，从传统光刻设备到纳米压印，再到先进封装，逻辑链清楚，不是简单资料罗列。；每一段都有追问和边界修正，尤其“是不是绕开EUV”后的反转，能避免过度营销，留存设计较成熟。；主要问题是事实支撑不足。当前提供的研究报告并没有给出带来源的事实材料，脚本中关于佳能公开销售半导体光刻系统、2023年发布纳米压印设备、先进封装曝光机会等说法都需要来源支撑。；结尾有回扣，但余味略偏概念化，停留在“不要只盯舞台中央”，缺少一个更有记忆点的总结或具体判断。；部分表达略重复，例如开头女声“对，核心答案是……对。”显得口播不够干净。；脚本整体可信语气比较克制，没有明显夸大成“佳能挑战ASML”，但因为资料源缺失，仍不建议直接通过。",
+              "封面/画面标签含英文残片：AI芯片制造"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\佳能：相机公司为什么还在造光刻机\\2026-06-11\\visual_assets\\hero.svg"
+          }
         },
         {
           "title": "施耐德电气：开关公司为什么站到 AI 电力中枢",
           "question": "施耐德电气为什么会成为 AI 数据中心绕不开的公司？重点探讨配电、UPS、机柜、液冷和能源管理，AI 算力扩张最后会回到电力系统能不能稳定交付。",
-          "generated": false
+          "generated": true,
+          "generated_at": "2026-06-13 11:28:45",
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\research_plan.md",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\research.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\research_trace.json",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\agent_interaction.log",
+          "source_count": 8,
+          "estimated_seconds": 141.0,
+          "quality_block_reason": "",
+          "fallback_used": false,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\施耐德电气：开关公司为什么站到_AI_电力中枢_2026-06-13.mp4",
+          "published": true,
+          "published_at": "2026-06-13 11:31:04",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-13 11:16:52",
+          "actual_seconds": 144.7,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\cover_option_3.png"
+          ],
+          "publish_title": "GPU最贵，电先卡住AI？",
+          "publish_desc": "AI数据中心不只是堆服务器。GPU要跑满，背后先要稳定配电、UPS、电力监控和能效管理。施耐德电气之所以被推到台前，不是因为它变成AI公司，而是AI把电力底座变成了算力命门。\n\n互动问题：你觉得AI数据中心最先卡住的会是GPU、电力，还是散热？\n\n关键词：AI、时代的隐形地基、施耐德电气、开关公司为什么站到、电力中枢、施耐德电气为什么会成为、数据中心绕不开的公司、重点探讨配电",
+          "publish_tags": "施耐德电气,AI数据中心,算力基础设施,电力系统,UPS,配电系统,能源管理,液冷,数据中心",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": [
+              "封面/画面标签含英文残片：UPS 关键电源、UPS 关键电源、AI 服务器"
+            ]
+          },
+          "publish_gate": {
+            "blocked": false,
+            "series": "AI时代的隐形地基",
+            "episode": "施耐德电气：开关公司为什么站到 AI 电力中枢",
+            "reasons": [],
+            "warnings": [
+              "封面/画面标签含英文残片：UPS 关键电源、UPS 关键电源、AI 服务器"
+            ]
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代的隐形地基\\施耐德电气：开关公司为什么站到_AI_电力中枢\\2026-06-13\\visual_assets\\hero.svg"
+          }
         },
         {
           "title": "约翰迪尔：拖拉机公司为什么比机器人公司更像机器人公司",
@@ -1382,7 +1488,56 @@
         },
         {
           "title": "当机器人真的便宜下来，谁的工作会先变？",
-          "question": "如果机器人价格持续下降，哪些工作会最先被重构？重点探讨重复体力劳动、危险岗位、标准化服务和人机协作，而不是简单地判断所有工作都会被替代。"
+          "question": "如果机器人价格持续下降，哪些工作会最先被重构？重点探讨重复体力劳动、危险岗位、标准化服务和人机协作，而不是简单地判断所有工作都会被替代。",
+          "generated": true,
+          "generated_at": "2026-06-19 09:58:16",
+          "research_plan_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\research_plan.md",
+          "research_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\research.md",
+          "research_trace_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\research_trace.json",
+          "audit_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\audit.md",
+          "script_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\script.md",
+          "script_notes_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\script_notes.md",
+          "documentary_package_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\documentary_package.md",
+          "quality_report_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\quality_report.json",
+          "agent_log_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\agent_interaction.log",
+          "source_count": 4,
+          "estimated_seconds": 103.0,
+          "quality_block_reason": "",
+          "fallback_used": false,
+          "audio_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\dialogue.mp3",
+          "video_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\当机器人真的便宜下来，谁的工作会先变？_2026-06-19.mp4",
+          "published": true,
+          "published_at": "2026-06-19 10:00:33",
+          "review_blocked": false,
+          "review_ready": true,
+          "audio_generated_at": "2026-06-19 09:51:26",
+          "actual_seconds": 105.5,
+          "publish_assets_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\publish_assets.json",
+          "cover_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\cover.png",
+          "cover_option_paths": [
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\cover_option_1.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\cover_option_2.png",
+            "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\cover_option_3.png"
+          ],
+          "publish_title": "机器人一降价，打工人先丢的不是岗位？",
+          "publish_desc": "当机器人真的便宜下来，谁的工作会先变？答案可能不是“整份岗位消失”，而是看、拿、搬、放、扫、复核这些高频、标准、可验证的小动作先被拆走。\n\n这期结合光象科技 Phi-Bot X1、蔚来汽车产线、清华 Youth2Real 抓取分拣案例，聊具身智能、机械臂、移动底盘、人形机器人在汽车制造、焊接、自动化上下料、仓储物流、分拣抓取、扫码复核、工业自动化和服务机器人场景里的真实落地：为什么机器人更可能先成为工位工具，而不是万能同事？\n\n互动问题：你工作里哪一个“小动作”，最可能先被机器人接手？\n\n关键词：AI时代、机器人先学会打工、当机器人真的便宜下来、谁的工作会先变、具身智能、光象科技、Phi-Bot X1、蔚来汽车、清华 Youth2Real、机械臂、移动底盘、人形机器人、自动化上下料、仓储分拣、汽车制造、工业自动化、服务机器人",
+          "publish_tags": "机器人,AI时代,具身智能,人工智能,职业变化,工厂自动化,仓储物流,人形机器人,工业机器人,服务机器人,自动化上下料,仓储分拣,汽车制造,光象科技,Phi-Bot X1,蔚来汽车",
+          "cover_quality": {
+            "blocked": false,
+            "reasons": [],
+            "warnings": []
+          },
+          "publish_gate": {
+            "blocked": false,
+            "series": "AI时代，机器人先学会打工",
+            "episode": "当机器人真的便宜下来，谁的工作会先变？",
+            "reasons": [],
+            "warnings": []
+          },
+          "visual_design_path": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\visual_design.json",
+          "visual_asset_paths": {
+            "hero": "d:\\myself\\AIContentfactory\\bg\\OpenNewsBrief\\deepContent\\AI时代，机器人先学会打工\\当机器人真的便宜下来，谁的工作会先变？\\2026-06-19\\visual_assets\\hero.svg"
+          }
         }
       ]
     }

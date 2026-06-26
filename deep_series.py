@@ -209,6 +209,114 @@ def call_llm(prompt: str, text: str = "") -> str:
     raise last_error
 
 
+def call_image_llm(prompt: str, text: str = "") -> str:
+    # 视觉设计 JSON 和 SVG 仍是文本产物；真正的 PNG 封面/视频底图在独立图片接口里生成。
+    return call_llm(prompt, text)
+
+
+def build_model_video_background_prompt(series: Dict, episode: Dict, visual_design: Dict = None) -> str:
+    # 视频底图由图片模型一次性生成，后续每张卡片只叠加文字，避免重新回到简单几何图。
+    design = visual_design if isinstance(visual_design, dict) else {}
+    elements = design.get("main_elements") if isinstance(design.get("main_elements"), list) else []
+    clean_elements = [visual_display_label(item) for item in elements if visual_display_label(item)]
+    style = str(design.get("style") or "iOS 风格、科技财经、电影感、干净高级").strip()
+    subtitle = str(design.get("subtitle") or episode.get("title", "")).strip()
+    return (
+        "生成一张 16:9 横版短视频大底图 PNG，用作整条视频的视觉背景。\n"
+        "画面要求：有明确主体，适合科技财经深度视频；高级、真实、抓眼球，但不要杂乱。\n"
+        "构图要求：左右都保留可读文字空间，主体不要压到画面中心正前方；不要水印、不要 Logo、不要乱码文字。\n"
+        "风格要求：保留 iOS 式干净质感，但视觉主体必须比简单几何图更有冲击力。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n"
+        f"副标题线索：{subtitle}\n"
+        f"视觉风格：{style}\n"
+        f"关键元素：{'、'.join(clean_elements[:6])}\n"
+        "请尽量不要在图里直接写文字，文字会由程序后期叠加。"
+    )
+
+
+def try_write_model_video_background(series: Dict, episode: Dict, visual_design: Dict, output_path: str) -> bool:
+    # 图片模型生成的尺寸不一定正好是 16:9，这里统一裁成视频标准尺寸，后续叠字更稳定。
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageOps
+        from util.llm import LLmFactory
+
+        prompt = build_model_video_background_prompt(series, episode, visual_design)
+        image_bytes = LLmFactory().get_openai_image_model_image(
+            prompt=prompt,
+            size="1536x1024",
+            quality="high",
+            output_format="png",
+            n=1,
+        )
+        if not isinstance(image_bytes, (bytes, bytearray)) or len(image_bytes) < 16:
+            return False
+        with Image.open(BytesIO(image_bytes)) as source:
+            source.load()
+            try:
+                resample = Image.Resampling.LANCZOS
+            except AttributeError:
+                resample = Image.LANCZOS
+            background = ImageOps.fit(source.convert("RGB"), (1920, 1080), method=resample)
+        background.save(output_path)
+        return True
+    except Exception as exc:
+        # 视频底图失败时继续走本地卡片兜底，不能让用户因为图片模型波动拿不到视频。
+        print(f"[深度视频] 图片模型底图生成失败，改用本地图卡兜底：{exc}", flush=True)
+        return False
+
+
+def build_model_cover_prompt(series: Dict, episode: Dict, assets: Dict, cover_text: str = None) -> str:
+    # 图片模型只负责生成主封面视觉，提示词尽量给足上下文，避免生成和主题无关的泛科技图。
+    design = assets.get("visual_design") if isinstance(assets.get("visual_design"), dict) else {}
+    elements = design.get("main_elements") if isinstance(design.get("main_elements"), list) else []
+    clean_elements = [visual_display_label(item) for item in elements if visual_display_label(item)]
+    title = normalize_cover_text(cover_text if cover_text is not None else design.get("cover_title") or assets.get("cover_text", ""), assets.get("title", ""))
+    subtitle = str(design.get("subtitle") or assets.get("title") or episode.get("title", "")).strip()
+    style = str(design.get("style") or "iOS 风格、科技财经、干净高级").strip()
+    return (
+        "生成一张 1:1 的短视频信息流封面 PNG。\n"
+        "画面要求：iOS 风格、干净高级、主体清晰、浅色背景、高对比、适合 B 站科技财经深度视频。\n"
+        "不要低俗，不要夸张裸露，不要水印，不要品牌 Logo，不要乱码文字。\n"
+        f"系列：{series.get('title', '')}\n"
+        f"主题：{episode.get('title', '')}\n"
+        f"封面核心文案：{title}\n"
+        f"副标题线索：{subtitle}\n"
+        f"视觉风格：{style}\n"
+        f"产业元素：{'、'.join(clean_elements[:5])}\n"
+        "如果需要文字，只使用极少、清晰、准确的中文大字；更重要的是让视觉主体和主题一致。"
+    )
+
+
+def try_write_model_cover_image(series: Dict, episode: Dict, assets: Dict, output_path: str, cover_text: str = None) -> bool:
+    # 图片模型返回的是 PNG/JPEG/WebP bytes；先校验能被 Pillow 读取，再写入封面文件。
+    try:
+        from io import BytesIO
+        from PIL import Image
+        from util.llm import LLmFactory
+
+        prompt = build_model_cover_prompt(series, episode, assets, cover_text)
+        image_bytes = LLmFactory().get_openai_image_model_image(
+            prompt=prompt,
+            size="1024x1024",
+            quality="high",
+            output_format="png",
+            n=1,
+        )
+        if not isinstance(image_bytes, (bytes, bytearray)) or len(image_bytes) < 16:
+            return False
+        with Image.open(BytesIO(image_bytes)) as image:
+            image.verify()
+        with open(output_path, "wb") as f:
+            f.write(image_bytes)
+        return True
+    except Exception as exc:
+        # 图片模型失败不能阻断整条视频链路，后面继续生成本地 iOS 兜底封面。
+        print(f"[深度封面] 图片模型生成失败，改用本地封面兜底：{exc}", flush=True)
+        return False
+
+
 def build_focused_search_terms(series: Dict, episode: Dict) -> List[str]:
     # 深度选题的 question 往往是一整段自然语言，新闻搜索先用短词更容易命中。
     title = str(episode.get("title") or "")
@@ -2120,11 +2228,128 @@ def create_text_card(
     visual_design: Dict = None,
     scene: Dict = None,
     current_speaker: Optional[str] = None,
+    background_image_path: Optional[str] = None,
 ) -> str:
     from PIL import Image, ImageDraw
 
     width = 1920
     height = 1080
+    if background_image_path and os.path.exists(background_image_path):
+        try:
+            from PIL import ImageOps
+
+            with Image.open(background_image_path) as source:
+                source.load()
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except AttributeError:
+                    resample = Image.LANCZOS
+                image = ImageOps.fit(source.convert("RGB"), (width, height), method=resample).convert("RGBA")
+
+            # 模型底图保留为全屏主体，只压一层轻暗遮罩和一块毛玻璃文字区，避免文字不可读。
+            image = Image.alpha_composite(image, Image.new("RGBA", (width, height), (0, 0, 0, 58)))
+            glass = Image.new("RGBA", (width, height), (255, 255, 255, 0))
+            glass_draw = ImageDraw.Draw(glass)
+            glass_draw.rounded_rectangle((96, 112, 1152, 968), radius=48, fill=(255, 255, 255, 224))
+            glass_draw.rounded_rectangle((1206, 812, 1806, 966), radius=42, fill=(255, 255, 255, 204))
+            if slide_index is not None and slide_total:
+                glass_draw.rounded_rectangle((1608, 86, 1810, 144), radius=26, fill=(255, 255, 255, 218))
+            image = Image.alpha_composite(image, glass).convert("RGB")
+            draw = ImageDraw.Draw(image)
+
+            if slide_index is not None and slide_total:
+                page_text = f"{slide_index:02d} / {slide_total:02d}"
+                page_font = _font(24, True)
+                page_w, _ = _measure_text_size(draw, page_text, page_font)
+                draw.text((1608 + int((202 - page_w) / 2), 102), page_text, font=page_font, fill="#3A3A3C")
+
+            content_left = 156
+            content_right = 1088
+            y = 166
+            title_font, title_lines = _fit_text_block(
+                draw,
+                title,
+                content_right - content_left,
+                142,
+                start_size=56,
+                min_size=36,
+                bold=True,
+                max_lines=2,
+            )
+            for line in title_lines:
+                draw.text((content_left, y), line, font=title_font, fill="#1D1D1F")
+                y += _measure_text_size(draw, line, title_font)[1] + 10
+
+            y += 16
+            subtitle_font, subtitle_lines = _fit_text_block(
+                draw,
+                subtitle,
+                content_right - content_left,
+                78,
+                start_size=27,
+                min_size=22,
+                bold=False,
+                max_lines=2,
+            )
+            for line in subtitle_lines:
+                draw.text((content_left, y), line, font=subtitle_font, fill="#6E6E73")
+                y += _measure_text_size(draw, line, subtitle_font)[1] + 8
+
+            draw.rounded_rectangle((content_left, y + 24, content_left + 146, y + 74), radius=22, fill=accent)
+            draw.text((content_left + 26, y + 35), "正在讲", font=_font(22, True), fill="#FFFFFF")
+            y += 122
+
+            body_font, body_lines = _fit_text_block(
+                draw,
+                body,
+                content_right - content_left,
+                368,
+                start_size=70,
+                min_size=40,
+                bold=False,
+                max_lines=5,
+            )
+            body_line_height = _measure_text_size(draw, "国", body_font)[1]
+            for line in body_lines:
+                draw.text((content_left, y), line, font=body_font, fill="#1D1D1F")
+                y += body_line_height + 24
+
+            elements = visual_design.get("main_elements", []) if isinstance(visual_design, dict) and isinstance(visual_design.get("main_elements"), list) else []
+            scene_label = visual_display_label(scene.get("label", "")) if isinstance(scene, dict) else ""
+            clue_words = []
+            for item in ([scene_label] if scene_label else []) + elements:
+                word = visual_display_label(item)[:10]
+                if word and word not in clue_words:
+                    clue_words.append(word)
+                if len(clue_words) >= 3:
+                    break
+            while len(clue_words) < 3:
+                clue_words.append(["光学系统", "精密制造", "产业地基"][len(clue_words)])
+
+            draw.text((content_left, 794), "产业线索", font=_font(24, True), fill="#6E6E73")
+            for index, word in enumerate(clue_words[:3]):
+                x = content_left + index * 286
+                draw.rounded_rectangle((x, 842, x + 238, 888), radius=20, fill="#F2F2F7")
+                draw.text((x + 22, 854), word, font=_font(22, True), fill="#1D1D1F")
+
+            if current_speaker in ("female", "male"):
+                # 底图模式只保留轻量主持人提示，不再绘制占画面的头像卡片。
+                label = "女主持" if current_speaker == "female" else "男主持"
+                host_accent = "#C79AA8" if current_speaker == "female" else "#8FA8C1"
+                draw.ellipse((1254, 860, 1342, 948), fill=host_accent)
+                draw.ellipse((1264, 870, 1332, 938), fill="#FFFFFF")
+                draw.text((1372, 858), label, font=_font(32, True), fill="#1D1D1F")
+                draw.text((1372, 908), "正在发言", font=_font(24, True), fill="#6E6E73")
+                for dot_index in range(3):
+                    dot_x = 1512 + dot_index * 22
+                    draw.ellipse((dot_x, 924, dot_x + 10, 934), fill=host_accent)
+
+            image.save(output_path)
+            return output_path
+        except Exception as exc:
+            # 底图读取或裁切失败时回退到原有本地图卡，保证视频仍可生成。
+            print(f"[深度视频] 模型底图叠字失败，改用本地图卡：{exc}", flush=True)
+
     image = Image.new("RGB", (width, height), "#F5F5F7")
     asset_paths = visual_design.get("asset_paths", {}) if isinstance(visual_design, dict) and isinstance(visual_design.get("asset_paths"), dict) else {}
     # 每期专属 background.svg 先铺满整张视频卡，后续 iOS 内容层再叠上去，形成统一的大背景。
@@ -2345,6 +2570,10 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
                 "duration": DEEP_VISUAL_MAX_SECONDS,
             }
         ]
+    # 视频画面先生成一张大模型底图，再把每段文字叠上去；失败时保持原本本地图卡兜底。
+    model_background_path = os.path.join(slide_dir, "model_background.png")
+    if not try_write_model_video_background(series, episode, visual_design or {}, model_background_path):
+        model_background_path = ""
     total = len(slide_plan)
     for index, segment in enumerate(slide_plan):
         image_path = os.path.join(slide_dir, f"slide_{index:03d}.png")
@@ -2362,6 +2591,7 @@ def create_deep_slide_images(series: Dict, episode: Dict, script_path: str, audi
             visual_design=visual_design,
             scene=scene,
             current_speaker=segment["speaker"],
+            background_image_path=model_background_path or None,
         )
         image_paths.append(image_path)
     write_deep_slide_durations(slide_dir, [item["duration"] for item in slide_plan])
@@ -2854,7 +3084,7 @@ def generate_visual_svg_asset(name: str, prompt: str, design: Dict, output_dir: 
             f"元素任务：{prompt}\n"
         )
         try:
-            svg_text = call_llm(llm_prompt)
+            svg_text = call_image_llm(llm_prompt)
         except Exception:
             svg_text = ""
     cleaned = sanitize_svg(
@@ -2932,7 +3162,7 @@ def build_visual_design(series: Dict, episode: Dict, result: Dict, use_llm: bool
             f"系列：{series.get('title', '')}\n主题：{episode.get('title', '')}\n问题：{_episode_question(episode)}\n"
         )
         try:
-            raw_design = parse_json_object(call_llm(prompt, context_text))
+            raw_design = parse_json_object(call_image_llm(prompt, context_text))
         except Exception:
             raw_design = {}
     design = normalize_visual_design(series, episode, raw_design, context_text)
@@ -3198,11 +3428,19 @@ def create_deep_cover_image(
     output_name: str = "cover.png",
     cover_text: str = None,
     accent: str = "#007AFF",
+    use_model_image: bool = True,
 ) -> str:
     # 封面使用视觉设计 JSON 驱动构图；没有设计时才走规则兜底，避免绑定某个固定系列模板。
     from PIL import Image, ImageDraw
 
     output_path = os.path.join(output_dir, output_name)
+    if use_model_image and output_name == "cover.png":
+        # 主封面已经存在时直接复用，避免同一期反复消耗昂贵图片模型。
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+            return output_path
+        if try_write_model_cover_image(series, episode, assets, output_path, cover_text):
+            return output_path
+
     design = assets.get("visual_design") if isinstance(assets.get("visual_design"), dict) else {}
     if not design:
         design = normalize_visual_design(series, episode, {}, assets.get("desc", ""))
@@ -3313,6 +3551,7 @@ def create_deep_cover_options(series: Dict, episode: Dict, assets: Dict, output_
                 output_name=f"cover_option_{index + 1}.png",
                 cover_text=text,
                 accent=palette[index % len(palette)],
+                use_model_image=False,
             )
         )
     return paths
